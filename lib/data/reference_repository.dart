@@ -1,5 +1,5 @@
 import 'dart:convert';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// 단순 자산/사용자 참조 데이터.

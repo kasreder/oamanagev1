@@ -26,6 +26,12 @@ class _ScanPageState extends State<ScanPage> {
   // TODO: 카메라 라이트 토글/전면카메라 전환 버튼 제공
 
   @override
+  void initState() {
+    super.initState();
+    _checkPermission();
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
     super.dispose();
@@ -92,6 +98,20 @@ class _ScanPageState extends State<ScanPage> {
     await openAppSettings();
   }
 
+  Future<void> _checkPermission() async {
+    try {
+      final status = await Permission.camera.request();
+      if (!mounted) return;
+      setState(() {
+        _permissionError = status.isGranted ? null : '카메라 권한이 필요합니다.';
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _permissionError = '권한 확인 중 오류: $error';
+      });
+    }
+  }
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
@@ -110,13 +130,7 @@ class _ScanPageState extends State<ScanPage> {
                   child: Text('카메라 오류: ${error.errorDescription ?? error.errorCode.name}'),
                 );
               },
-              onPermissionSet: (controller, granted) {
-                if (!granted) {
-                  setState(() {
-                    _permissionError = '카메라 권한이 필요합니다.';
-                  });
-                }
-              },
+
             ),
           ),
           if (_permissionError != null)
@@ -126,7 +140,7 @@ class _ScanPageState extends State<ScanPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.camera_alt_off, color: Colors.white, size: 48),
+                  const Icon(Icons.no_photography, color: Colors.white, size: 48),
                   const SizedBox(height: 16),
                   Text(
                     _permissionError!,
@@ -136,6 +150,13 @@ class _ScanPageState extends State<ScanPage> {
                   FilledButton(
                     onPressed: _openSettings,
                     child: const Text('설정에서 권한 허용'),
+                  ),
+                  TextButton(
+                    onPressed: _checkPermission,
+                    child: const Text(
+                      '다시 시도',
+                      style: TextStyle(color: Colors.white),
+                    ),
                   ),
                   if (kIsWeb)
                     const Padding(

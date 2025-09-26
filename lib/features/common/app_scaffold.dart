@@ -41,9 +41,7 @@ class AppScaffold extends StatelessWidget {
   void _goTo(BuildContext context, int index) {
     final router = GoRouter.of(context);
     final route = _destinations[index].route;
-    if (router.location != route) {
-      router.go(route);
-    }
+    router.go(route);
   }
 
   @override
