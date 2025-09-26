@@ -9,11 +9,11 @@ OA 자산 실사 관리 앱입니다. 에셋 JSON을 로드하여 실사 목록�
 - Material 3 및 반응형 NavigationBar/NavigationRail 적용
 
 ## 더미 데이터
-에셋 JSON은 `assets/mock` 아래에 위치하며, `pubspec.yaml`에 등록되어 있습니다.
+에셋 JSON은 `assets/dummy/mock` 아래에 위치하며, `pubspec.yaml`에 등록되어 있습니다.
 ```
-assets/mock/users.json
-assets/mock/assets.json
-assets/mock/asset_inspections.json
+assets/dummy/mock/users.json
+assets/dummy/mock/assets.json
+assets/dummy/mock/asset_inspections.json
 ```
 
 ## 개발 환경

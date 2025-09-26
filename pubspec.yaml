@@ -26,6 +26,6 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/mock/users.json
-    - assets/mock/assets.json
-    - assets/mock/asset_inspections.json
+    - assets/dummy/mock/users.json
+    - assets/dummy/mock/assets.json
+    - assets/dummy/mock/asset_inspections.json
