@@ -1,0 +1,18 @@
+[
+  {
+    "id": "ins_1718000000000",
+    "assetUid": "A01234",
+    "status": "사용",
+    "memo": "정상 사용 중",
+    "scannedAt": "2024-05-01T09:30:00.000Z",
+    "synced": true
+  },
+  {
+    "id": "ins_1718100000000",
+    "assetUid": "A04567",
+    "status": "가용(창고)",
+    "memo": "창고 재고",
+    "scannedAt": "2024-05-05T03:12:00.000Z",
+    "synced": false
+  }
+]
