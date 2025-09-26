@@ -112,7 +112,6 @@ class _ScanPageState extends State<ScanPage> {
       });
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
@@ -131,6 +130,7 @@ class _ScanPageState extends State<ScanPage> {
                   child: Text('카메라 오류: ${error.errorDescription ?? error.errorCode.name}'),
                 );
               },
+
             ),
           ),
           if (_permissionError != null)
