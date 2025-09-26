@@ -126,8 +126,9 @@ class _ScanPageState extends State<ScanPage> {
               fit: BoxFit.cover,
               onDetect: _onDetect,
               errorBuilder: (context, error, child) {
+                final details = error.errorDetails?.toString();
                 return Center(
-                  child: Text('카메라 오류: ${error.errorDescription ?? error.errorCode.name}'),
+                  child: Text('카메라 오류: ${details ?? error.errorCode.name}'),
                 );
               },
 
