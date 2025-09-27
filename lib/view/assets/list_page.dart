@@ -1,5 +1,5 @@
+// lib/view/assets/detail_page.dart
 import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
