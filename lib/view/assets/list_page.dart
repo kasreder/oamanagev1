@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -34,7 +36,10 @@ class _AssetsListPageState extends State<AssetsListPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalScrollController = ScrollController();
   final ScrollController _verticalScrollController = ScrollController();
+  static const double _tableMinWidth =
+      1100; // 테이블이 답답해 보이지 않도록 최소 너비를 지정합니다.
   _AssetSearchField _searchField = _AssetSearchField.name;
+  int _currentPage = 0;
 
   @override
   void dispose() {
@@ -49,6 +54,18 @@ class _AssetsListPageState extends State<AssetsListPage> {
     return Consumer<InspectionProvider>(
       builder: (context, provider, _) {
         final filteredRows = _filterRows(provider);
+        const pageSize = 20;
+        final totalPages =
+            filteredRows.isEmpty ? 0 : (filteredRows.length / pageSize).ceil();
+        final currentPage = totalPages == 0
+            ? 0
+            : (_currentPage.clamp(0, totalPages - 1)).toInt();
+        final pageRows = filteredRows.isEmpty
+            ? const <_AssetRowData>[]
+            : filteredRows.sublist(
+                currentPage * pageSize,
+                math.min((currentPage + 1) * pageSize, filteredRows.length),
+              );
         final totalCount = provider.onlyUnsynced
             ? provider.unsyncedCount
             : provider.totalCount;
@@ -64,127 +81,194 @@ class _AssetsListPageState extends State<AssetsListPage> {
                   if (value == null) return;
                   setState(() {
                     _searchField = value;
+                    _currentPage = 0;
                   });
                 },
-                onQueryChanged: (_) => setState(() {}),
+                onQueryChanged: (_) => setState(() {
+                  _currentPage = 0;
+                }),
                 provider: provider,
                 filteredCount: filteredRows.length,
                 totalCount: totalCount,
+                onFilterReset: () {
+                  setState(() {
+                    _currentPage = 0;
+                  });
+                },
               ),
               Expanded(
                 child: filteredRows.isEmpty
                     ? const Center(child: Text('표시할 실사 내역이 없습니다.'))
-                    : Scrollbar(
-                        controller: _horizontalScrollController,
-                        thumbVisibility: true,
-                        notificationPredicate: (notification) =>
-                            notification.metrics.axis == Axis.horizontal,
-                        child: SingleChildScrollView(
-                          controller: _horizontalScrollController,
-                          scrollDirection: Axis.horizontal,
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(
-                              minWidth: MediaQuery.of(context).size.width,
-                            ),
-                            child: Scrollbar(
-                              controller: _verticalScrollController,
-                              thumbVisibility: true,
-                              child: SingleChildScrollView(
-                                controller: _verticalScrollController,
-                                child: DataTable(
-                                  headingRowColor: MaterialStateProperty.resolveWith(
-                                    (states) => Theme.of(context)
-                                        .colorScheme
-                                        .surfaceVariant,
-                                  ),
-                                  columns: const [
-                                    DataColumn(label: Text('자산번호')),
-                                    DataColumn(label: Text('자산명')),
-                                    DataColumn(label: Text('카테고리')),
-                                    DataColumn(label: Text('모델명')),
-                                    DataColumn(label: Text('상태')),
-                                    DataColumn(label: Text('소속팀')),
-                                    DataColumn(label: Text('위치')),
-                                    DataColumn(label: Text('스캔일시')),
-                                    DataColumn(label: Text('동기화')),
-                                    DataColumn(label: Text('메모')),
-                                    DataColumn(label: Text('작업')),
-                                  ],
-                                  rows: filteredRows
-                                      .map(
-                                        (row) => DataRow(
-                                          onSelectChanged: (_) => context
-                                              .go('/inspection/${row.inspection.id}'),
-                                          cells: [
-                                            DataCell(Text(row.inspection.assetUid)),
-                                            DataCell(_cellText(row.asset?.name ?? '-')),
-                                            DataCell(_cellText(row.asset?.category ?? '-')),
-                                            DataCell(_cellText(row.asset?.model ?? '-')),
-                                            DataCell(_cellText(row.inspection.status)),
-                                            DataCell(
-                                              _cellText(row.inspection.userTeam ?? '-'),
-                                            ),
-                                            DataCell(_cellText(row.asset?.location ?? '-')),
-                                            DataCell(
-                                              _cellText(
-                                                provider.formatDateTime(
-                                                  row.inspection.scannedAt,
-                                                ),
-                                              ),
-                                            ),
-                                            DataCell(
-                                              Icon(
-                                                row.inspection.synced
-                                                    ? Icons.cloud_done
-                                                    : Icons.cloud_off,
-                                                size: 18,
-                                                color: row.inspection.synced
-                                                    ? Colors.green
-                                                    : Colors.orange,
-                                              ),
-                                            ),
-                                            DataCell(
-                                              _cellText(
-                                                _formattedMemo(row.inspection.memo),
-                                                maxLines: 2,
-                                              ),
-                                            ),
-                                            DataCell(
-                                              IconButton(
-                                                tooltip: '삭제',
-                                                icon: const Icon(Icons.delete_outline),
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .error,
-                                                onPressed: () async {
-                                                  final confirmed =
-                                                      await _confirmDelete(context);
-                                                  if (!mounted || !confirmed) {
-                                                    return;
-                                                  }
-                                                  provider.remove(row.inspection.id);
-                                                  if (!mounted) return;
-                                                  ScaffoldMessenger.of(context).showSnackBar(
-                                                    SnackBar(
-                                                      content: Text(
-                                                        '${row.inspection.assetUid} 삭제됨',
+                    : LayoutBuilder(
+                        builder: (context, constraints) {
+                          final tableWidth = math.max(
+                            constraints.maxWidth,
+                            _tableMinWidth,
+                          );
+                          final columns = _buildColumns(context);
+                          return Scrollbar(
+                            controller: _horizontalScrollController,
+                            thumbVisibility: true,
+                            notificationPredicate: (notification) =>
+                                notification.metrics.axis == Axis.horizontal,
+                            child: SingleChildScrollView(
+                              controller: _horizontalScrollController,
+                              scrollDirection: Axis.horizontal,
+                              child: SizedBox(
+                                width: tableWidth,
+                                height: constraints.maxHeight,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    DataTable(
+                                      headingRowColor:
+                                          MaterialStateProperty.resolveWith(
+                                        (states) => Theme.of(context)
+                                            .colorScheme
+                                            .surfaceVariant,
+                                      ),
+                                      columnSpacing: 0,
+                                      horizontalMargin: 0,
+                                      headingRowHeight: 48,
+                                      dataRowMinHeight: 0,
+                                      dataRowMaxHeight: 0,
+                                      columns: columns,
+                                      rows: const [],
+                                    ),
+                                    const Divider(height: 0),
+                                    Expanded(
+                                      child: Scrollbar(
+                                        controller: _verticalScrollController,
+                                        thumbVisibility: true,
+                                        child: SingleChildScrollView(
+                                          controller: _verticalScrollController,
+                                          child: DataTable(
+                                            headingRowHeight: 0,
+                                            columnSpacing: 0, // 컬럼 간 간격을 제거합니다.
+                                            horizontalMargin: 0,
+                                            columns: columns,
+                                            rows: pageRows
+                                                .map(
+                                                  (row) => DataRow(
+                                                    onSelectChanged: (_) =>
+                                                        context.go(
+                                                            '/assets/${row.inspection.id}'),
+                                                    cells: [
+                                                      DataCell(_cellText(
+                                                          row.inspection.assetUid)),
+                                                      DataCell(_cellText(
+                                                          row.asset?.name ?? '-')),
+                                                      DataCell(_cellText(
+                                                          row.asset?.category ?? '-')),
+                                                      DataCell(_cellText(
+                                                          row.asset?.model ?? '-')),
+                                                      DataCell(_cellText(
+                                                          row.inspection.status)),
+                                                      DataCell(_cellText(
+                                                          row.inspection.userTeam ?? '-')),
+                                                      DataCell(_cellText(
+                                                          row.asset?.location ?? '-')),
+                                                      DataCell(
+                                                        _cellText(
+                                                          provider.formatDateTime(
+                                                            row.inspection.scannedAt,
+                                                          ),
+                                                        ),
                                                       ),
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                            ),
-                                          ],
+                                                      DataCell(
+                                                        Padding(
+                                                          padding:
+                                                              const EdgeInsets
+                                                                  .symmetric(
+                                                            horizontal: 12,
+                                                          ),
+                                                          child: Icon(
+                                                            row.inspection.synced
+                                                                ? Icons.cloud_done
+                                                                : Icons.cloud_off,
+                                                            size: 18,
+                                                            color: row.inspection.synced
+                                                                ? Colors.green
+                                                                : Colors.orange,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      DataCell(
+                                                        _cellText(
+                                                          _formattedMemo(
+                                                              row.inspection.memo),
+                                                          maxLines: 2,
+                                                        ),
+                                                      ),
+                                                      DataCell(
+                                                        Padding(
+                                                          padding:
+                                                              const EdgeInsets
+                                                                  .symmetric(
+                                                            horizontal: 12,
+                                                          ),
+                                                          child: IconButton(
+                                                            tooltip: '삭제',
+                                                            icon: const Icon(
+                                                                Icons.delete_outline),
+                                                            color: Theme.of(context)
+                                                                .colorScheme
+                                                                .error,
+                                                            onPressed: () async {
+                                                              final confirmed =
+                                                                  await _confirmDelete(
+                                                                      context);
+                                                              if (!mounted ||
+                                                                  !confirmed) {
+                                                                return;
+                                                              }
+                                                              provider.remove(
+                                                                  row.inspection.id);
+                                                              if (!mounted) {
+                                                                return;
+                                                              }
+                                                              ScaffoldMessenger
+                                                                      .of(context)
+                                                                  .showSnackBar(
+                                                                SnackBar(
+                                                                  content: Text(
+                                                                    '${row.inspection.assetUid} 삭제됨',
+                                                                  ),
+                                                                ),
+                                                              );
+                                                            },
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                )
+                                                .toList(),
+                                          ),
                                         ),
-                                      )
-                                      .toList(),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
-                          ),
-                        ),
+                          );
+                        },
                       ),
               ),
+              if (totalPages > 1)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: _PaginationControls(
+                    totalPages: totalPages,
+                    currentPage: currentPage,
+                    onPageSelected: (page) {
+                      setState(() {
+                        _currentPage = page;
+                      });
+                    },
+                  ),
+                ),
             ],
           ),
         );
@@ -216,6 +300,81 @@ class _AssetsListPageState extends State<AssetsListPage> {
     return matches;
   }
 
+  List<DataColumn> _buildColumns(BuildContext context) {
+    const headerPadding = EdgeInsets.symmetric(horizontal: 12, vertical: 12);
+    final headerStyle = Theme.of(context)
+        .textTheme
+        .labelLarge; // 헤더는 기본 크기를 유지해 가독성을 확보합니다.
+    return [
+      DataColumn(
+        label: Padding(
+          padding: headerPadding,
+          child: Text('자산번호', style: headerStyle),
+        ),
+      ),
+      DataColumn(
+        label: Padding(
+          padding: headerPadding,
+          child: Text('자산명', style: headerStyle),
+        ),
+      ),
+      DataColumn(
+        label: Padding(
+          padding: headerPadding,
+          child: Text('카테고리', style: headerStyle),
+        ),
+      ),
+      DataColumn(
+        label: Padding(
+          padding: headerPadding,
+          child: Text('모델명', style: headerStyle),
+        ),
+      ),
+      DataColumn(
+        label: Padding(
+          padding: headerPadding,
+          child: Text('상태', style: headerStyle),
+        ),
+      ),
+      DataColumn(
+        label: Padding(
+          padding: headerPadding,
+          child: Text('소속팀', style: headerStyle),
+        ),
+      ),
+      DataColumn(
+        label: Padding(
+          padding: headerPadding,
+          child: Text('위치', style: headerStyle),
+        ),
+      ),
+      DataColumn(
+        label: Padding(
+          padding: headerPadding,
+          child: Text('스캔일시', style: headerStyle),
+        ),
+      ),
+      DataColumn(
+        label: Padding(
+          padding: headerPadding,
+          child: Text('동기화', style: headerStyle),
+        ),
+      ),
+      DataColumn(
+        label: Padding(
+          padding: headerPadding,
+          child: Text('메모', style: headerStyle),
+        ),
+      ),
+      DataColumn(
+        label: Padding(
+          padding: headerPadding,
+          child: Text('작업', style: headerStyle),
+        ),
+      ),
+    ];
+  }
+
   bool _matchesQuery(Inspection inspection, AssetInfo? asset, String query) {
     switch (_searchField) {
       case _AssetSearchField.name:
@@ -234,12 +393,19 @@ class _AssetsListPageState extends State<AssetsListPage> {
   }
 
   Widget _cellText(String value, {int maxLines = 1}) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 200),
-      child: Text(
-        value,
-        maxLines: maxLines,
-        overflow: TextOverflow.ellipsis,
+    final textStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+          fontSize: 13,
+        ); // 본문 글꼴 크기를 살짝 줄여 테이블을 더 촘촘하게 보여줍니다.
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 200),
+        child: Text(
+          value,
+          maxLines: maxLines,
+          overflow: TextOverflow.ellipsis,
+          style: textStyle,
+        ),
       ),
     );
   }
@@ -283,6 +449,7 @@ class _FilterSection extends StatelessWidget {
     required this.provider,
     required this.filteredCount,
     required this.totalCount,
+    required this.onFilterReset,
   });
 
   final TextEditingController searchController;
@@ -292,6 +459,7 @@ class _FilterSection extends StatelessWidget {
   final InspectionProvider provider;
   final int filteredCount;
   final int totalCount;
+  final VoidCallback onFilterReset;
 
   @override
   Widget build(BuildContext context) {
@@ -347,6 +515,7 @@ class _FilterSection extends StatelessWidget {
                 ],
                 selected: <bool>{provider.onlyUnsynced},
                 onSelectionChanged: (value) {
+                  onFilterReset();
                   provider.setOnlyUnsynced(value.first);
                 },
               ),
@@ -369,4 +538,101 @@ class _AssetRowData {
 
   final Inspection inspection;
   final AssetInfo? asset;
+}
+
+class _PaginationControls extends StatelessWidget {
+  const _PaginationControls({
+    required this.totalPages,
+    required this.currentPage,
+    required this.onPageSelected,
+  });
+
+  final int totalPages;
+  final int currentPage;
+  final ValueChanged<int> onPageSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final buttons = <Widget>[
+      IconButton(
+        icon: const Icon(Icons.chevron_left),
+        onPressed:
+            currentPage > 0 ? () => onPageSelected(currentPage - 1) : null,
+      ),
+      ..._pageNumberWidgets(context),
+      IconButton(
+        icon: const Icon(Icons.chevron_right),
+        onPressed: currentPage < totalPages - 1
+            ? () => onPageSelected(currentPage + 1)
+            : null,
+      ),
+    ];
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: buttons,
+    );
+  }
+
+  List<Widget> _pageNumberWidgets(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final pages = _visiblePageNumbers();
+
+    return pages
+        .map(
+          (page) => page == null
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4),
+                  child: Text('...'),
+                )
+              : Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: TextButton(
+                    onPressed: page == currentPage
+                        ? null
+                        : () => onPageSelected(page),
+                    child: Text(
+                      '${page + 1}',
+                      style: page == currentPage
+                          ? textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            )
+                          : null,
+                    ),
+                  ),
+                ),
+        )
+        .toList(growable: false);
+  }
+
+  List<int?> _visiblePageNumbers() {
+    const maxDisplay = 7;
+    if (totalPages <= maxDisplay) {
+      return List<int>.generate(totalPages, (index) => index);
+    }
+
+    final pages = <int?>[];
+    pages.add(0);
+
+    if (currentPage > 3) {
+      pages.add(null);
+    }
+
+    final start = currentPage <= 3 ? 1 : currentPage - 1;
+    final end = currentPage >= totalPages - 4 ? totalPages - 2 : currentPage + 1;
+
+    for (var page = start; page <= end; page++) {
+      if (page > 0 && page < totalPages - 1) {
+        pages.add(page);
+      }
+    }
+
+    if (currentPage < totalPages - 4) {
+      pages.add(null);
+    }
+
+    pages.add(totalPages - 1);
+
+    return pages;
+  }
 }
