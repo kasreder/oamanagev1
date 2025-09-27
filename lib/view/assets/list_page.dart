@@ -1,4 +1,6 @@
 // lib/view/assets/detail_page.dart
+
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -36,6 +38,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
   final ScrollController _horizontalScrollController = ScrollController();
   final ScrollController _verticalScrollController = ScrollController();
   _AssetSearchField _searchField = _AssetSearchField.name;
+  int _currentPage = 0;
 
   @override
   void dispose() {
@@ -50,6 +53,18 @@ class _AssetsListPageState extends State<AssetsListPage> {
     return Consumer<InspectionProvider>(
       builder: (context, provider, _) {
         final filteredRows = _filterRows(provider);
+        const pageSize = 20;
+        final totalPages =
+            filteredRows.isEmpty ? 0 : (filteredRows.length / pageSize).ceil();
+        final currentPage = totalPages == 0
+            ? 0
+            : (_currentPage.clamp(0, totalPages - 1)).toInt();
+        final pageRows = filteredRows.isEmpty
+            ? const <_AssetRowData>[]
+            : filteredRows.sublist(
+                currentPage * pageSize,
+                math.min((currentPage + 1) * pageSize, filteredRows.length),
+              );
         final totalCount = provider.onlyUnsynced
             ? provider.unsyncedCount
             : provider.totalCount;
@@ -65,12 +80,20 @@ class _AssetsListPageState extends State<AssetsListPage> {
                   if (value == null) return;
                   setState(() {
                     _searchField = value;
+                    _currentPage = 0;
                   });
                 },
-                onQueryChanged: (_) => setState(() {}),
+                onQueryChanged: (_) => setState(() {
+                  _currentPage = 0;
+                }),
                 provider: provider,
                 filteredCount: filteredRows.length,
                 totalCount: totalCount,
+                onFilterReset: () {
+                  setState(() {
+                    _currentPage = 0;
+                  });
+                },
               ),
               Expanded(
                 child: filteredRows.isEmpty
@@ -111,7 +134,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
                                     DataColumn(label: Text('메모')),
                                     DataColumn(label: Text('작업')),
                                   ],
-                                  rows: filteredRows
+                                  rows: pageRows
                                       .map(
                                         (row) => DataRow(
                                           onSelectChanged: (_) => context
@@ -186,6 +209,19 @@ class _AssetsListPageState extends State<AssetsListPage> {
                         ),
                       ),
               ),
+              if (totalPages > 1)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: _PaginationControls(
+                    totalPages: totalPages,
+                    currentPage: currentPage,
+                    onPageSelected: (page) {
+                      setState(() {
+                        _currentPage = page;
+                      });
+                    },
+                  ),
+                ),
             ],
           ),
         );
@@ -284,6 +320,7 @@ class _FilterSection extends StatelessWidget {
     required this.provider,
     required this.filteredCount,
     required this.totalCount,
+    required this.onFilterReset,
   });
 
   final TextEditingController searchController;
@@ -293,6 +330,7 @@ class _FilterSection extends StatelessWidget {
   final InspectionProvider provider;
   final int filteredCount;
   final int totalCount;
+  final VoidCallback onFilterReset;
 
   @override
   Widget build(BuildContext context) {
@@ -348,6 +386,7 @@ class _FilterSection extends StatelessWidget {
                 ],
                 selected: <bool>{provider.onlyUnsynced},
                 onSelectionChanged: (value) {
+                  onFilterReset();
                   provider.setOnlyUnsynced(value.first);
                 },
               ),
@@ -370,4 +409,101 @@ class _AssetRowData {
 
   final Inspection inspection;
   final AssetInfo? asset;
+}
+
+class _PaginationControls extends StatelessWidget {
+  const _PaginationControls({
+    required this.totalPages,
+    required this.currentPage,
+    required this.onPageSelected,
+  });
+
+  final int totalPages;
+  final int currentPage;
+  final ValueChanged<int> onPageSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final buttons = <Widget>[
+      IconButton(
+        icon: const Icon(Icons.chevron_left),
+        onPressed:
+            currentPage > 0 ? () => onPageSelected(currentPage - 1) : null,
+      ),
+      ..._pageNumberWidgets(context),
+      IconButton(
+        icon: const Icon(Icons.chevron_right),
+        onPressed: currentPage < totalPages - 1
+            ? () => onPageSelected(currentPage + 1)
+            : null,
+      ),
+    ];
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: buttons,
+    );
+  }
+
+  List<Widget> _pageNumberWidgets(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final pages = _visiblePageNumbers();
+
+    return pages
+        .map(
+          (page) => page == null
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4),
+                  child: Text('...'),
+                )
+              : Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: TextButton(
+                    onPressed: page == currentPage
+                        ? null
+                        : () => onPageSelected(page),
+                    child: Text(
+                      '${page + 1}',
+                      style: page == currentPage
+                          ? textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            )
+                          : null,
+                    ),
+                  ),
+                ),
+        )
+        .toList(growable: false);
+  }
+
+  List<int?> _visiblePageNumbers() {
+    const maxDisplay = 7;
+    if (totalPages <= maxDisplay) {
+      return List<int>.generate(totalPages, (index) => index);
+    }
+
+    final pages = <int?>[];
+    pages.add(0);
+
+    if (currentPage > 3) {
+      pages.add(null);
+    }
+
+    final start = currentPage <= 3 ? 1 : currentPage - 1;
+    final end = currentPage >= totalPages - 4 ? totalPages - 2 : currentPage + 1;
+
+    for (var page = start; page <= end; page++) {
+      if (page > 0 && page < totalPages - 1) {
+        pages.add(page);
+      }
+    }
+
+    if (currentPage < totalPages - 4) {
+      pages.add(null);
+    }
+
+    pages.add(totalPages - 1);
+
+    return pages;
+  }
 }
