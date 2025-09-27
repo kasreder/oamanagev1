@@ -124,6 +124,7 @@ class InspectionProvider extends ChangeNotifier {
               status: _stringOrNull(item['assets_status']) ??
                   _stringOrNull(item['status']) ??
                   '',
+              category: _stringOrNull(item['category']) ?? '',
             ),
           ),
         );
@@ -232,6 +233,7 @@ class AssetInfo {
     required this.vendor,
     required this.location,
     this.status = '',
+    this.category = '',
   });
 
   final String uid;
@@ -241,6 +243,7 @@ class AssetInfo {
   final String vendor;
   final String location;
   final String status;
+  final String category;
 }
 
 /// 사용자 참조 정보를 보관하는 DTO.
