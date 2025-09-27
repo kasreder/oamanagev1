@@ -1,3 +1,5 @@
+// Path: lib/data/inspection_repository.dart
+
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -6,11 +8,22 @@ import 'package:collection/collection.dart';
 import '../models/inspection.dart';
 
 /// 메모리 기반 실사 저장소.
+///
+/// - 앱 부팅 시 더미 JSON을 로드하여 [_items] 리스트를 구성하고,
+/// - 이후에는 Provider 등을 통해 in-memory 상태를 갱신한다.
+///
+/// 본 클래스는 비동기 로딩, 정렬, 메모 생성 로직 등 실사 데이터
+/// 전처리를 담당한다.
 class InspectionRepository {
   final List<Inspection> _items = [];
   // TODO: Hive/Sqflite 등 영속 저장소 교체 포인트 고려
 
   /// 에셋 JSON으로부터 초기 데이터를 로드한다.
+  ///
+  /// 1. `asset_inspections.json`을 읽어 실사 원본을 파싱한다.
+  /// 2. `assets.json`을 추가로 읽어 자산별 상태(status)를 매핑한다.
+  /// 3. 누락된 필드는 디폴트 값을 채워 넣으며, 메모 문자열을 구성한다.
+  /// 4. 로드한 실사 목록을 최근 스캔 순으로 정렬하여 [_items]에 보관한다.
   Future<void> loadFromAssets() async {
     try {
       final raw = await _loadInspectionRaw();
@@ -57,9 +70,13 @@ class InspectionRepository {
   }
 
   /// 현재 보유 중인 실사 리스트를 반환한다.
+  ///
+  /// 외부에서 [_items]를 변경하지 못하도록 `List.unmodifiable`을 사용한다.
   List<Inspection> getAll() => List.unmodifiable(_items);
 
   /// 실사 내역을 추가하거나 갱신한다.
+  ///
+  /// [inspection.id] 기준으로 기존 항목을 찾고, 존재하면 교체 후 정렬을 유지한다.
   void upsert(Inspection inspection) {
     final index = _items.indexWhere((item) => item.id == inspection.id);
     if (index >= 0) {
@@ -71,18 +88,27 @@ class InspectionRepository {
   }
 
   /// 식별자로 실사를 삭제한다.
+  ///
+  /// 주로 상세 화면에서 삭제 요청 시 호출되며, 정렬은 재실행할 필요가 없다.
   void delete(String id) {
     _items.removeWhere((item) => item.id == id);
   }
 
+  /// ID로 실사 단건을 조회한다. 존재하지 않으면 `null`을 반환한다.
   Inspection? findById(String id) {
     return _items.firstWhereOrNull((item) => item.id == id);
   }
 
+  /// 스캔 일자를 기준으로 내림차순 정렬한다.
+  ///
+  /// 최신 스캔이 리스트 상단에 위치하도록 정렬하여 UX를 개선한다.
   void _sortItems() {
     _items.sort((a, b) => b.scannedAt.compareTo(a.scannedAt));
   }
 
+  /// 자산 실사 더미 JSON을 읽는다.
+  ///
+  /// `assets/dummy/mock` 경로가 없을 경우 `assets/mock` 경로를 폴백으로 사용한다.
   Future<String> _loadInspectionRaw() async {
     try {
       return await rootBundle.loadString('assets/dummy/mock/asset_inspections.json');
@@ -91,6 +117,9 @@ class InspectionRepository {
     }
   }
 
+  /// 자산 상태 정보를 읽어서 UID → 상태 맵을 구성한다.
+  ///
+  /// JSON 파싱에 실패하거나 파일이 없으면 빈 맵을 반환한다.
   Future<Map<String, String>> _loadAssetStatuses() async {
     Future<String> load(String path) => rootBundle.loadString(path);
     try {
@@ -106,6 +135,7 @@ class InspectionRepository {
     }
   }
 
+  /// 자산 상태 JSON 문자열을 파싱하여 UID 기반 맵을 만든다.
   Map<String, String> _parseAssetStatuses(String raw) {
     final decoded = (jsonDecode(raw) as List<dynamic>).cast<Map<String, dynamic>>();
     final map = <String, String>{};
@@ -120,12 +150,16 @@ class InspectionRepository {
     return map;
   }
 
+  /// 값이 `null`이거나 빈 문자열일 경우 `null`을 반환하는 헬퍼.
   String? _stringOrNull(dynamic value) {
     if (value == null) return null;
     final stringValue = value.toString().trim();
     return stringValue.isEmpty ? null : stringValue;
   }
 
+  /// 점검자/자산 정보를 기반으로 한 다중 행 메모를 생성한다.
+  ///
+  /// JSON에 포함된 필드를 순차적으로 조합하여 사용자에게 읽기 쉬운 문자열을 만든다.
   String? _buildMemo(Map<String, dynamic> item) {
     final lines = <String>[];
     final inspector = _stringOrNull(item['inspector_name']);
