@@ -9,6 +9,7 @@ class Inspection {
     this.memo,
     required this.scannedAt,
     required this.synced,
+    this.userTeam,
   });
 
   final String id;
@@ -17,6 +18,7 @@ class Inspection {
   String? memo;
   DateTime scannedAt;
   bool synced;
+  String? userTeam;
 
   factory Inspection.fromJson(Map<String, dynamic> json) {
     return Inspection(
@@ -26,6 +28,7 @@ class Inspection {
       memo: json['memo'] as String?,
       scannedAt: DateTime.parse(json['scannedAt'] as String),
       synced: json['synced'] as bool? ?? false,
+      userTeam: json['userTeam'] as String?,
     );
   }
 
@@ -37,6 +40,7 @@ class Inspection {
       'memo': memo,
       'scannedAt': scannedAt.toUtc().toIso8601String(),
       'synced': synced,
+      'userTeam': userTeam,
     };
   }
 
@@ -45,6 +49,7 @@ class Inspection {
     String? memo,
     DateTime? scannedAt,
     bool? synced,
+    String? userTeam,
   }) {
     return Inspection(
       id: id,
@@ -53,6 +58,7 @@ class Inspection {
       memo: memo ?? this.memo,
       scannedAt: scannedAt ?? this.scannedAt,
       synced: synced ?? this.synced,
+      userTeam: userTeam ?? this.userTeam,
     );
   }
 

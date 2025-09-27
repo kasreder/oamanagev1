@@ -57,6 +57,7 @@ class InspectionRepository {
             memo: memo,
             scannedAt: parsedDate,
             synced: item['synced'] as bool? ?? ((item['inspection_count'] as int? ?? 0) % 2 == 0),
+            userTeam: _stringOrNull(item['user_team']),
           ),
         );
       }
