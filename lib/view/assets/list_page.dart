@@ -114,7 +114,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
                                       .map(
                                         (row) => DataRow(
                                           onSelectChanged: (_) => context
-                                              .go('/inspection/${row.inspection.id}'),
+                                              .go('/assets/${row.inspection.id}'),
                                           cells: [
                                             DataCell(Text(row.inspection.assetUid)),
                                             DataCell(_cellText(row.asset?.name ?? '-')),
