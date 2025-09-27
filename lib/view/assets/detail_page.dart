@@ -6,16 +6,16 @@ import '../../models/inspection.dart';
 import '../../providers/inspection_provider.dart';
 import '../common/app_scaffold.dart';
 
-class InspectionDetailPage extends StatefulWidget {
-  const InspectionDetailPage({super.key, required this.inspectionId});
+class AssetsDetailPage extends StatefulWidget {
+  const AssetsDetailPage({super.key, required this.inspectionId});
 
   final String inspectionId;
 
   @override
-  State<InspectionDetailPage> createState() => _InspectionDetailPageState();
+  State<AssetsDetailPage> createState() => _AssetsDetailPageState();
 }
 
-class _InspectionDetailPageState extends State<InspectionDetailPage> {
+class _AssetsDetailPageState extends State<AssetsDetailPage> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _memoController;
   String _status = '사용';

@@ -5,8 +5,8 @@ import 'package:provider/provider.dart';
 import '../../providers/inspection_provider.dart';
 import '../common/app_scaffold.dart';
 
-class InspectionListPage extends StatelessWidget {
-  const InspectionListPage({super.key});
+class AssetsListPage extends StatelessWidget {
+  const AssetsListPage({super.key});
 
   @override
   Widget build(BuildContext context) {

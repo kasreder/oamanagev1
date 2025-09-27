@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../features/asset_verification/list_page.dart';
-import '../features/home/home_page.dart';
-import '../features/inspections/detail_page.dart';
-import '../features/inspections/list_page.dart';
-import '../features/scan/scan_page.dart';
+import '../view/asset_verification/list_page.dart';
+import '../view/home/home_page.dart';
+import '../view/assets/detail_page.dart';
+import '../view/assets/list_page.dart';
+import '../view/scan/scan_page.dart';
 import '../providers/inspection_provider.dart';
 
 class AppRouter {
@@ -27,13 +27,13 @@ class AppRouter {
       ),
       GoRoute(
         path: '/inspections',
-        builder: (context, state) => const InspectionListPage(),
+        builder: (context, state) => const AssetsListPage(),
       ),
       GoRoute(
         path: '/inspection/:id',
         builder: (context, state) {
           final id = state.pathParameters['id']!;
-          return InspectionDetailPage(inspectionId: id);
+          return AssetsDetailPage(inspectionId: id);
         },
       ),
       GoRoute(
