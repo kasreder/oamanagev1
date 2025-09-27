@@ -61,7 +61,7 @@ class _ScanPageState extends State<ScanPage> {
       final provider = context.read<InspectionProvider>();
       provider.addOrUpdate(inspection);
       if (mounted) {
-        context.go('/inspection/${inspection.id}');
+        context.go('/assets/${inspection.id}');
       }
     } catch (error) {
       _isProcessing = false;
