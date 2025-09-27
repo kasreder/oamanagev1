@@ -26,11 +26,11 @@ class AppRouter {
         builder: (context, state) => const ScanPage(),
       ),
       GoRoute(
-        path: '/inspections',
+        path: '/assets',
         builder: (context, state) => const AssetsListPage(),
       ),
       GoRoute(
-        path: '/inspection/:id',
+        path: '/assets/:id',
         builder: (context, state) {
           final id = state.pathParameters['id']!;
           return AssetsDetailPage(inspectionId: id);
