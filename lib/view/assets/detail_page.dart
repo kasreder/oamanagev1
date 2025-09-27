@@ -88,7 +88,7 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
     if (!confirmed) return;
     provider.remove(widget.inspectionId);
     if (!mounted) return;
-    context.go('/inspections');
+    context.go('/assets');
   }
 
   @override
@@ -151,7 +151,7 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
                             ),
                             const SizedBox(width: 12),
                             OutlinedButton(
-                              onPressed: () => context.go('/inspections'),
+                              onPressed: () => context.go('/assets'),
                               child: const Text('완료'),
                             ),
                             const Spacer(),
