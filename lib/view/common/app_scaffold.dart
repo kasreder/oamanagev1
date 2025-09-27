@@ -25,10 +25,10 @@ class AppScaffold extends StatelessWidget {
       route: '/',
     ),
     _NavigationDestination(
-      label: '실사 목록',
+      label: '자산리스트',
       icon: Icons.list_alt,
       selectedIcon: Icons.fact_check,
-      route: '/inspections',
+      route: '/assets',
     ),
     _NavigationDestination(
       label: '미검증 자산',
