@@ -108,63 +108,77 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
                   padding: const EdgeInsets.all(16),
                   child: Form(
                     key: _formKey,
-                    child: ListView(
-                      children: [
-                        Card(
-                          child: ListTile(
-                            title: Text(inspection.assetUid),
-                            subtitle: Text(provider.formatDateTime(inspection.scannedAt)),
-                            trailing: asset != null ? Text(asset.model) : null,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final minWidth = constraints.maxWidth;
+                        return SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(minWidth: minWidth),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Card(
+                                  child: ListTile(
+                                    title: Text(inspection.assetUid),
+                                    subtitle: Text(provider.formatDateTime(inspection.scannedAt)),
+                                    trailing: asset != null ? Text(asset.model) : null,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                DropdownButtonFormField<String>(
+                                  value: _status,
+                                  decoration: const InputDecoration(labelText: '상태'),
+                                  items: const [
+                                    DropdownMenuItem(value: '사용', child: Text('사용')),
+                                    DropdownMenuItem(value: '가용(창고)', child: Text('가용(창고)')),
+                                    DropdownMenuItem(value: '이동', child: Text('이동')),
+                                  ],
+                                  onChanged: (value) {
+                                    if (value != null) {
+                                      setState(() {
+                                        _status = value;
+                                      });
+                                    }
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                TextFormField(
+                                  controller: _memoController,
+                                  maxLines: 4,
+                                  decoration: const InputDecoration(
+                                    labelText: '메모',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                Row(
+                                  children: [
+                                    FilledButton(
+                                      onPressed: () => _save(provider),
+                                      child: const Text('저장'),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    OutlinedButton(
+                                      onPressed: () => context.go('/assets'),
+                                      child: const Text('완료'),
+                                    ),
+                                    const Spacer(),
+                                    TextButton.icon(
+                                      onPressed: () => _delete(provider),
+                                      icon: const Icon(Icons.delete),
+                                      label: const Text('삭제'),
+                                      style:
+                                          TextButton.styleFrom(foregroundColor: Colors.redAccent),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                        DropdownButtonFormField<String>(
-                          value: _status,
-                          decoration: const InputDecoration(labelText: '상태'),
-                          items: const [
-                            DropdownMenuItem(value: '사용', child: Text('사용')),
-                            DropdownMenuItem(value: '가용(창고)', child: Text('가용(창고)')),
-                            DropdownMenuItem(value: '이동', child: Text('이동')),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() {
-                                _status = value;
-                              });
-                            }
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _memoController,
-                          maxLines: 4,
-                          decoration: const InputDecoration(
-                            labelText: '메모',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        Row(
-                          children: [
-                            FilledButton(
-                              onPressed: () => _save(provider),
-                              child: const Text('저장'),
-                            ),
-                            const SizedBox(width: 12),
-                            OutlinedButton(
-                              onPressed: () => context.go('/assets'),
-                              child: const Text('완료'),
-                            ),
-                            const Spacer(),
-                            TextButton.icon(
-                              onPressed: () => _delete(provider),
-                              icon: const Icon(Icons.delete),
-                              label: const Text('삭제'),
-                              style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
-                            ),
-                          ],
-                        ),
-                      ],
+                        );
+                      },
                     ),
                   ),
                 ),
