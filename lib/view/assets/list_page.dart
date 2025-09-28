@@ -322,7 +322,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
         label: _headerCell('자산번호', headerStyle),
       ),
       DataColumn(
-        label: _headerCell('자산명', headerStyle),
+        label: _headerCell('사용자', headerStyle),
       ),
       DataColumn(
         label: _headerCell('장비종류', headerStyle),
