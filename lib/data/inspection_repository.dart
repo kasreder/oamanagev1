@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:collection/collection.dart';
-
 import '../models/inspection.dart';
 
 /// 메모리 기반 실사 저장소.

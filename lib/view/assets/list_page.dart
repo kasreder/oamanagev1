@@ -20,9 +20,9 @@ extension on _AssetSearchField {
   String get label {
     switch (this) {
       case _AssetSearchField.name:
-        return '자산명';
+        return '사용자';
       case _AssetSearchField.category:
-        return '카테고리';
+        return '장비종류';
       case _AssetSearchField.modelName:
         return '모델명';
       case _AssetSearchField.organizationTeam:
@@ -74,7 +74,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
             ? provider.unsyncedCount
             : provider.totalCount;
         return AppScaffold(
-          title: '실사 목록',
+          title: '자산 목록',
           selectedIndex: 1,
           body: Column(
             children: [
@@ -468,28 +468,6 @@ class _AssetsListPageState extends State<AssetsListPage> {
       String value, {
         int maxLines = 1,
         double width = 200,
-      }) {
-    final textStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
-      fontSize: 13,
-    ); // 본문 글꼴 크기를 살짝 줄여 테이블을 더 촘촘하게 보여줍니다.
-    return Padding(
-      padding: _cellPadding,
-      child: SizedBox(
-        width: width,
-        child: Text(
-          value,
-          maxLines: maxLines,
-          overflow: TextOverflow.ellipsis,
-          style: textStyle,
-        ),
-      ),
-    );
-  }
-
-  Widget _cellText10( //아이콘
-      String value, {
-        int maxLines = 1,
-        double width = 10,
       }) {
     final textStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
       fontSize: 13,
