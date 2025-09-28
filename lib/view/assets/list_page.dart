@@ -326,6 +326,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
       ),
       DataColumn(
         label: _headerCell('장비종류', headerStyle),
+
       ),
       DataColumn(
         label: _headerCell('모델명', headerStyle),
@@ -345,6 +346,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
       DataColumn(
         label: _headerCell30(
           '인증',
+
           headerStyle,
           width: _iconColumnWidth,
         ),
@@ -409,6 +411,27 @@ class _AssetsListPageState extends State<AssetsListPage> {
       TextStyle? style, {
         double width = 30,
       }) {
+    return Padding(
+      padding: _cellPadding,
+      child: SizedBox(
+        width: width,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            label,
+            style: style,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _headerCell(
+    String label,
+    TextStyle? style, {
+    double width = _defaultColumnWidth,
+  }) {
     return Padding(
       padding: _cellPadding,
       child: SizedBox(
