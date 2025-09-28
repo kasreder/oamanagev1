@@ -40,6 +40,9 @@ function macAddress() {
   const h = () => pad(randomInt(0, 256).toString(16), 2);
   return `${h()}:${h()}:${h()}:${h()}:${h()}:${h()}`.toUpperCase();
 }
+function resolveOrganization(team, dept, hq) {
+  return team ?? dept ?? hq; // 팀 → 실 → 본부
+}
 
 /* ------------ dictionaries ------------ */
 const HQS = ['경영본부','생산본부','영업본부','연구개발본부','품질본부'];
@@ -53,15 +56,17 @@ const FLOORS = ['1층','2층','3층','4층','5층','6층', null];
 
 const ASSET_STATUS = ['사용','가용(창고)','이동'];
 const BUILDING1 = ['본사','개발실','본사외'];
-const CATEGORIES = ['OA장비','전산장비','네트워크장비','OA소모품','전산소모품','소모품'];
 const NETWORKS = [null, '업무망','개발망','시스템망','무선업무망','무선인터넷','유선인터넷','로컬'];
 const VENDORS = ['Lenovo','HP','Dell','Apple','Samsung','LG','Cisco','Siemens','Omron','Mitsubishi','Universal Robots'];
 const ASSET_TYPES = ['데스크탑','모니터','프린터','스캐너','노트북','태블릿','소모품'];
 
+// OS 목록(소문자 표기 유지)
+const OS_LIST = ['win', 'ios', 'mac os', 'ipados', 'android', 'etc'];
+
 // memo 샘플
 const MEMOS = [
   '정기점검 완료', '부품 교체 필요', '펌웨어 업데이트 예정', '사용 빈도 낮음',
-  '소음 발생 관찰됨', '정상 동작', '오염으로 청소 필요', '이동 계획 있음',null
+  '소음 발생 관찰됨', '정상 동작', '오염으로 청소 필요', '이동 계획 있음', null
 ];
 
 function koreanName() {
@@ -85,6 +90,33 @@ function modelName() {
   const suffix = ['100','200','500','700','900','10e','3000','G2','M2'];
   return `${pick(VENDORS)} ${pick(series)} ${pick(suffix)}`;
 }
+function osVersion(os) {
+  switch (os) {
+    case 'win': {
+      const win = pick(['10 22H2','11 23H2','11 24H2']);
+      return `Windows ${win}`;
+    }
+    case 'ios': {
+      const v = pick(['17.6','17.6.1','18.0','18.1']);
+      return `iOS ${v}`;
+    }
+    case 'mac os': {
+      const v = pick(['13.6','14.6.1','15.0']);
+      return `macOS ${v}`;
+    }
+    case 'ipados': {
+      const v = pick(['17.6','18.0']);
+      return `iPadOS ${v}`;
+    }
+    case 'android': {
+      const v = pick(['13','14','15']);
+      return `Android ${v}`;
+    }
+    case 'etc':
+    default:
+      return pick(['FreeDOS 1.3','Ubuntu 22.04','Rocky 9','Unknown']);
+  }
+}
 
 /* ------------ generators ------------ */
 function generateUsers(n) {
@@ -96,7 +128,7 @@ function generateUsers(n) {
       employee_name: koreanName(),
       organization_hq: pick(HQS),
       organization_dept: Math.random() < 0.03 ? null : pick(DEPTS), // 3% null
-      organization_team: pick(TEAMS),
+      organization_team: Math.random() < 0.30 ? null : pick(TEAMS),  // ✅ 팀 30% null
       organization_part: Math.random() < 0.9 ? null : pick(PARTS),   // 90% null
       organization_etc: pick(POSITIONS),
       work_building: pick(BUILDINGS),
@@ -127,16 +159,39 @@ function generateAssets(n, users) {
     const physicalDt = chance(0.6) ? randBetweenDays(120, 0) : null;
     const confirmationDt = chance(0.4) ? randBetweenDays(90, 0) : null;
 
-    // memo1, memo2: 0.55 확률로 값, 아니면 null
-    const memo1 = chance(0.55) ? pick(MEMOS) : null;
+    // OS / OS 버전
+    const os = pick(OS_LIST);
+    const os_ver = osVersion(os);
+
+    // memo1, memo2
+    let memo1 = chance(0.55) ? pick(MEMOS) : null;
     const memo2 = chance(0.55) ? pick(MEMOS) : null;
+
+    // ✅ 공용 자산일 때 memo1을 "<팀명> <이름> 사용" 형식으로 강제 입력
+    if (!assigned) {
+      memo1 = `${pick(TEAMS)} ${koreanName()} 사용`;
+    }
+
+    // ✅ organization (팀→실→본부)
+    let orgTeam, orgDept, orgHq;
+    if (assigned) {
+      orgTeam = assigned.organization_team ?? null;
+      orgDept = assigned.organization_dept ?? null;
+      orgHq   = assigned.organization_hq; // 항상 값 존재
+    } else {
+      // 공용일 때도 규칙 적용을 위해 가상의 조직값 생성
+      orgTeam = Math.random() < 0.30 ? null : pick(TEAMS);          // 팀 30% null 규칙 반영
+      orgDept = Math.random() < 0.03 ? null : pick(DEPTS);          // 실 3% null 규칙 반영
+      orgHq   = pick(HQS);
+    }
+    const organization = resolveOrganization(orgTeam, orgDept, orgHq);
 
     res.push({
       id: i + 1,
       asset_uid: assetUid(),
       name: assigneeName,
       assets_status: status,
-      assets_types: pick(ASSET_TYPES),
+      assets_types: pick(ASSET_TYPES),      // category 대신
       serial_number: serial(),
       model_name: modelName(),
       vendor: pick(VENDORS),
@@ -154,9 +209,12 @@ function generateAssets(n, users) {
       location_row: locRow,
       location_col: locCol,
       location_drawing_file: drawingId ? `drawing_${drawingId}.png` : null,
-      // ★ 추가된 메모 필드
+      // ★ 추가된 필드
       memo1,
       memo2,
+      os,
+      os_ver,
+      organization, // ✅ 새 필드
       created_at: iso(createdAt),
       updated_at: iso(updatedAt),
       user_id: assigned?.id ?? null
@@ -221,7 +279,7 @@ function generateInspections(total, assets, users) {
       base.department_confirm = null;
       base.asset_info = {
         model_name: null,
-        usage: asset.user_id ? "개인" : "공용", // 사용 용도는 정보 자체가 민감도 낮다고 가정하여 유지
+        usage: asset.user_id ? "개인" : "공용", // 용도는 유지
         serial_number: null
       };
     }
