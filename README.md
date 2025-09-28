@@ -22,33 +22,33 @@ assets/dummy/mock/asset_inspections.json
 더미 JSON 구조를 기반으로 한 주요 테이블(또는 컬렉션)의 스키마입니다. 실제 구현 시 RDB 또는 NoSQL에 맞춰 타입을 조정하면 됩니다.
 
 ### assets (자산 정보)
-| 컬럼 | 타입 | 설명 |
-| --- | --- | --- |
-| `id` | INTEGER | 자산 기본 키 |
+| 컬럼 | 타입 | 설명                  |
+| --- | --- |---------------------|
+| `id` | INTEGER | 자산 기본 키             |
 | `asset_uid` | TEXT | 자산 고유 코드(실사 시 매칭 키) |
-| `name` | TEXT | 자산 명칭 또는 사용자 |
-| `assets_status` | TEXT | 사용/가용/이동 등 자산 상태 |
+| `name` | TEXT | 자산 명칭 또는 사용자        |
+| `assets_status` | TEXT | 사용/가용/이동 등 자산 상태    |
 | `category` | TEXT | 자산 분류(사무기기, 네트워크 등) |
-| `serial_number` | TEXT | 시리얼 번호 |
-| `model_name` | TEXT | 모델명 |
-| `vendor` | TEXT | 제조사 |
-| `network` | TEXT | 네트워크 구분 |
-| `physical_check_date` | DATETIME | 실물 점검일 |
-| `confirmation_date` | DATETIME | 관리자 확인일 |
-| `normal_comment` | TEXT | 일반 메모 |
-| `oa_comment` | TEXT | OA 관련 메모 |
-| `mac_address` | TEXT | MAC 주소 |
-| `building1` | TEXT | 사용자 유형(내부/외부 등) |
-| `building` | TEXT | 건물명 |
-| `floor` | TEXT | 층 정보 |
-| `member_name` | TEXT | 사용자 이름 |
-| `location_drawing_id` | INTEGER | 도면 ID |
-| `location_row` | INTEGER | 도면 좌표(행) |
-| `location_col` | INTEGER | 도면 좌표(열) |
-| `location_drawing_file` | TEXT | 도면 파일명 |
-| `created_at` | DATETIME | 생성일 |
-| `updated_at` | DATETIME | 수정일 |
-| `user_id` | INTEGER | 자산 담당 사용자 FK |
+| `serial_number` | TEXT | 시리얼 번호              |
+| `model_name` | TEXT | 모델명                 |
+| `vendor` | TEXT | 제조사                 |
+| `network` | TEXT | 네트워크 구분             |
+| `physical_check_date` | DATETIME | 실물 점검일              |
+| `confirmation_date` | DATETIME | 관리자 확인일             |
+| `normal_comment` | TEXT | 일반 메모               |
+| `oa_comment` | TEXT | OA 관련 메모            |
+| `mac_address` | TEXT | MAC 주소              |
+| `building1` | TEXT | 사용자 유형(내부/외부 등)     |
+| `building` | TEXT | 건물명                 |
+| `floor` | TEXT | 층 정보                |
+| `member_name` | TEXT | 관리자 이름              |
+| `location_drawing_id` | INTEGER | 도면 ID               |
+| `location_row` | INTEGER | 도면 좌표(행)            |
+| `location_col` | INTEGER | 도면 좌표(열)            |
+| `location_drawing_file` | TEXT | 도면 파일명              |
+| `created_at` | DATETIME | 생성일                 |
+| `updated_at` | DATETIME | 수정일                 |
+| `user_id` | INTEGER | 자산 담당 사용자 FK        |
 
 ### users (사원 정보)
 | 컬럼 | 타입 | 설명 |

@@ -14,14 +14,14 @@ class AssetsListPage extends StatefulWidget {
   State<AssetsListPage> createState() => _AssetsListPageState();
 }
 
-enum _AssetSearchField { name, category, modelName, organizationTeam }
+enum _AssetSearchField { name, assets_types, modelName, organizationTeam }
 
 extension on _AssetSearchField {
   String get label {
     switch (this) {
       case _AssetSearchField.name:
         return '사용자';
-      case _AssetSearchField.category:
+      case _AssetSearchField.assets_types:
         return '장비종류';
       case _AssetSearchField.modelName:
         return '모델명';
@@ -164,7 +164,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
                                             DataCell(_cellText(
                                                 row.asset?.name ?? '-')),
                                             DataCell(_cellText(
-                                                row.asset?.category ?? '-')),
+                                                row.asset?.assets_types ?? '-')),
                                             DataCell(_cellText(
                                                 row.asset?.model ?? '-')),
                                             DataCell(_cellText(
@@ -430,8 +430,8 @@ class _AssetsListPageState extends State<AssetsListPage> {
       case _AssetSearchField.name:
         final target = asset?.name ?? '';
         return target.toLowerCase().contains(query);
-      case _AssetSearchField.category:
-        final target = asset?.category ?? '';
+      case _AssetSearchField.assets_types:
+        final target = asset?.assets_types ?? '';
         return target.toLowerCase().contains(query);
       case _AssetSearchField.modelName:
         final target = asset?.model ?? '';

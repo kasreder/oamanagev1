@@ -43,20 +43,26 @@ function macAddress() {
 
 /* ------------ dictionaries ------------ */
 const HQS = ['경영본부','생산본부','영업본부','연구개발본부','품질본부'];
-// 🔹 모두 "~실" 로 변경
+// 모두 "~실"
 const DEPTS = ['재무실','인사실','생산기술실','마케팅실','R&D실','품질관리실'];
 const TEAMS = ['회계팀','급여팀','자동화팀','콘텐츠팀','플랫폼팀','검사팀','품질보증팀'];
-const PARTS = ['결산파트','운영파트','설계파트','데이터파트','시스템파트']; // 90% null 처리
-const POSITIONS = [null, null, '팀장', '파트장', '책임', null];
+const PARTS = ['결산파트','운영파트','설계파트','데이터파트','시스템파트']; // 90% null
+const POSITIONS = ['본부장', '실장', '팀장', '파트장', '책임', '고문', null];
 const BUILDINGS = ['본사A동','본사B동','공장1','공장2','연구동', null];
 const FLOORS = ['1층','2층','3층','4층','5층','6층', null];
 
 const ASSET_STATUS = ['사용','가용(창고)','이동'];
-const BUILDING1 = ['내부직원','외부직원','자산창고'];
-const CATEGORIES = ['IT장비','생산설비','네트워크','사무기기','안전장비'];
-const NETWORKS = [null, '사내망','생산망','게스트','분리망'];
+const BUILDING1 = ['본사','개발실','본사외'];
+const CATEGORIES = ['OA장비','전산장비','네트워크장비','OA소모품','전산소모품','소모품'];
+const NETWORKS = [null, '업무망','개발망','시스템망','무선업무망','무선인터넷','유선인터넷','로컬'];
 const VENDORS = ['Lenovo','HP','Dell','Apple','Samsung','LG','Cisco','Siemens','Omron','Mitsubishi','Universal Robots'];
-const ASSET_TYPES_FOR_INSPECTION = ['데스크탑','모니터','프린터','스캐너','노트북','태블릿','소모품'];
+const ASSET_TYPES = ['데스크탑','모니터','프린터','스캐너','노트북','태블릿','소모품'];
+
+// memo 샘플
+const MEMOS = [
+  '정기점검 완료', '부품 교체 필요', '펌웨어 업데이트 예정', '사용 빈도 낮음',
+  '소음 발생 관찰됨', '정상 동작', '오염으로 청소 필요', '이동 계획 있음',null
+];
 
 function koreanName() {
   const last = ['김','이','박','최','정','조','유','윤','장','임','한','오','서','신','권','황','안','송','심','홍'];
@@ -89,11 +95,9 @@ function generateUsers(n) {
       employee_id: employeeId(i),
       employee_name: koreanName(),
       organization_hq: pick(HQS),
-      // 🔹 3% 확률 null, 97%는 값
-      organization_dept: Math.random() < 0.03 ? null : pick(DEPTS),
+      organization_dept: Math.random() < 0.03 ? null : pick(DEPTS), // 3% null
       organization_team: pick(TEAMS),
-      // 🔹 90% null, 10% 값
-      organization_part: Math.random() < 0.9 ? null : pick(PARTS),
+      organization_part: Math.random() < 0.9 ? null : pick(PARTS),   // 90% null
       organization_etc: pick(POSITIONS),
       work_building: pick(BUILDINGS),
       work_floor: pick(FLOORS)
@@ -123,12 +127,16 @@ function generateAssets(n, users) {
     const physicalDt = chance(0.6) ? randBetweenDays(120, 0) : null;
     const confirmationDt = chance(0.4) ? randBetweenDays(90, 0) : null;
 
+    // memo1, memo2: 0.55 확률로 값, 아니면 null
+    const memo1 = chance(0.55) ? pick(MEMOS) : null;
+    const memo2 = chance(0.55) ? pick(MEMOS) : null;
+
     res.push({
       id: i + 1,
       asset_uid: assetUid(),
       name: assigneeName,
       assets_status: status,
-      category: pick(CATEGORIES),
+      assets_types: pick(ASSET_TYPES),
       serial_number: serial(),
       model_name: modelName(),
       vendor: pick(VENDORS),
@@ -146,6 +154,9 @@ function generateAssets(n, users) {
       location_row: locRow,
       location_col: locCol,
       location_drawing_file: drawingId ? `drawing_${drawingId}.png` : null,
+      // ★ 추가된 메모 필드
+      memo1,
+      memo2,
       created_at: iso(createdAt),
       updated_at: iso(updatedAt),
       user_id: assigned?.id ?? null
@@ -180,14 +191,17 @@ function generateInspections(total, assets, users) {
 
     const when = randBetweenDays(150, 0);
 
-    list.push({
+    // 50%는 미검증 처리
+    const is_verified = chance(0.5) ? false : true;
+
+    const base = {
       id: i + 1,
       asset_id: asset.id,
       user_id: user?.id ?? null,
       inspector_name: inspector,
       user_team: user?.organization_team ?? pick(TEAMS),
       asset_code: asset.asset_uid,
-      asset_type: pick(ASSET_TYPES_FOR_INSPECTION),
+      asset_type: pick(ASSET_TYPES),
       asset_info: {
         model_name: asset.model_name,
         usage: asset.user_id ? "개인" : "공용",
@@ -195,11 +209,27 @@ function generateInspections(total, assets, users) {
       },
       inspection_count: next,
       inspection_date: iso(when),
-      maintenance_company_staff: chance(0.7) ? koreanName() : null,
-      department_confirm: deptConfirm
-    });
+      // maintenance_company_staff 제거됨
+      department_confirm: deptConfirm,
+      is_verified
+    };
+
+    if (!is_verified) {
+      // 인증되지 않은 값은 null 처리
+      base.inspector_name = null;
+      base.user_team = null;
+      base.department_confirm = null;
+      base.asset_info = {
+        model_name: null,
+        usage: asset.user_id ? "개인" : "공용", // 사용 용도는 정보 자체가 민감도 낮다고 가정하여 유지
+        serial_number: null
+      };
+    }
+
+    list.push(base);
   }
 
+  // 동일 자산의 점검 이력 순번 재정렬
   const byAsset = new Map();
   for (const it of list) {
     if (!byAsset.has(it.asset_id)) byAsset.set(it.asset_id, []);
