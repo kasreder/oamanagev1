@@ -110,11 +110,13 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
                     key: _formKey,
                     child: LayoutBuilder(
                       builder: (context, constraints) {
-                        final minWidth = constraints.maxWidth;
+                        final availableWidth = constraints.maxWidth.isFinite
+                            ? constraints.maxWidth
+                            : MediaQuery.of(context).size.width;
                         return SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
                           child: ConstrainedBox(
-                            constraints: BoxConstraints(minWidth: minWidth),
+                            constraints: BoxConstraints(minWidth: availableWidth),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
