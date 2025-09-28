@@ -36,7 +36,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
   final ScrollController _horizontalScrollController = ScrollController();
   final ScrollController _verticalScrollController = ScrollController();
   static const double _tableMinWidth =
-  1100; // 테이블이 답답해 보이지 않도록 최소 너비를 지정합니다.
+  640; // 테이블이 답답해 보이지 않도록 최소 너비를 지정합니다.
   static const EdgeInsets _cellPadding =
   EdgeInsets.symmetric(horizontal: 12, vertical: 10);
   static const double _defaultColumnWidth = 200;
