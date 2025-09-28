@@ -1,4 +1,4 @@
-// lib/view/assets/detail_page.dart
+// lib/view/assets/list.dart
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -122,10 +122,10 @@ class _AssetsListPageState extends State<AssetsListPage> {
                                   children: [
                                     DataTable(
                                       headingRowColor:
-                                          MaterialStateProperty.resolveWith(
+                                          WidgetStateProperty.resolveWith(
                                         (states) => Theme.of(context)
                                             .colorScheme
-                                            .surfaceVariant,
+                                            .surfaceContainerHighest,
                                       ),
                                       columnSpacing: 0,
                                       horizontalMargin: 0,
@@ -143,6 +143,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
                                         child: SingleChildScrollView(
                                           controller: _verticalScrollController,
                                           child: DataTable(
+                                            showCheckboxColumn: false, // ✅ 기본 체크박스 삭제
                                             headingRowHeight: 0,
                                             columnSpacing: 0, // 컬럼 간 간격을 제거합니다.
                                             horizontalMargin: 0,
@@ -150,6 +151,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
                                             rows: pageRows
                                                 .map(
                                                   (row) => DataRow(
+                                                    // selected: false, // 체크박스 선택됨
                                                     onSelectChanged: (_) =>
                                                         context.go(
                                                             '/assets/${row.inspection.id}'),
