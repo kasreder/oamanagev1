@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-
 import '../../models/inspection.dart';
 import '../../providers/inspection_provider.dart';
 import '../common/app_scaffold.dart';
@@ -320,7 +319,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
         .labelLarge; // 헤더는 기본 크기를 유지해 가독성을 확보합니다.
     return [
       DataColumn(
-        label: _headerCell('자산번호', headerStyle),
+        label: _headerCell('자산번호11', headerStyle),
       ),
       DataColumn(
         label: _headerCell('자산명', headerStyle),
