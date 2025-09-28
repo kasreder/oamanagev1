@@ -38,9 +38,9 @@ class _AssetsListPageState extends State<AssetsListPage> {
   static const double _tableMinWidth =
   640; // 테이블이 답답해 보이지 않도록 최소 너비를 지정합니다.
   static const EdgeInsets _cellPadding =
-  EdgeInsets.symmetric(horizontal: 12, vertical: 10);
-  static const double _defaultColumnWidth = 200;
-  static const double _iconColumnWidth = 88;
+  EdgeInsets.symmetric(horizontal: 5, vertical: 10);
+  static const double _defaultColumnWidth = 60;
+  static const double _iconColumnWidth = 30;
   static const double _actionColumnWidth = 104;
   _AssetSearchField _searchField = _AssetSearchField.name;
   int _currentPage = 0;
@@ -202,57 +202,57 @@ class _AssetsListPageState extends State<AssetsListPage> {
                                               ),
                                             ),
                                             DataCell(
-                                              _cellText(
+                                              _cellText200(
                                                 _formattedMemo(
                                                     row.inspection.memo),
                                                 maxLines: 2,
                                               ),
                                             ),
-                                            DataCell(
-                                              Padding(
-                                                padding: _cellPadding,
-                                                child: SizedBox(
-                                                  width: _actionColumnWidth,
-                                                  child: Align(
-                                                    alignment:
-                                                    Alignment.centerLeft,
-                                                    child: IconButton(
-                                                      tooltip: '삭제',
-                                                      icon: const Icon(
-                                                        Icons
-                                                            .delete_outline,
-                                                      ),
-                                                      color: Theme.of(context)
-                                                          .colorScheme
-                                                          .error,
-                                                      onPressed: () async {
-                                                        final confirmed =
-                                                        await _confirmDelete(
-                                                            context);
-                                                        if (!mounted ||
-                                                            !confirmed) {
-                                                          return;
-                                                        }
-                                                        provider.remove(
-                                                            row.inspection.id);
-                                                        if (!mounted) {
-                                                          return;
-                                                        }
-                                                        ScaffoldMessenger
-                                                            .of(context)
-                                                            .showSnackBar(
-                                                          SnackBar(
-                                                            content: Text(
-                                                              '${row.inspection.assetUid} 삭제됨',
-                                                            ),
-                                                          ),
-                                                        );
-                                                      },
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
+                                            // DataCell(
+                                            //   Padding(
+                                            //     padding: _cellPadding,
+                                            //     child: SizedBox(
+                                            //       width: _actionColumnWidth,
+                                            //       child: Align(
+                                            //         alignment:
+                                            //         Alignment.centerLeft,
+                                            //         child: IconButton(
+                                            //           tooltip: '삭제',
+                                            //           icon: const Icon(
+                                            //             Icons
+                                            //                 .delete_outline,
+                                            //           ),
+                                            //           color: Theme.of(context)
+                                            //               .colorScheme
+                                            //               .error,
+                                            //           onPressed: () async {
+                                            //             final confirmed =
+                                            //             await _confirmDelete(
+                                            //                 context);
+                                            //             if (!mounted ||
+                                            //                 !confirmed) {
+                                            //               return;
+                                            //             }
+                                            //             provider.remove(
+                                            //                 row.inspection.id);
+                                            //             if (!mounted) {
+                                            //               return;
+                                            //             }
+                                            //             ScaffoldMessenger
+                                            //                 .of(context)
+                                            //                 .showSnackBar(
+                                            //               SnackBar(
+                                            //                 content: Text(
+                                            //                   '${row.inspection.assetUid} 삭제됨',
+                                            //                 ),
+                                            //               ),
+                                            //             );
+                                            //           },
+                                            //         ),
+                                            //       ),
+                                            //     ),
+                                            //   ),
+                                            // ),
                                           ],
                                         ),
                                       )
@@ -319,7 +319,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
         .labelLarge; // 헤더는 기본 크기를 유지해 가독성을 확보합니다.
     return [
       DataColumn(
-        label: _headerCell('자산번호11', headerStyle),
+        label: _headerCell('자산번호', headerStyle),
       ),
       DataColumn(
         label: _headerCell('자산명', headerStyle),
@@ -343,22 +343,22 @@ class _AssetsListPageState extends State<AssetsListPage> {
         label: _headerCell('스캔일시', headerStyle),
       ),
       DataColumn(
-        label: _headerCell(
-          '동기화',
+        label: _headerCell30(
+          '인증',
           headerStyle,
           width: _iconColumnWidth,
         ),
       ),
       DataColumn(
-        label: _headerCell('메모', headerStyle),
+        label: _headerCell200('메모', headerStyle),
       ),
-      DataColumn(
-        label: _headerCell(
-          '작업',
-          headerStyle,
-          width: _actionColumnWidth,
-        ),
-      ),
+      // DataColumn(
+      //   label: _headerCell(
+      //     '작업',
+      //     headerStyle,
+      //     width: _actionColumnWidth,
+      //   ),
+      // ),
     ];
   }
 
@@ -366,6 +366,48 @@ class _AssetsListPageState extends State<AssetsListPage> {
       String label,
       TextStyle? style, {
         double width = _defaultColumnWidth,
+      }) {
+    return Padding(
+      padding: _cellPadding,
+      child: SizedBox(
+        width: width,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            label,
+            style: style,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _headerCell200( //메모
+      String label,
+      TextStyle? style, {
+        double width = 200,
+      }) {
+    return Padding(
+      padding: _cellPadding,
+      child: SizedBox(
+        width: width,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            label,
+            style: style,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _headerCell30( //아이콘
+      String label,
+      TextStyle? style, {
+        double width = 30,
       }) {
     return Padding(
       padding: _cellPadding,
@@ -404,6 +446,50 @@ class _AssetsListPageState extends State<AssetsListPage> {
       String value, {
         int maxLines = 1,
         double width = _defaultColumnWidth,
+      }) {
+    final textStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+      fontSize: 13,
+    ); // 본문 글꼴 크기를 살짝 줄여 테이블을 더 촘촘하게 보여줍니다.
+    return Padding(
+      padding: _cellPadding,
+      child: SizedBox(
+        width: width,
+        child: Text(
+          value,
+          maxLines: maxLines,
+          overflow: TextOverflow.ellipsis,
+          style: textStyle,
+        ),
+      ),
+    );
+  }
+
+  Widget _cellText200( //메모
+      String value, {
+        int maxLines = 1,
+        double width = 200,
+      }) {
+    final textStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+      fontSize: 13,
+    ); // 본문 글꼴 크기를 살짝 줄여 테이블을 더 촘촘하게 보여줍니다.
+    return Padding(
+      padding: _cellPadding,
+      child: SizedBox(
+        width: width,
+        child: Text(
+          value,
+          maxLines: maxLines,
+          overflow: TextOverflow.ellipsis,
+          style: textStyle,
+        ),
+      ),
+    );
+  }
+
+  Widget _cellText10( //아이콘
+      String value, {
+        int maxLines = 1,
+        double width = 10,
       }) {
     final textStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
       fontSize: 13,
