@@ -1,4 +1,4 @@
-// lib/view/assets/list_page.dart
+// lib/view/assets/datail.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';

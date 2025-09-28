@@ -325,7 +325,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
         label: _headerCell('자산명', headerStyle),
       ),
       DataColumn(
-        label: _headerCell('카테고리', headerStyle),
+        label: _headerCell('장비종류', headerStyle),
       ),
       DataColumn(
         label: _headerCell('모델명', headerStyle),
