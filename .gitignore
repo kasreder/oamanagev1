@@ -48,3 +48,8 @@ app.*.map.json
 assets/dummy/node_modules/
 ios/Podfile
 macos/Podfile
+
+# local only
+assets/dummy/node_modules/
+ios/Podfile
+macos/Podfile
