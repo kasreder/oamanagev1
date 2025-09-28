@@ -1,4 +1,4 @@
-// lib/view/assets/detail_page.dart
+// lib/view/assets/list.dart
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
