@@ -38,6 +38,11 @@ class _AssetsListPageState extends State<AssetsListPage> {
   final ScrollController _verticalScrollController = ScrollController();
   static const double _tableMinWidth =
       1100; // 테이블이 답답해 보이지 않도록 최소 너비를 지정합니다.
+  static const EdgeInsets _cellPadding =
+      EdgeInsets.symmetric(horizontal: 12, vertical: 10);
+  static const double _defaultColumnWidth = 200;
+  static const double _iconColumnWidth = 88;
+  static const double _actionColumnWidth = 104;
   _AssetSearchField _searchField = _AssetSearchField.name;
   int _currentPage = 0;
 
@@ -151,7 +156,6 @@ class _AssetsListPageState extends State<AssetsListPage> {
                                             rows: pageRows
                                                 .map(
                                                   (row) => DataRow(
-                                                    // selected: false, // 체크박스 선택됨
                                                     onSelectChanged: (_) =>
                                                         context.go(
                                                             '/assets/${row.inspection.id}'),
@@ -179,19 +183,22 @@ class _AssetsListPageState extends State<AssetsListPage> {
                                                       ),
                                                       DataCell(
                                                         Padding(
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .symmetric(
-                                                            horizontal: 12,
-                                                          ),
-                                                          child: Icon(
-                                                            row.inspection.synced
-                                                                ? Icons.cloud_done
-                                                                : Icons.cloud_off,
-                                                            size: 18,
-                                                            color: row.inspection.synced
-                                                                ? Colors.green
-                                                                : Colors.orange,
+                                                          padding: _cellPadding,
+                                                          child: SizedBox(
+                                                            width: _iconColumnWidth,
+                                                            child: Align(
+                                                              alignment:
+                                                                  Alignment.centerLeft,
+                                                              child: Icon(
+                                                                row.inspection.synced
+                                                                    ? Icons.cloud_done
+                                                                    : Icons.cloud_off,
+                                                                size: 18,
+                                                                color: row.inspection.synced
+                                                                    ? Colors.green
+                                                                    : Colors.orange,
+                                                              ),
+                                                            ),
                                                           ),
                                                         ),
                                                       ),
@@ -204,41 +211,46 @@ class _AssetsListPageState extends State<AssetsListPage> {
                                                       ),
                                                       DataCell(
                                                         Padding(
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .symmetric(
-                                                            horizontal: 12,
-                                                          ),
-                                                          child: IconButton(
-                                                            tooltip: '삭제',
-                                                            icon: const Icon(
-                                                                Icons.delete_outline),
-                                                            color: Theme.of(context)
-                                                                .colorScheme
-                                                                .error,
-                                                            onPressed: () async {
-                                                              final confirmed =
-                                                                  await _confirmDelete(
-                                                                      context);
-                                                              if (!mounted ||
-                                                                  !confirmed) {
-                                                                return;
-                                                              }
-                                                              provider.remove(
-                                                                  row.inspection.id);
-                                                              if (!mounted) {
-                                                                return;
-                                                              }
-                                                              ScaffoldMessenger
-                                                                      .of(context)
-                                                                  .showSnackBar(
-                                                                SnackBar(
-                                                                  content: Text(
-                                                                    '${row.inspection.assetUid} 삭제됨',
-                                                                  ),
+                                                          padding: _cellPadding,
+                                                          child: SizedBox(
+                                                            width: _actionColumnWidth,
+                                                            child: Align(
+                                                              alignment:
+                                                                  Alignment.centerLeft,
+                                                              child: IconButton(
+                                                                tooltip: '삭제',
+                                                                icon: const Icon(
+                                                                  Icons
+                                                                      .delete_outline,
                                                                 ),
-                                                              );
-                                                            },
+                                                                color: Theme.of(context)
+                                                                    .colorScheme
+                                                                    .error,
+                                                                onPressed: () async {
+                                                                  final confirmed =
+                                                                      await _confirmDelete(
+                                                                          context);
+                                                                  if (!mounted ||
+                                                                      !confirmed) {
+                                                                    return;
+                                                                  }
+                                                                  provider.remove(
+                                                                      row.inspection.id);
+                                                                  if (!mounted) {
+                                                                    return;
+                                                                  }
+                                                                  ScaffoldMessenger
+                                                                          .of(context)
+                                                                      .showSnackBar(
+                                                                    SnackBar(
+                                                                      content: Text(
+                                                                        '${row.inspection.assetUid} 삭제됨',
+                                                                      ),
+                                                                    ),
+                                                                  );
+                                                                },
+                                                              ),
+                                                            ),
                                                           ),
                                                         ),
                                                       ),
@@ -303,78 +315,73 @@ class _AssetsListPageState extends State<AssetsListPage> {
   }
 
   List<DataColumn> _buildColumns(BuildContext context) {
-    const headerPadding = EdgeInsets.symmetric(horizontal: 12, vertical: 12);
     final headerStyle = Theme.of(context)
         .textTheme
         .labelLarge; // 헤더는 기본 크기를 유지해 가독성을 확보합니다.
     return [
       DataColumn(
-        label: Padding(
-          padding: headerPadding,
-          child: Text('자산번호', style: headerStyle),
+        label: _headerCell('자산번호', headerStyle),
+      ),
+      DataColumn(
+        label: _headerCell('자산명', headerStyle),
+      ),
+      DataColumn(
+        label: _headerCell('카테고리', headerStyle),
+      ),
+      DataColumn(
+        label: _headerCell('모델명', headerStyle),
+      ),
+      DataColumn(
+        label: _headerCell('상태', headerStyle),
+      ),
+      DataColumn(
+        label: _headerCell('소속팀', headerStyle),
+      ),
+      DataColumn(
+        label: _headerCell('위치', headerStyle),
+      ),
+      DataColumn(
+        label: _headerCell('스캔일시', headerStyle),
+      ),
+      DataColumn(
+        label: _headerCell(
+          '동기화',
+          headerStyle,
+          width: _iconColumnWidth,
         ),
       ),
       DataColumn(
-        label: Padding(
-          padding: headerPadding,
-          child: Text('자산명', style: headerStyle),
-        ),
+        label: _headerCell('메모', headerStyle),
       ),
       DataColumn(
-        label: Padding(
-          padding: headerPadding,
-          child: Text('카테고리', style: headerStyle),
-        ),
-      ),
-      DataColumn(
-        label: Padding(
-          padding: headerPadding,
-          child: Text('모델명', style: headerStyle),
-        ),
-      ),
-      DataColumn(
-        label: Padding(
-          padding: headerPadding,
-          child: Text('상태', style: headerStyle),
-        ),
-      ),
-      DataColumn(
-        label: Padding(
-          padding: headerPadding,
-          child: Text('소속팀', style: headerStyle),
-        ),
-      ),
-      DataColumn(
-        label: Padding(
-          padding: headerPadding,
-          child: Text('위치', style: headerStyle),
-        ),
-      ),
-      DataColumn(
-        label: Padding(
-          padding: headerPadding,
-          child: Text('스캔일시', style: headerStyle),
-        ),
-      ),
-      DataColumn(
-        label: Padding(
-          padding: headerPadding,
-          child: Text('동기화', style: headerStyle),
-        ),
-      ),
-      DataColumn(
-        label: Padding(
-          padding: headerPadding,
-          child: Text('메모', style: headerStyle),
-        ),
-      ),
-      DataColumn(
-        label: Padding(
-          padding: headerPadding,
-          child: Text('작업', style: headerStyle),
+        label: _headerCell(
+          '작업',
+          headerStyle,
+          width: _actionColumnWidth,
         ),
       ),
     ];
+  }
+
+  Widget _headerCell(
+    String label,
+    TextStyle? style, {
+    double width = _defaultColumnWidth,
+  }) {
+    return Padding(
+      padding: _cellPadding,
+      child: SizedBox(
+        width: width,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            label,
+            style: style,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ),
+    );
   }
 
   bool _matchesQuery(Inspection inspection, AssetInfo? asset, String query) {
@@ -394,14 +401,18 @@ class _AssetsListPageState extends State<AssetsListPage> {
     }
   }
 
-  Widget _cellText(String value, {int maxLines = 1}) {
+  Widget _cellText(
+    String value, {
+    int maxLines = 1,
+    double width = _defaultColumnWidth,
+  }) {
     final textStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
           fontSize: 13,
         ); // 본문 글꼴 크기를 살짝 줄여 테이블을 더 촘촘하게 보여줍니다.
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 200),
+      padding: _cellPadding,
+      child: SizedBox(
+        width: width,
         child: Text(
           value,
           maxLines: maxLines,
