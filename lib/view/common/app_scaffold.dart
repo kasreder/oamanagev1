@@ -36,6 +36,12 @@ class AppScaffold extends StatelessWidget {
       selectedIcon: Icons.inventory,
       route: '/asset_verification_list',
     ),
+    _NavigationDestination(
+      label: '자산등록',
+      icon: Icons.add_box_outlined,
+      selectedIcon: Icons.add_box,
+      route: '/assets/register',
+    ),
   ];
 
   void _goTo(BuildContext context, int index) {

@@ -41,6 +41,12 @@ class HomePage extends StatelessWidget {
                     icon: Icons.cloud_upload_outlined,
                     onTap: () => context.go('/assets'),
                   ),
+                  _HomeCard(
+                    title: '자산 등록',
+                    subtitle: '새로운 자산 정보를 직접 입력하여 추가합니다.',
+                    icon: Icons.add_box_outlined,
+                    onTap: () => context.go('/assets/register'),
+                  ),
                 ],
               ),
               const SizedBox(height: 24),

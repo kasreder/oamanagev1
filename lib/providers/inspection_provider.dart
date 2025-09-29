@@ -52,6 +52,13 @@ class InspectionProvider extends ChangeNotifier {
 
   AssetInfo? assetOf(String uid) => _assetMap[uid];
 
+  bool assetExists(String uid) => _assetMap.containsKey(uid);
+
+  void upsertAssetInfo(AssetInfo asset) {
+    _assetMap[asset.uid] = asset;
+    notifyListeners();
+  }
+
   UserInfo? userOf(String id) => _userMap[id];
 
   Future<void> initialize() async {

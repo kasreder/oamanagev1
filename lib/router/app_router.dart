@@ -5,6 +5,7 @@ import '../view/asset_verification/list_page.dart';
 import '../view/home/home_page.dart';
 import '../view/assets/detail_page.dart';
 import '../view/assets/list_page.dart';
+import '../view/assets/registration_page.dart';
 import '../view/scan/scan_page.dart';
 import '../providers/inspection_provider.dart';
 
@@ -28,6 +29,10 @@ class AppRouter {
       GoRoute(
         path: '/assets',
         builder: (context, state) => const AssetsListPage(),
+      ),
+      GoRoute(
+        path: '/assets/register',
+        builder: (context, state) => const AssetRegistrationPage(),
       ),
       GoRoute(
         path: '/assets/:id',
