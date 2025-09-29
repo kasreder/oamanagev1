@@ -214,6 +214,7 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
 
   Widget _buildAssetInfo(AssetInfo asset) {
     final metadataRows = _buildAssetMetadataRows(asset);
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -330,7 +331,6 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
         return key;
     }
   }
-
   Widget _buildInspectionMeta(InspectionProvider provider) {
     final inspection = _inspection;
     if (inspection == null) {
