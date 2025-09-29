@@ -1,3 +1,4 @@
+// lib/view/scan/scan_page.dart
 import 'dart:convert';
 
 import 'package:collection/collection.dart';
