@@ -112,3 +112,9 @@ assets/dummy/mock/asset_inspections.json
 - 로컬 영속화(Hive/Sqflite) 지원
 - 카메라 라이트 토글/전면 카메라 전환
 - 실사 검색(자산 UID/메모)
+
+
+2. 지금 작업 중인 브랜치를 main으로 만들고 싶을 때
+즉, codex/... 브랜치를 main 이름으로 바꾸려는 경우:
+
+git branch -M main
