@@ -213,6 +213,8 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
   }
 
   Widget _buildAssetInfo(AssetInfo asset) {
+    final metadataRows = _buildAssetMetadataRows(asset);
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -232,12 +234,103 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
             _infoRow('자산 상태', asset.status.isEmpty ? '-' : asset.status),
             _infoRow('장비 종류', asset.assets_types.isEmpty ? '-' : asset.assets_types),
             _infoRow('소속 조직', asset.organization.isEmpty ? '-' : asset.organization),
+            if (metadataRows.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 12),
+              const Text(
+                '자산 상세 정보',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              ...metadataRows,
+            ],
           ],
         ),
       ),
     );
   }
 
+  List<Widget> _buildAssetMetadataRows(AssetInfo asset) {
+    const primaryKeys = {
+      'uid',
+      'asset_uid',
+      'name',
+      'model',
+      'model_name',
+      'serial',
+      'serial_number',
+      'vendor',
+      'location',
+      'building',
+      'building1',
+      'floor',
+      'location_row',
+      'location_col',
+      'assets_status',
+      'status',
+      'assets_types',
+      'organization',
+    };
+    final entries = asset.metadata.entries
+        .where((entry) => entry.value.isNotEmpty)
+        .where((entry) => !primaryKeys.contains(entry.key))
+        .toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+
+    return entries
+        .map(
+          (entry) => _infoRow(_assetFieldLabel(entry.key), entry.value),
+        )
+        .toList(growable: false);
+  }
+
+  String _assetFieldLabel(String key) {
+    switch (key) {
+      case 'network':
+        return '네트워크';
+      case 'physical_check_date':
+        return '실사일';
+      case 'confirmation_date':
+        return '확인일';
+      case 'normal_comment':
+        return '일반 코멘트';
+      case 'oa_comment':
+        return 'OA 코멘트';
+      case 'mac_address':
+        return 'MAC 주소';
+      case 'location_drawing_id':
+        return '도면 ID';
+      case 'location_drawing_file':
+        return '도면 파일';
+      case 'memo1':
+        return '메모1';
+      case 'memo2':
+        return '메모2';
+      case 'os':
+        return '운영체제';
+      case 'os_ver':
+        return '운영체제 버전';
+      case 'user_id':
+        return '사용자 ID';
+      case 'member_name':
+        return '사용자';
+      case 'organization_hq':
+        return '본부';
+      case 'organization_dept':
+        return '부서';
+      case 'organization_team':
+        return '팀';
+      case 'organization_part':
+        return '파트';
+      case 'created_at':
+        return '생성일';
+      case 'updated_at':
+        return '수정일';
+      default:
+        return key;
+    }
+  }
   Widget _buildInspectionMeta(InspectionProvider provider) {
     final inspection = _inspection;
     if (inspection == null) {

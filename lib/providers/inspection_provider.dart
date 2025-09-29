@@ -116,6 +116,17 @@ class InspectionProvider extends ChangeNotifier {
         if (uid == null) {
           continue;
         }
+        final metadata = <String, String>{};
+        item.forEach((key, value) {
+          final normalizedKey = key?.toString();
+          if (normalizedKey == null) {
+            return;
+          }
+          final normalizedValue = _stringOrNull(value);
+          if (normalizedValue != null) {
+            metadata[normalizedKey] = normalizedValue;
+          }
+        });
         entries.add(
           MapEntry(
             uid,
@@ -135,6 +146,7 @@ class InspectionProvider extends ChangeNotifier {
                   '',
               assets_types: _stringOrNull(item['assets_types']) ?? '',
               organization: _stringOrNull(item['organization']) ?? '',
+              metadata: metadata,
             ),
           ),
         );
@@ -235,7 +247,7 @@ class InspectionProvider extends ChangeNotifier {
 
 /// 자산 기본 정보를 표현하는 단순 DTO.
 class AssetInfo {
-  const AssetInfo({
+  AssetInfo({
     required this.uid,
     required this.name,
     required this.model,
@@ -245,7 +257,8 @@ class AssetInfo {
     this.status = '',
     this.assets_types = '',
     this.organization = '',
-  });
+    Map<String, String> metadata = const {},
+  }) : metadata = Map.unmodifiable(metadata);
 
   final String uid;
   final String name;
@@ -256,6 +269,7 @@ class AssetInfo {
   final String status;
   final String assets_types;
   final String organization;
+  final Map<String, String> metadata;
 }
 
 /// 사용자 참조 정보를 보관하는 DTO.
