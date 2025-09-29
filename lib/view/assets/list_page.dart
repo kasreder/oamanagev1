@@ -170,7 +170,9 @@ class _AssetsListPageState extends State<AssetsListPage> {
                                             DataCell(_cellText(
                                                 row.inspection.status)),
                                             DataCell(_cellText(
-                                                row.inspection.userTeam ?? '-')),
+                                                _resolveOrganization(
+                                                    row.asset,
+                                                    row.inspection))),
                                             DataCell(_cellText(
                                                 row.asset?.location ?? '-')),
                                             DataCell(
@@ -426,6 +428,20 @@ class _AssetsListPageState extends State<AssetsListPage> {
     );
   }
 
+  String _resolveOrganization(AssetInfo? asset, Inspection inspection) {
+    final assetOrganization = asset?.organization;
+    if (assetOrganization != null && assetOrganization.trim().isNotEmpty) {
+      return assetOrganization;
+    }
+
+    final inspectionTeam = inspection.userTeam;
+    if (inspectionTeam != null && inspectionTeam.trim().isNotEmpty) {
+      return inspectionTeam;
+    }
+
+    return '-';
+  }
+
   bool _matchesQuery(Inspection inspection, AssetInfo? asset, String query) {
     switch (_searchField) {
       case _AssetSearchField.name:
@@ -438,8 +454,8 @@ class _AssetsListPageState extends State<AssetsListPage> {
         final target = asset?.model ?? '';
         return target.toLowerCase().contains(query);
       case _AssetSearchField.organizationTeam:
-        final target = inspection.userTeam ?? '';
-        return target.toLowerCase().contains(query);
+        final organization = _resolveOrganization(asset, inspection);
+        return organization.toLowerCase().contains(query);
     }
   }
 
