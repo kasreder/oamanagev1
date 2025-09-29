@@ -68,6 +68,15 @@ class InspectionProvider extends ChangeNotifier {
     return _repository.findById(id);
   }
 
+  Inspection? latestByAssetUid(String assetUid) {
+    for (final item in _items) {
+      if (item.assetUid == assetUid) {
+        return item;
+      }
+    }
+    return null;
+  }
+
   void addOrUpdate(Inspection inspection) {
     _repository.upsert(inspection);
     _items = _repository.getAll();
