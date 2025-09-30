@@ -22,6 +22,10 @@ class ScanPage extends StatefulWidget {
 
 class _ScanPageState extends State<ScanPage> {
   final MobileScannerController _controller = MobileScannerController();
+  final ValueNotifier<TorchState> _torchStateNotifier =
+      ValueNotifier<TorchState>(TorchState.off);
+  final ValueNotifier<CameraFacing> _cameraFacingNotifier =
+      ValueNotifier<CameraFacing>(CameraFacing.back);
   bool _isProcessing = false;
   bool _isPaused = false;
   String? _permissionError;
@@ -36,6 +40,8 @@ class _ScanPageState extends State<ScanPage> {
 
   @override
   void dispose() {
+    _torchStateNotifier.dispose();
+    _cameraFacingNotifier.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -128,6 +134,7 @@ class _ScanPageState extends State<ScanPage> {
         activeUid != null ? provider.assetOf(activeUid) : null;
         final isRegistered =
         activeUid != null ? provider.assetExists(activeUid) : false;
+
         return AppScaffold(
           title: 'QR 스캔',
           selectedIndex: 0,
@@ -193,11 +200,13 @@ class _ScanPageState extends State<ScanPage> {
                           children: [
                             ValueListenableBuilder<TorchState>(
                               valueListenable: _controller.torchState,
+
                               builder: (context, state, _) {
                                 final isOn = state == TorchState.on;
                                 return _OverlayIconButton(
                                   icon:
                                   isOn ? Icons.flash_on : Icons.flash_off,
+                                      isOn ? Icons.flash_on : Icons.flash_off,
                                   label: '플래시',
                                   onPressed: _toggleTorch,
                                 );
@@ -207,6 +216,7 @@ class _ScanPageState extends State<ScanPage> {
                             ValueListenableBuilder<CameraFacing>(
                               valueListenable:
                               _controller.cameraFacingState,
+
                               builder: (context, facing, _) {
                                 return _OverlayIconButton(
                                   icon: Icons.cameraswitch,
@@ -308,6 +318,7 @@ class _ScanPageState extends State<ScanPage> {
                                 ?.copyWith(
                                 color: Colors.white,
                                 shadows: const [Shadow(blurRadius: 8)]),
+
                             textAlign: TextAlign.center,
                           )
                         else
@@ -358,6 +369,7 @@ class _ScanPageState extends State<ScanPage> {
 
   Future<void> _toggleTorch() async {
     await _controller.toggleTorch();
+
   }
 
   Future<void> _switchCamera() async {
