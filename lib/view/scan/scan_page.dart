@@ -22,6 +22,10 @@ class ScanPage extends StatefulWidget {
 
 class _ScanPageState extends State<ScanPage> {
   final MobileScannerController _controller = MobileScannerController();
+  final ValueNotifier<TorchState> _torchStateNotifier =
+      ValueNotifier<TorchState>(TorchState.off);
+  final ValueNotifier<CameraFacing> _cameraFacingNotifier =
+      ValueNotifier<CameraFacing>(CameraFacing.back);
   bool _isProcessing = false;
   bool _isPaused = false;
   String? _permissionError;
@@ -36,6 +40,8 @@ class _ScanPageState extends State<ScanPage> {
 
   @override
   void dispose() {
+    _torchStateNotifier.dispose();
+    _cameraFacingNotifier.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -192,7 +198,7 @@ class _ScanPageState extends State<ScanPage> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             ValueListenableBuilder<TorchState>(
-                              valueListenable: _controller.torchState,
+                              valueListenable: _torchStateNotifier,
                               builder: (context, state, _) {
                                 final isOn = state == TorchState.on;
                                 return _OverlayIconButton(
@@ -205,8 +211,7 @@ class _ScanPageState extends State<ScanPage> {
                             ),
                             const SizedBox(width: 8),
                             ValueListenableBuilder<CameraFacing>(
-                              valueListenable:
-                                  _controller.cameraFacingState,
+                              valueListenable: _cameraFacingNotifier,
                               builder: (context, facing, _) {
                                 return _OverlayIconButton(
                                   icon: Icons.cameraswitch,
@@ -358,10 +363,18 @@ class _ScanPageState extends State<ScanPage> {
 
   Future<void> _toggleTorch() async {
     await _controller.toggleTorch();
+    if (!mounted) return;
+    final current = _torchStateNotifier.value;
+    _torchStateNotifier.value =
+        current == TorchState.on ? TorchState.off : TorchState.on;
   }
 
   Future<void> _switchCamera() async {
     await _controller.switchCamera();
+    if (!mounted) return;
+    final current = _cameraFacingNotifier.value;
+    _cameraFacingNotifier.value =
+        current == CameraFacing.back ? CameraFacing.front : CameraFacing.back;
   }
 
   Future<void> _togglePause() async {
