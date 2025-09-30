@@ -23,10 +23,10 @@ class ScanPage extends StatefulWidget {
 class _ScanPageState extends State<ScanPage> {
   final MobileScannerController _controller = MobileScannerController();
   bool _isProcessing = false;
+  bool _isPaused = false;
   String? _permissionError;
   String? _activeUid;
   final List<String> _recentUids = [];
-  // TODO: 카메라 라이트 토글/전면카메라 전환 버튼 제공
 
   @override
   void initState() {
@@ -41,7 +41,7 @@ class _ScanPageState extends State<ScanPage> {
   }
 
   void _onDetect(BarcodeCapture capture) {
-    if (_isProcessing || capture.barcodes.isEmpty) {
+    if (_isProcessing || _isPaused || capture.barcodes.isEmpty) {
       return;
     }
     final barcode = capture.barcodes.firstOrNull;
@@ -149,6 +149,89 @@ class _ScanPageState extends State<ScanPage> {
                 ),
               ),
               const _ScannerOverlay(),
+              if (_isPaused)
+                Positioned.fill(
+                  child: Container(
+                    color: Colors.black45,
+                    alignment: Alignment.center,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Text(
+                        '스캔이 일시정지되었습니다.',
+                        style: TextStyle(color: Colors.white, fontSize: 16),
+                      ),
+                    ),
+                  ),
+                ),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _OverlayIconButton(
+                          icon: Icons.arrow_back,
+                          label: '뒤로가기',
+                          onPressed: () => context.pop(),
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ValueListenableBuilder<TorchState>(
+                              valueListenable: _controller.torchState,
+                              builder: (context, state, _) {
+                                final isOn = state == TorchState.on;
+                                return _OverlayIconButton(
+                                  icon:
+                                      isOn ? Icons.flash_on : Icons.flash_off,
+                                  label: '플래시',
+                                  onPressed: _toggleTorch,
+                                );
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            ValueListenableBuilder<CameraFacing>(
+                              valueListenable:
+                                  _controller.cameraFacingState,
+                              builder: (context, facing, _) {
+                                return _OverlayIconButton(
+                                  icon: Icons.cameraswitch,
+                                  label: facing == CameraFacing.back
+                                      ? '후면'
+                                      : '전면',
+                                  onPressed: _switchCamera,
+                                );
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            _OverlayIconButton(
+                              icon: _isPaused
+                                  ? Icons.play_arrow
+                                  : Icons.pause,
+                              label: _isPaused ? '재시작' : '일시정지',
+                              onPressed: _togglePause,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
               if (_permissionError != null)
                 Container(
                   color: Colors.black54,
@@ -195,6 +278,25 @@ class _ScanPageState extends State<ScanPage> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.6),
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          child: const Text(
+                            '신규/재등록 + 코드',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
                         if (activeUid == null)
                           Text(
                             kIsWeb
@@ -254,6 +356,26 @@ class _ScanPageState extends State<ScanPage> {
     context.go('/assets/$uid');
   }
 
+  Future<void> _toggleTorch() async {
+    await _controller.toggleTorch();
+  }
+
+  Future<void> _switchCamera() async {
+    await _controller.switchCamera();
+  }
+
+  Future<void> _togglePause() async {
+    if (_isPaused) {
+      await _controller.start();
+    } else {
+      await _controller.stop();
+    }
+    if (!mounted) return;
+    setState(() {
+      _isPaused = !_isPaused;
+    });
+  }
+
   void _verifyAsset(String uid) {
     final provider = context.read<InspectionProvider>();
     final now = DateTime.now();
@@ -279,7 +401,6 @@ class _ScanPageState extends State<ScanPage> {
     context.go('/assets/register');
   }
 }
-
 class _ScannerOverlay extends StatelessWidget {
   const _ScannerOverlay();
 
@@ -347,7 +468,6 @@ class _ScannedAssetPanel extends StatelessWidget {
     this.onVerify,
     this.onRegister,
   });
-
   final String uid;
   final bool isRegistered;
   final String? assetName;
@@ -425,6 +545,39 @@ class _ScannedAssetPanel extends StatelessWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _OverlayIconButton extends StatelessWidget {
+  const _OverlayIconButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return ElevatedButton.icon(
+      style: ElevatedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        backgroundColor: Colors.black.withOpacity(0.55),
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ),
+        elevation: 0,
+      ),
+      onPressed: onPressed,
+      icon: Icon(icon, size: 20),
+      label: Text(
+        label,
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
       ),
     );
   }
