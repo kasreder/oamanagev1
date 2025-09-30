@@ -296,6 +296,7 @@ class _ScanPageState extends State<ScanPage> {
                           ),
                         ),
                         const SizedBox(height: 12),
+
                         if (activeUid == null)
                           Text(
                             kIsWeb
@@ -400,7 +401,6 @@ class _ScanPageState extends State<ScanPage> {
     context.go('/assets/register');
   }
 }
-
 class _ScannerOverlay extends StatelessWidget {
   const _ScannerOverlay();
 
@@ -468,7 +468,6 @@ class _ScannedAssetPanel extends StatelessWidget {
     this.onVerify,
     this.onRegister,
   });
-
   final String uid;
   final bool isRegistered;
   final String? assetName;
