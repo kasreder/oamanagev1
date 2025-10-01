@@ -20,16 +20,45 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _memoController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
-  String _status = '사용';
+  final TextEditingController _assetNameController = TextEditingController();
+  final TextEditingController _assetModelController = TextEditingController();
+  final TextEditingController _assetSerialController = TextEditingController();
+  final TextEditingController _assetVendorController = TextEditingController();
+  final TextEditingController _assetLocationController = TextEditingController();
+  final TextEditingController _assetStatusController = TextEditingController();
+  final TextEditingController _assetTypeController = TextEditingController();
+  final TextEditingController _assetOrganizationController = TextEditingController();
+  final TextEditingController _assetOsController = TextEditingController();
+  final TextEditingController _assetOsVersionController = TextEditingController();
+  final TextEditingController _assetNetworkController = TextEditingController();
+  final TextEditingController _assetUserController = TextEditingController();
+  final TextEditingController _assetMemoController = TextEditingController();
+  final TextEditingController _assetMemo2Controller = TextEditingController();
+  String _inspectionStatus = '사용';
   Inspection? _inspection;
   String? _selectedAssetUid;
   bool _assetNotFound = false;
   bool _initialLoadDone = false;
+  bool _isEditing = false;
 
   @override
   void dispose() {
     _memoController.dispose();
     _searchController.dispose();
+    _assetNameController.dispose();
+    _assetModelController.dispose();
+    _assetSerialController.dispose();
+    _assetVendorController.dispose();
+    _assetLocationController.dispose();
+    _assetStatusController.dispose();
+    _assetTypeController.dispose();
+    _assetOrganizationController.dispose();
+    _assetOsController.dispose();
+    _assetOsVersionController.dispose();
+    _assetNetworkController.dispose();
+    _assetUserController.dispose();
+    _assetMemoController.dispose();
+    _assetMemo2Controller.dispose();
     super.dispose();
   }
 
@@ -44,18 +73,25 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
     if (inspection != null) {
       _inspection = inspection;
       _selectedAssetUid = inspection.assetUid;
-      _status = inspection.status;
+      _inspectionStatus = _normalizeStatus(inspection.status);
       final memo = inspection.memo ?? '';
       _memoController.text = memo;
       _memoController.selection = TextSelection.collapsed(offset: memo.length);
       _searchController.text = inspection.assetUid;
+      final asset = provider.assetOf(inspection.assetUid);
+      if (asset != null) {
+        _populateAssetControllers(asset);
+      }
       return;
     }
 
     final asset = provider.assetOf(widget.inspectionId);
     if (asset != null) {
       _selectedAssetUid = asset.uid;
-      _status = asset.status.isNotEmpty ? asset.status : '사용';
+      _inspectionStatus = _normalizeStatus(
+        asset.status.isNotEmpty ? asset.status : '사용',
+      );
+      _populateAssetControllers(asset);
       _searchController.text = asset.uid;
     }
   }
@@ -66,37 +102,98 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
       setState(() {
         _selectedAssetUid = null;
         _inspection = null;
-        _status = '사용';
+        _inspectionStatus = '사용';
         _assetNotFound = false;
       });
       _memoController
         ..text = ''
         ..selection = const TextSelection.collapsed(offset: 0);
+      _clearAssetControllers();
       return;
     }
 
     final asset = provider.assetOf(query);
     final inspection = provider.latestByAssetUid(query);
-    final nextStatus = inspection?.status ?? (asset != null && asset.status.isNotEmpty
-        ? asset.status
-        : '사용');
+    final nextStatus = inspection?.status ??
+        (asset != null && asset.status.isNotEmpty ? asset.status : '사용');
     final memo = inspection?.memo ?? '';
 
     setState(() {
       _selectedAssetUid = asset?.uid;
       _inspection = inspection;
-      _status = nextStatus;
+      _inspectionStatus = _normalizeStatus(nextStatus);
       _assetNotFound = asset == null;
+      _isEditing = false;
     });
     _memoController
       ..text = memo
       ..selection = TextSelection.collapsed(offset: memo.length);
+    if (asset != null) {
+      _populateAssetControllers(asset);
+    } else {
+      _clearAssetControllers();
+    }
 
     if (asset == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('자산을 찾을 수 없습니다: $query')),
       );
     }
+  }
+
+  void _populateAssetControllers(AssetInfo asset) {
+    _setControllerText(_assetNameController, asset.name);
+    _setControllerText(_assetModelController, asset.model);
+    _setControllerText(_assetSerialController, asset.serial);
+    _setControllerText(_assetVendorController, asset.vendor);
+    _setControllerText(_assetLocationController, asset.location);
+    _setControllerText(_assetStatusController, asset.status);
+    _setControllerText(_assetTypeController, asset.assets_types);
+    _setControllerText(_assetOrganizationController, asset.organization);
+    _setControllerText(_assetOsController, _metadataValue(asset, 'os'));
+    _setControllerText(_assetOsVersionController, _metadataValue(asset, 'os_ver'));
+    _setControllerText(_assetNetworkController, _metadataValue(asset, 'network'));
+    _setControllerText(_assetUserController, _metadataValue(asset, 'member_name'));
+    _setControllerText(_assetMemoController, _metadataValue(asset, 'memo'));
+    _setControllerText(_assetMemo2Controller, _metadataValue(asset, 'memo2'));
+  }
+
+  void _clearAssetControllers() {
+    for (final controller in [
+      _assetNameController,
+      _assetModelController,
+      _assetSerialController,
+      _assetVendorController,
+      _assetLocationController,
+      _assetStatusController,
+      _assetTypeController,
+      _assetOrganizationController,
+      _assetOsController,
+      _assetOsVersionController,
+      _assetNetworkController,
+      _assetUserController,
+      _assetMemoController,
+      _assetMemo2Controller,
+    ]) {
+      _setControllerText(controller, '');
+    }
+  }
+
+  void _setControllerText(TextEditingController controller, String value) {
+    controller
+      ..text = value
+      ..selection = TextSelection.collapsed(offset: value.length);
+  }
+
+  String _normalizeStatus(String status) {
+    const allowed = {'사용', '가용(창고)', '이동'};
+    if (allowed.contains(status)) {
+      return status;
+    }
+    if (status.isEmpty) {
+      return '사용';
+    }
+    return status;
   }
 
   void _save(InspectionProvider provider) {
@@ -115,24 +212,96 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
             Inspection(
               id: _inspection?.id ?? 'ins_${assetUid}_${now.millisecondsSinceEpoch}',
               assetUid: assetUid,
-              status: _status,
+              status: _inspectionStatus,
               memo: _memoController.text,
               scannedAt: now,
               synced: false,
             ))
         .copyWith(
-      status: _status,
+      status: _inspectionStatus,
       memo: _memoController.text,
       scannedAt: now,
       synced: false,
     );
     provider.addOrUpdate(inspection);
+    final asset = provider.assetOf(assetUid);
+    if (asset != null) {
+      final updatedMetadata = Map<String, String>.from(asset.metadata);
+      void updateMetadata(String key, TextEditingController controller) {
+        final value = controller.text.trim();
+        if (value.isEmpty) {
+          updatedMetadata.remove(key);
+        } else {
+          updatedMetadata[key] = value;
+        }
+      }
+
+      updateMetadata('os', _assetOsController);
+      updateMetadata('os_ver', _assetOsVersionController);
+      updateMetadata('network', _assetNetworkController);
+      updateMetadata('member_name', _assetUserController);
+      updateMetadata('memo', _assetMemoController);
+      updateMetadata('memo2', _assetMemo2Controller);
+
+      provider.upsertAssetInfo(
+        AssetInfo(
+          uid: asset.uid,
+          name: _assetNameController.text.trim(),
+          model: _assetModelController.text.trim(),
+          serial: _assetSerialController.text.trim(),
+          vendor: _assetVendorController.text.trim(),
+          location: _assetLocationController.text.trim(),
+          status: _assetStatusController.text.trim(),
+          assets_types: _assetTypeController.text.trim(),
+          organization: _assetOrganizationController.text.trim(),
+          metadata: updatedMetadata,
+        ),
+      );
+    }
     setState(() {
       _inspection = inspection;
+      _isEditing = false;
     });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('저장되었습니다.')),
     );
+  }
+
+  void _cancelEditing(InspectionProvider provider) {
+    final inspection = _inspection;
+    if (inspection != null) {
+      final memo = inspection.memo ?? '';
+      _memoController
+        ..text = memo
+        ..selection = TextSelection.collapsed(offset: memo.length);
+      setState(() {
+        _inspectionStatus = _normalizeStatus(inspection.status);
+        _isEditing = false;
+      });
+      final asset = _selectedAssetUid != null
+          ? provider.assetOf(_selectedAssetUid!)
+          : null;
+      if (asset != null) {
+        _populateAssetControllers(asset);
+      }
+      return;
+    }
+
+    final assetUid = _selectedAssetUid;
+    final asset = assetUid != null ? provider.assetOf(assetUid) : null;
+    final nextStatus = asset != null && asset.status.isNotEmpty ? asset.status : '사용';
+    _memoController
+      ..text = ''
+      ..selection = const TextSelection.collapsed(offset: 0);
+    setState(() {
+      _inspectionStatus = _normalizeStatus(nextStatus);
+      _isEditing = false;
+    });
+    if (asset != null) {
+      _populateAssetControllers(asset);
+    } else {
+      _clearAssetControllers();
+    }
   }
 
   void _delete(InspectionProvider provider) async {
@@ -227,13 +396,72 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
             ),
             const SizedBox(height: 12),
             _infoRow('자산 UID', asset.uid),
-            _infoRow('모델명', asset.model),
-            _infoRow('시리얼', asset.serial),
-            _infoRow('제조사', asset.vendor),
-            _infoRow('위치', asset.location),
-            _infoRow('자산 상태', asset.status.isEmpty ? '-' : asset.status),
-            _infoRow('장비 종류', asset.assets_types.isEmpty ? '-' : asset.assets_types),
-            _infoRow('소속 조직', asset.organization.isEmpty ? '-' : asset.organization),
+            if (_isEditing)
+              _editField(controller: _assetNameController, label: '자산명')
+            else
+              _infoRow('자산명', asset.name),
+            if (_isEditing)
+              _editField(controller: _assetModelController, label: '모델명')
+            else
+              _infoRow('모델명', asset.model),
+            if (_isEditing)
+              _editField(controller: _assetSerialController, label: '시리얼')
+            else
+              _infoRow('시리얼', asset.serial),
+            if (_isEditing)
+              _editField(controller: _assetVendorController, label: '제조사')
+            else
+              _infoRow('제조사', asset.vendor),
+            if (_isEditing)
+              _editField(controller: _assetLocationController, label: '위치')
+            else
+              _infoRow('위치', asset.location),
+            if (_isEditing)
+              _editField(controller: _assetStatusController, label: '자산 상태')
+            else
+              _infoRow('자산 상태', asset.status.isEmpty ? '-' : asset.status),
+            if (_isEditing)
+              _editField(controller: _assetTypeController, label: '장비 종류')
+            else
+              _infoRow('장비 종류',
+                  asset.assets_types.isEmpty ? '-' : asset.assets_types),
+            if (_isEditing)
+              _editField(controller: _assetOrganizationController, label: '소속 조직')
+            else
+              _infoRow('소속 조직',
+                  asset.organization.isEmpty ? '-' : asset.organization),
+            if (_isEditing)
+              _editField(controller: _assetOsController, label: '운영체제')
+            else
+              _infoRow('운영체제', _metadataValue(asset, 'os')),
+            if (_isEditing)
+              _editField(controller: _assetOsVersionController, label: '운영체제 버전')
+            else
+              _infoRow('운영체제 버전', _metadataValue(asset, 'os_ver')),
+            if (_isEditing)
+              _editField(controller: _assetNetworkController, label: '네트워크')
+            else
+              _infoRow('네트워크', _metadataValue(asset, 'network')),
+            if (_isEditing)
+              _editField(controller: _assetUserController, label: '사용자')
+            else
+              _infoRow('사용자', _metadataValue(asset, 'member_name')),
+            if (_isEditing)
+              _editField(
+                controller: _assetMemoController,
+                label: '메모',
+                maxLines: 3,
+              )
+            else
+              _infoRow('메모', _metadataValue(asset, 'memo')),
+            if (_isEditing)
+              _editField(
+                controller: _assetMemo2Controller,
+                label: '메모2',
+                maxLines: 3,
+              )
+            else
+              _infoRow('메모2', _metadataValue(asset, 'memo2')),
             if (metadataRows.isNotEmpty) ...[
               const SizedBox(height: 16),
               const Divider(),
@@ -247,6 +475,24 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _editField({
+    required TextEditingController controller,
+    required String label,
+    int maxLines = 1,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: TextFormField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
+        maxLines: maxLines,
       ),
     );
   }
@@ -271,6 +517,13 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
       'status',
       'assets_types',
       'organization',
+      'os',
+      'os_ver',
+      'network',
+      'member_name',
+      'memo',
+      'memo1',
+      'memo2',
     };
     final entries = asset.metadata.entries
         .where((entry) => entry.value.isNotEmpty)
@@ -307,6 +560,8 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
         return '메모1';
       case 'memo2':
         return '메모2';
+      case 'memo':
+        return '메모';
       case 'os':
         return '운영체제';
       case 'os_ver':
@@ -331,6 +586,10 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
         return key;
     }
   }
+
+  String _metadataValue(AssetInfo asset, String key) {
+    return asset.metadata[key] ?? '';
+  }
   Widget _buildInspectionMeta(InspectionProvider provider) {
     final inspection = _inspection;
     if (inspection == null) {
@@ -347,7 +606,7 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            _infoRow('상태', inspection.status),
+            _infoRow('상태', _isEditing ? _inspectionStatus : inspection.status),
             _infoRow('스캔 일시', provider.formatDateTime(inspection.scannedAt)),
             _infoRow('동기화', inspection.synced ? '완료' : '대기 중'),
             if ((inspection.memo ?? '').isNotEmpty)
@@ -408,69 +667,97 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
                   const SizedBox(height: 16),
                   _buildInspectionMeta(provider),
                   const SizedBox(height: 16),
-                  Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          '실사 수정',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<String>(
-                          value: _status,
-                          decoration: const InputDecoration(labelText: '상태'),
-                          items: const [
-                            DropdownMenuItem(value: '사용', child: Text('사용')),
-                            DropdownMenuItem(value: '가용(창고)', child: Text('가용(창고)')),
-                            DropdownMenuItem(value: '이동', child: Text('이동')),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() {
-                                _status = value;
-                              });
-                            }
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _memoController,
-                          maxLines: 4,
-                          decoration: const InputDecoration(
-                            labelText: '메모',
-                            border: OutlineInputBorder(),
+                  if (_isEditing)
+                    Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '실사 수정',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                           ),
-                        ),
-                        const SizedBox(height: 24),
-                        Row(
-                          children: [
-                            FilledButton(
-                              onPressed: () => _save(provider),
-                              child: const Text('저장'),
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            value: _inspectionStatus,
+                            decoration: const InputDecoration(labelText: '상태'),
+                            items: const [
+                              DropdownMenuItem(value: '사용', child: Text('사용')),
+                              DropdownMenuItem(value: '가용(창고)', child: Text('가용(창고)')),
+                              DropdownMenuItem(value: '이동', child: Text('이동')),
+                            ],
+                            onChanged: (value) {
+                              if (value != null) {
+                                setState(() {
+                                  _inspectionStatus = value;
+                                });
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _memoController,
+                            maxLines: 4,
+                            decoration: const InputDecoration(
+                              labelText: '메모',
+                              border: OutlineInputBorder(),
                             ),
-                            const SizedBox(width: 12),
-                            OutlinedButton(
-                              onPressed: () => context.go('/assets'),
-                              child: const Text('완료'),
-                            ),
-                            const Spacer(),
-                            TextButton.icon(
-                              onPressed: _inspection == null
-                                  ? null
-                                  : () => _delete(provider),
-                              icon: const Icon(Icons.delete),
-                              label: const Text('삭제'),
-                              style: TextButton.styleFrom(
-                                foregroundColor: Colors.redAccent,
+                          ),
+                          const SizedBox(height: 24),
+                          Row(
+                            children: [
+                              FilledButton(
+                                onPressed: () => _save(provider),
+                                child: const Text('저장'),
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 12),
+                              OutlinedButton(
+                                onPressed: () => _cancelEditing(provider),
+                                child: const Text('취소'),
+                              ),
+                              const Spacer(),
+                              TextButton.icon(
+                                onPressed:
+                                    _inspection == null ? null : () => _delete(provider),
+                                icon: const Icon(Icons.delete),
+                                label: const Text('삭제'),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.redAccent,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Row(
+                      children: [
+                        FilledButton(
+                          onPressed: () {
+                            setState(() {
+                              _isEditing = true;
+                            });
+                          },
+                          child: const Text('수정'),
+                        ),
+                        const SizedBox(width: 12),
+                        OutlinedButton(
+                          onPressed: () => context.go('/assets'),
+                          child: const Text('완료'),
+                        ),
+                        const Spacer(),
+                        TextButton.icon(
+                          onPressed:
+                              _inspection == null ? null : () => _delete(provider),
+                          icon: const Icon(Icons.delete),
+                          label: const Text('삭제'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.redAccent,
+                          ),
                         ),
                       ],
                     ),
-                  ),
                 ] else if (!_assetNotFound) ...[
                   const SizedBox(height: 24),
                   const Center(child: Text('asset_uid를 검색하여 자산 정보를 확인하세요.')),
