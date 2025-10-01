@@ -34,6 +34,7 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
   final TextEditingController _assetUserController = TextEditingController();
   final TextEditingController _assetMemoController = TextEditingController();
   final TextEditingController _assetMemo2Controller = TextEditingController();
+  
   String _inspectionStatus = '사용';
   Inspection? _inspection;
   String? _selectedAssetUid;
@@ -59,6 +60,7 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
     _assetUserController.dispose();
     _assetMemoController.dispose();
     _assetMemo2Controller.dispose();
+
     super.dispose();
   }
 
@@ -156,6 +158,7 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
     _setControllerText(_assetUserController, _metadataValue(asset, 'member_name'));
     _setControllerText(_assetMemoController, _metadataValue(asset, 'memo'));
     _setControllerText(_assetMemo2Controller, _metadataValue(asset, 'memo2'));
+
   }
 
   void _clearAssetControllers() {
@@ -174,6 +177,7 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
       _assetUserController,
       _assetMemoController,
       _assetMemo2Controller,
+
     ]) {
       _setControllerText(controller, '');
     }
@@ -255,6 +259,7 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
           assets_types: _assetTypeController.text.trim(),
           organization: _assetOrganizationController.text.trim(),
           metadata: updatedMetadata,
+
         ),
       );
     }
@@ -462,6 +467,7 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
               )
             else
               _infoRow('메모2', _metadataValue(asset, 'memo2')),
+
             if (metadataRows.isNotEmpty) ...[
               const SizedBox(height: 16),
               const Divider(),
@@ -483,6 +489,7 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
     required TextEditingController controller,
     required String label,
     int maxLines = 1,
+
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -493,6 +500,7 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
           border: const OutlineInputBorder(),
         ),
         maxLines: maxLines,
+
       ),
     );
   }
