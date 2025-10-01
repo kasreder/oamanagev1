@@ -28,6 +28,13 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
   final TextEditingController _assetStatusController = TextEditingController();
   final TextEditingController _assetTypeController = TextEditingController();
   final TextEditingController _assetOrganizationController = TextEditingController();
+  final TextEditingController _assetOsController = TextEditingController();
+  final TextEditingController _assetOsVersionController = TextEditingController();
+  final TextEditingController _assetNetworkController = TextEditingController();
+  final TextEditingController _assetUserController = TextEditingController();
+  final TextEditingController _assetMemoController = TextEditingController();
+  final TextEditingController _assetMemo2Controller = TextEditingController();
+  
   String _inspectionStatus = '사용';
   Inspection? _inspection;
   String? _selectedAssetUid;
@@ -47,6 +54,13 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
     _assetStatusController.dispose();
     _assetTypeController.dispose();
     _assetOrganizationController.dispose();
+    _assetOsController.dispose();
+    _assetOsVersionController.dispose();
+    _assetNetworkController.dispose();
+    _assetUserController.dispose();
+    _assetMemoController.dispose();
+    _assetMemo2Controller.dispose();
+
     super.dispose();
   }
 
@@ -138,6 +152,13 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
     _setControllerText(_assetStatusController, asset.status);
     _setControllerText(_assetTypeController, asset.assets_types);
     _setControllerText(_assetOrganizationController, asset.organization);
+    _setControllerText(_assetOsController, _metadataValue(asset, 'os'));
+    _setControllerText(_assetOsVersionController, _metadataValue(asset, 'os_ver'));
+    _setControllerText(_assetNetworkController, _metadataValue(asset, 'network'));
+    _setControllerText(_assetUserController, _metadataValue(asset, 'member_name'));
+    _setControllerText(_assetMemoController, _metadataValue(asset, 'memo'));
+    _setControllerText(_assetMemo2Controller, _metadataValue(asset, 'memo2'));
+
   }
 
   void _clearAssetControllers() {
@@ -150,6 +171,13 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
       _assetStatusController,
       _assetTypeController,
       _assetOrganizationController,
+      _assetOsController,
+      _assetOsVersionController,
+      _assetNetworkController,
+      _assetUserController,
+      _assetMemoController,
+      _assetMemo2Controller,
+
     ]) {
       _setControllerText(controller, '');
     }
@@ -202,6 +230,23 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
     provider.addOrUpdate(inspection);
     final asset = provider.assetOf(assetUid);
     if (asset != null) {
+      final updatedMetadata = Map<String, String>.from(asset.metadata);
+      void updateMetadata(String key, TextEditingController controller) {
+        final value = controller.text.trim();
+        if (value.isEmpty) {
+          updatedMetadata.remove(key);
+        } else {
+          updatedMetadata[key] = value;
+        }
+      }
+
+      updateMetadata('os', _assetOsController);
+      updateMetadata('os_ver', _assetOsVersionController);
+      updateMetadata('network', _assetNetworkController);
+      updateMetadata('member_name', _assetUserController);
+      updateMetadata('memo', _assetMemoController);
+      updateMetadata('memo2', _assetMemo2Controller);
+
       provider.upsertAssetInfo(
         AssetInfo(
           uid: asset.uid,
@@ -213,7 +258,8 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
           status: _assetStatusController.text.trim(),
           assets_types: _assetTypeController.text.trim(),
           organization: _assetOrganizationController.text.trim(),
-          metadata: asset.metadata,
+          metadata: updatedMetadata,
+
         ),
       );
     }
@@ -389,6 +435,39 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
             else
               _infoRow('소속 조직',
                   asset.organization.isEmpty ? '-' : asset.organization),
+            if (_isEditing)
+              _editField(controller: _assetOsController, label: '운영체제')
+            else
+              _infoRow('운영체제', _metadataValue(asset, 'os')),
+            if (_isEditing)
+              _editField(controller: _assetOsVersionController, label: '운영체제 버전')
+            else
+              _infoRow('운영체제 버전', _metadataValue(asset, 'os_ver')),
+            if (_isEditing)
+              _editField(controller: _assetNetworkController, label: '네트워크')
+            else
+              _infoRow('네트워크', _metadataValue(asset, 'network')),
+            if (_isEditing)
+              _editField(controller: _assetUserController, label: '사용자')
+            else
+              _infoRow('사용자', _metadataValue(asset, 'member_name')),
+            if (_isEditing)
+              _editField(
+                controller: _assetMemoController,
+                label: '메모',
+                maxLines: 3,
+              )
+            else
+              _infoRow('메모', _metadataValue(asset, 'memo')),
+            if (_isEditing)
+              _editField(
+                controller: _assetMemo2Controller,
+                label: '메모2',
+                maxLines: 3,
+              )
+            else
+              _infoRow('메모2', _metadataValue(asset, 'memo2')),
+
             if (metadataRows.isNotEmpty) ...[
               const SizedBox(height: 16),
               const Divider(),
@@ -409,6 +488,8 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
   Widget _editField({
     required TextEditingController controller,
     required String label,
+    int maxLines = 1,
+
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -418,6 +499,8 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
           labelText: label,
           border: const OutlineInputBorder(),
         ),
+        maxLines: maxLines,
+
       ),
     );
   }
@@ -442,6 +525,13 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
       'status',
       'assets_types',
       'organization',
+      'os',
+      'os_ver',
+      'network',
+      'member_name',
+      'memo',
+      'memo1',
+      'memo2',
     };
     final entries = asset.metadata.entries
         .where((entry) => entry.value.isNotEmpty)
@@ -478,6 +568,8 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
         return '메모1';
       case 'memo2':
         return '메모2';
+      case 'memo':
+        return '메모';
       case 'os':
         return '운영체제';
       case 'os_ver':
@@ -501,6 +593,10 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
       default:
         return key;
     }
+  }
+
+  String _metadataValue(AssetInfo asset, String key) {
+    return asset.metadata[key] ?? '';
   }
   Widget _buildInspectionMeta(InspectionProvider provider) {
     final inspection = _inspection;
