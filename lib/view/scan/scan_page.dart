@@ -1,3 +1,4 @@
+// lib/view/scan/scan_page.dart
 import 'dart:async';
 import 'dart:convert';
 
