@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -42,10 +43,8 @@ class _ScanPageState extends State<ScanPage> {
   bool _isPaused = false;
   // 권한 관련 에러 메시지 저장용 변수
   String? _permissionError;
-  // 화면 하단에 표시될 현재 활성 UID
-  String? _activeUid;
   // 최근 스캔된 UID 리스트(최대 5개 보관)
-  final List<String> _recentUids = [];
+  final List<_ScannedBarcode> _scannedBarcodes = [];
 
   @override
   void initState() {
@@ -80,17 +79,38 @@ class _ScanPageState extends State<ScanPage> {
     try {
       // QR 데이터에서 자산 UID를 추출한다.
       final assetUid = _parseAssetUid(rawValue);
-      setState(() {
-        // 현재 활성 UID 업데이트
-        _activeUid = assetUid;
-        // 중복 제거 후 최근 리스트 맨 앞에 추가
-        _recentUids.remove(assetUid);
-        _recentUids.insert(0, assetUid);
-        if (_recentUids.length > 5) {
-          // 최대 5개까지만 유지하여 UI 혼잡을 줄인다.
-          _recentUids.removeRange(5, _recentUids.length);
-        }
-      });
+      if (!mounted) {
+        return;
+      }
+      final provider = context.read<InspectionProvider>();
+      final isRegistered = provider.assetExists(assetUid);
+      final existingIndex =
+          _scannedBarcodes.indexWhere((item) => item.uid == assetUid);
+
+      if (existingIndex != -1) {
+        // 이미 목록에 있는 경우 맨 위로 올리고 진동/단일 비프음 재생
+        unawaited(_playBeep());
+        _triggerVibration();
+        setState(() {
+          final updated =
+              _ScannedBarcode(uid: assetUid, isRegistered: isRegistered);
+          _scannedBarcodes
+            ..removeAt(existingIndex)
+            ..insert(0, updated);
+        });
+      } else {
+        // 신규 스캔인 경우 등록 여부에 따라 사운드 피드백 제공
+        unawaited(_playBeep(count: isRegistered ? 2 : 1));
+        setState(() {
+          _scannedBarcodes.insert(
+            0,
+            _ScannedBarcode(uid: assetUid, isRegistered: isRegistered),
+          );
+          if (_scannedBarcodes.length > 5) {
+            _scannedBarcodes.removeRange(5, _scannedBarcodes.length);
+          }
+        });
+      }
     } catch (error) {
       _showError('QR 파싱 실패: $error');
     } finally {
@@ -160,14 +180,6 @@ class _ScanPageState extends State<ScanPage> {
   Widget build(BuildContext context) {
     return Consumer<InspectionProvider>(
       builder: (context, provider, _) {
-        // 현재 활성 UID에 대한 자산 정보를 조회한다.
-        final activeUid = _activeUid;
-        final activeAsset =
-            activeUid != null ? provider.assetOf(activeUid) : null;
-        final isRegistered =
-            activeUid != null ? provider.assetExists(activeUid) : false;
-// ... 생략 ...
-
         return AppScaffold(
           title: 'QR 스캔',
           selectedIndex: 0,
@@ -308,42 +320,37 @@ class _ScanPageState extends State<ScanPage> {
                             // ),
                             // const SizedBox(height: 12),
 
-                            if (activeUid == null)
+                            if (_scannedBarcodes.isEmpty)
                               Text(
-                                kIsWeb ? '카메라 접근을 허용했는지 확인하세요.' : 'QR 코드를 뷰파인더 중앙에 맞춰주세요.',
+                                kIsWeb
+                                    ? '카메라 접근을 허용했는지 확인하세요.'
+                                    : 'QR 코드를 뷰파인더 중앙에 맞춰주세요.',
                                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w800,
-                                  shadows: const [Shadow(blurRadius: 8)],
-                                ),
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800,
+                                      shadows: const [Shadow(blurRadius: 8)],
+                                    ),
                                 textAlign: TextAlign.center,
                               )
                             else
-                              _ScannedAssetPanel(
-                                uid: activeUid,
-                                assetName: activeAsset?.name,
-                                location: activeAsset?.location,
-                                isRegistered: isRegistered,
-                                onEdit: () => _openAssetDetail(activeUid),
-                                onVerify: () => _verifyAsset(activeUid),
-                                onRegister: () => _registerAsset(activeUid),
+                              Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  for (var i = 0; i < _scannedBarcodes.length; i++) ...[
+                                    _ScannedBarcodeRow(
+                                      barcode: _scannedBarcodes[i].uid,
+                                      isRegistered: _scannedBarcodes[i].isRegistered,
+                                      onAction: _scannedBarcodes[i].isRegistered
+                                          ? () => _verifyAsset(_scannedBarcodes[i].uid)
+                                          : () => _registerAsset(_scannedBarcodes[i].uid),
+                                      onDelete: () => _removeBarcode(_scannedBarcodes[i].uid),
+                                    ),
+                                    if (i != _scannedBarcodes.length - 1)
+                                      const SizedBox(height: 8),
+                                  ],
+                                ],
                               ),
-
-                            if (_recentUids.isNotEmpty) ...[
-                              const SizedBox(height: 12),
-                              Wrap(
-                                alignment: WrapAlignment.center,
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: _recentUids.map((uid) {
-                                  return ChoiceChip(
-                                    label: Text(uid),
-                                    selected: uid == activeUid,
-                                    onSelected: (_) => setState(() => _activeUid = uid),
-                                  );
-                                }).toList(),
-                              ),
-                            ],
                           ],
                         ),
                       ),
@@ -356,11 +363,6 @@ class _ScanPageState extends State<ScanPage> {
 
       },
     );
-  }
-
-  void _openAssetDetail(String uid) {
-    // 자산 상세 화면으로 이동한다.
-    context.go('/assets/$uid');
   }
 
   Future<void> _toggleTorch() async {
@@ -394,6 +396,25 @@ class _ScanPageState extends State<ScanPage> {
     });
   }
 
+  void _removeBarcode(String uid) {
+    setState(() {
+      _scannedBarcodes.removeWhere((item) => item.uid == uid);
+    });
+  }
+
+  Future<void> _playBeep({int count = 1}) async {
+    for (var i = 0; i < count; i++) {
+      await SystemSound.play(SystemSoundType.click);
+      if (i < count - 1) {
+        await Future.delayed(const Duration(milliseconds: 120));
+      }
+    }
+  }
+
+  void _triggerVibration() {
+    HapticFeedback.mediumImpact();
+  }
+
   void _verifyAsset(String uid) {
     // 자산 검수(검증) 내역을 즉시 생성하여 저장한다.
     final provider = context.read<InspectionProvider>();
@@ -421,6 +442,70 @@ class _ScanPageState extends State<ScanPage> {
     context.go('/assets/register');
   }
 }
+
+class _ScannedBarcode {
+  const _ScannedBarcode({required this.uid, required this.isRegistered});
+
+  final String uid;
+  final bool isRegistered;
+}
+
+class _ScannedBarcodeRow extends StatelessWidget {
+  const _ScannedBarcodeRow({
+    required this.barcode,
+    required this.isRegistered,
+    required this.onAction,
+    required this.onDelete,
+  });
+
+  final String barcode;
+  final bool isRegistered;
+  final VoidCallback onAction;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final buttonLabel = isRegistered ? '인증' : '자산등록';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.65),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              barcode,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 12),
+          FilledButton(
+            onPressed: onAction,
+            style: FilledButton.styleFrom(minimumSize: const Size(90, 40)),
+            child: Text(buttonLabel),
+          ),
+          const SizedBox(width: 4),
+          IconButton(
+            onPressed: onDelete,
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.white12,
+              foregroundColor: Colors.white,
+            ),
+            icon: const Icon(Icons.close),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ScannerOverlay extends StatelessWidget {
   const _ScannerOverlay({required this.cutOutRect});
   final Rect cutOutRect;
@@ -468,101 +553,6 @@ class _ScannerOverlayPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _ScannerOverlayPainter oldDelegate) {
     return oldDelegate.cutOutRect != cutOutRect;
-  }
-}
-
-class _ScannedAssetPanel extends StatelessWidget {
-  const _ScannedAssetPanel({
-    required this.uid,
-    required this.isRegistered,
-    this.assetName,
-    this.location,
-    this.onEdit,
-    this.onVerify,
-    this.onRegister,
-  });
-  final String uid;
-  final bool isRegistered;
-  final String? assetName;
-  final String? location;
-  final VoidCallback? onEdit;
-  final VoidCallback? onVerify;
-  final VoidCallback? onRegister;
-
-  @override
-  Widget build(BuildContext context) {
-    // 스캔 결과를 카드 형태로 표현하여 가독성을 높인다.
-    return Card(
-      color: Colors.black.withOpacity(0.65),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '스캔된 자산번호',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(color: Colors.white70),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              uid,
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineSmall
-                  ?.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-            if (assetName != null && assetName!.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                assetName!,
-                style: const TextStyle(color: Colors.white70),
-              ),
-            ],
-            if (location != null && location!.isNotEmpty) ...[
-              const SizedBox(height: 2),
-              Text(
-                location!,
-                style: const TextStyle(color: Colors.white54),
-              ),
-            ],
-            const SizedBox(height: 12),
-            if (isRegistered)
-              Row(
-                children: [
-                  Expanded(
-                    // 이미 등록된 자산이라면 수정 버튼과 인증 버튼을 함께 제공한다.
-                    child: FilledButton(
-                      onPressed: onEdit,
-                      child: const Text('수정하기'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: FilledButton.tonal(
-                      onPressed: onVerify,
-                      child: const Text('인증하기'),
-                    ),
-                  ),
-                ],
-              )
-            else
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  // 미등록 자산은 등록하기 버튼만 단독으로 노출한다.
-                  onPressed: onRegister,
-                  child: const Text('등록하기'),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
   }
 }
 
