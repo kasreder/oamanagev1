@@ -14,6 +14,12 @@ import '../../models/inspection.dart';
 import '../../providers/inspection_provider.dart';
 import '../common/app_scaffold.dart';
 
+// QR 스캔 화면을 담당하는 최상위 위젯
+// ------------------------------------------------------------
+// 이 화면은 모바일/웹 환경에서 공통으로 사용할 수 있도록 작성되었으며
+// 모바일 스캐너 패키지를 통해 QR 코드를 인식한다.
+// 아래의 State 클래스에서는 카메라 권한, 토치 제어, 카메라 전환,
+// 스캔 결과 처리 등 다양한 상태를 관리한다.
 class ScanPage extends StatefulWidget {
   const ScanPage({super.key});
 
@@ -22,25 +28,35 @@ class ScanPage extends StatefulWidget {
 }
 
 class _ScanPageState extends State<ScanPage> {
+  // MobileScanner 컨트롤러: 카메라 제어와 스캔 결과 수신에 사용된다.
   final MobileScannerController _controller = MobileScannerController();
+  // 토치(플래시) 상태를 즉시 반영하기 위한 ValueNotifier
   final ValueNotifier<TorchState> _torchStateNotifier =
       ValueNotifier<TorchState>(TorchState.off);
+  // 전/후면 카메라 전환 상태를 추적하는 ValueNotifier
   final ValueNotifier<CameraFacing> _cameraFacingNotifier =
       ValueNotifier<CameraFacing>(CameraFacing.back);
+  // 스캔 중복 처리를 피하기 위한 플래그
   bool _isProcessing = false;
+  // 일시정지 상태인지 여부
   bool _isPaused = false;
+  // 권한 관련 에러 메시지 저장용 변수
   String? _permissionError;
+  // 화면 하단에 표시될 현재 활성 UID
   String? _activeUid;
+  // 최근 스캔된 UID 리스트(최대 5개 보관)
   final List<String> _recentUids = [];
 
   @override
   void initState() {
     super.initState();
+    // 최초 진입 시 카메라 권한을 확인한다.
     _checkPermission();
   }
 
   @override
   void dispose() {
+    // 사용 중인 리소스들을 반드시 해제하여 메모리 누수를 방지한다.
     _torchStateNotifier.dispose();
     _cameraFacingNotifier.dispose();
     _controller.dispose();
@@ -48,29 +64,37 @@ class _ScanPageState extends State<ScanPage> {
   }
 
   void _onDetect(BarcodeCapture capture) {
+    // 이미 처리 중이거나 일시정지 상태일 경우 추가 처리를 막는다.
     if (_isProcessing || _isPaused || capture.barcodes.isEmpty) {
       return;
     }
+    // 첫 번째 바코드 정보만 사용한다. (다중 바코드는 현재 필요 없음)
     final barcode = capture.barcodes.firstOrNull;
     final rawValue = barcode?.rawValue;
     if (rawValue == null) {
       _showError('유효하지 않은 QR 코드입니다.');
       return;
     }
+    // 중복 처리를 방지하기 위해 플래그를 설정한다.
     _isProcessing = true;
     try {
+      // QR 데이터에서 자산 UID를 추출한다.
       final assetUid = _parseAssetUid(rawValue);
       setState(() {
+        // 현재 활성 UID 업데이트
         _activeUid = assetUid;
+        // 중복 제거 후 최근 리스트 맨 앞에 추가
         _recentUids.remove(assetUid);
         _recentUids.insert(0, assetUid);
         if (_recentUids.length > 5) {
+          // 최대 5개까지만 유지하여 UI 혼잡을 줄인다.
           _recentUids.removeRange(5, _recentUids.length);
         }
       });
     } catch (error) {
       _showError('QR 파싱 실패: $error');
     } finally {
+      // 일정 시간 후 다시 스캔 가능하도록 플래그를 초기화한다.
       Timer(const Duration(milliseconds: 800), () {
         if (mounted) {
           setState(() {
@@ -85,6 +109,7 @@ class _ScanPageState extends State<ScanPage> {
 
   String _parseAssetUid(String rawValue) {
     try {
+      // JSON 형태의 QR 데이터라면 asset_uid 값을 우선적으로 사용한다.
       final decoded = jsonDecode(rawValue);
       if (decoded is Map<String, dynamic>) {
         final uid = decoded['asset_uid'] as String?;
@@ -95,6 +120,7 @@ class _ScanPageState extends State<ScanPage> {
     } catch (_) {
       // 단순 문자열 QR 코드 처리.
     }
+    // JSON 파싱이 실패하거나 단순 문자열인 경우, 원본 문자열을 그대로 사용한다.
     if (rawValue.isEmpty) {
       throw const FormatException('빈 QR 코드');
     }
@@ -102,6 +128,7 @@ class _ScanPageState extends State<ScanPage> {
   }
 
   void _showError(String message) {
+    // 화면이 언마운트된 경우에는 스낵바를 띄울 수 없으므로 즉시 반환한다.
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
@@ -109,17 +136,20 @@ class _ScanPageState extends State<ScanPage> {
   }
 
   Future<void> _openSettings() async {
+    // 사용자가 직접 앱 설정으로 이동하여 권한을 허용하도록 안내한다.
     await openAppSettings();
   }
 
   Future<void> _checkPermission() async {
     try {
+      // 카메라 권한을 요청하고 현재 상태를 갱신한다.
       final status = await Permission.camera.request();
       if (!mounted) return;
       setState(() {
         _permissionError = status.isGranted ? null : '카메라 권한이 필요합니다.';
       });
     } catch (error) {
+      // 권한 요청 과정에서 예외가 발생한 경우 사용자에게 안내한다.
       if (!mounted) return;
       setState(() {
         _permissionError = '권한 확인 중 오류: $error';
@@ -130,6 +160,7 @@ class _ScanPageState extends State<ScanPage> {
   Widget build(BuildContext context) {
     return Consumer<InspectionProvider>(
       builder: (context, provider, _) {
+        // 현재 활성 UID에 대한 자산 정보를 조회한다.
         final activeUid = _activeUid;
         final activeAsset =
             activeUid != null ? provider.assetOf(activeUid) : null;
@@ -327,10 +358,12 @@ class _ScanPageState extends State<ScanPage> {
   }
 
   void _openAssetDetail(String uid) {
+    // 자산 상세 화면으로 이동한다.
     context.go('/assets/$uid');
   }
 
   Future<void> _toggleTorch() async {
+    // MobileScanner 컨트롤러를 통해 토치 상태를 토글한다.
     await _controller.toggleTorch();
     if (!mounted) return;
     final current = _torchStateNotifier.value;
@@ -339,6 +372,7 @@ class _ScanPageState extends State<ScanPage> {
   }
 
   Future<void> _switchCamera() async {
+    // 전/후면 카메라를 전환하고 상태를 반영한다.
     await _controller.switchCamera();
     if (!mounted) return;
     final current = _cameraFacingNotifier.value;
@@ -347,6 +381,7 @@ class _ScanPageState extends State<ScanPage> {
   }
 
   Future<void> _togglePause() async {
+    // 스캔을 일시정지하거나 재시작한다.
     if (_isPaused) {
       await _controller.start();
     } else {
@@ -359,6 +394,7 @@ class _ScanPageState extends State<ScanPage> {
   }
 
   void _verifyAsset(String uid) {
+    // 자산 검수(검증) 내역을 즉시 생성하여 저장한다.
     final provider = context.read<InspectionProvider>();
     final now = DateTime.now();
     final asset = provider.assetOf(uid);
@@ -377,6 +413,7 @@ class _ScanPageState extends State<ScanPage> {
   }
 
   void _registerAsset(String uid) {
+    // 등록되지 않은 자산이라면 사용자에게 등록을 유도한다.
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('새 자산 등록을 진행해주세요. ($uid)')),
     );
@@ -389,6 +426,7 @@ class _ScannerOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // overlay 터치 이벤트가 하위 위젯에 전달되도록 IgnorePointer로 감싼다.
     return IgnorePointer(
       child: CustomPaint(
         size: Size.infinite,
@@ -406,6 +444,7 @@ class _ScannerOverlayPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // 화면 전체에 반투명 흰색을 깔고, 스캔 영역은 투명하게 처리한다.
     final overlayPaint = Paint()
       ..color = Colors.white.withOpacity(0.85);
     final path = Path()
@@ -414,6 +453,7 @@ class _ScannerOverlayPainter extends CustomPainter {
       ..addRRect(RRect.fromRectXY(cutOutRect, 16, 16));
     canvas.drawPath(path, overlayPaint);
 
+    // 스캔 영역 경계를 파란색으로 강조하여 사용자 가이드를 돕는다.
     final borderPaint = Paint()
       ..color = Colors.indigo
       ..style = PaintingStyle.stroke
@@ -450,6 +490,7 @@ class _ScannedAssetPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 스캔 결과를 카드 형태로 표현하여 가독성을 높인다.
     return Card(
       color: Colors.black.withOpacity(0.65),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -493,6 +534,7 @@ class _ScannedAssetPanel extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
+                    // 이미 등록된 자산이라면 수정 버튼과 인증 버튼을 함께 제공한다.
                     child: FilledButton(
                       onPressed: onEdit,
                       child: const Text('수정하기'),
@@ -511,6 +553,7 @@ class _ScannedAssetPanel extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
+                  // 미등록 자산은 등록하기 버튼만 단독으로 노출한다.
                   onPressed: onRegister,
                   child: const Text('등록하기'),
                 ),
@@ -535,6 +578,7 @@ class _OverlayIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 상단 컨트롤 버튼들을 일관된 스타일로 렌더링한다.
     return ElevatedButton.icon(
       style: ElevatedButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
