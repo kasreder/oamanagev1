@@ -25,6 +25,7 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
   String? _selectedAssetUid;
   bool _assetNotFound = false;
   bool _initialLoadDone = false;
+  bool _isEditing = false;
 
   @override
   void dispose() {
@@ -87,6 +88,7 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
       _inspection = inspection;
       _status = nextStatus;
       _assetNotFound = asset == null;
+      _isEditing = false;
     });
     _memoController
       ..text = memo
@@ -129,10 +131,37 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
     provider.addOrUpdate(inspection);
     setState(() {
       _inspection = inspection;
+      _isEditing = false;
     });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('저장되었습니다.')),
     );
+  }
+
+  void _cancelEditing(InspectionProvider provider) {
+    final inspection = _inspection;
+    if (inspection != null) {
+      final memo = inspection.memo ?? '';
+      _memoController
+        ..text = memo
+        ..selection = TextSelection.collapsed(offset: memo.length);
+      setState(() {
+        _status = inspection.status;
+        _isEditing = false;
+      });
+      return;
+    }
+
+    final assetUid = _selectedAssetUid;
+    final asset = assetUid != null ? provider.assetOf(assetUid) : null;
+    final nextStatus = asset != null && asset.status.isNotEmpty ? asset.status : '사용';
+    _memoController
+      ..text = ''
+      ..selection = const TextSelection.collapsed(offset: 0);
+    setState(() {
+      _status = nextStatus;
+      _isEditing = false;
+    });
   }
 
   void _delete(InspectionProvider provider) async {
@@ -408,69 +437,97 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
                   const SizedBox(height: 16),
                   _buildInspectionMeta(provider),
                   const SizedBox(height: 16),
-                  Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          '실사 수정',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<String>(
-                          value: _status,
-                          decoration: const InputDecoration(labelText: '상태'),
-                          items: const [
-                            DropdownMenuItem(value: '사용', child: Text('사용')),
-                            DropdownMenuItem(value: '가용(창고)', child: Text('가용(창고)')),
-                            DropdownMenuItem(value: '이동', child: Text('이동')),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() {
-                                _status = value;
-                              });
-                            }
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _memoController,
-                          maxLines: 4,
-                          decoration: const InputDecoration(
-                            labelText: '메모',
-                            border: OutlineInputBorder(),
+                  if (_isEditing)
+                    Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '실사 수정',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                           ),
-                        ),
-                        const SizedBox(height: 24),
-                        Row(
-                          children: [
-                            FilledButton(
-                              onPressed: () => _save(provider),
-                              child: const Text('저장'),
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            value: _status,
+                            decoration: const InputDecoration(labelText: '상태'),
+                            items: const [
+                              DropdownMenuItem(value: '사용', child: Text('사용')),
+                              DropdownMenuItem(value: '가용(창고)', child: Text('가용(창고)')),
+                              DropdownMenuItem(value: '이동', child: Text('이동')),
+                            ],
+                            onChanged: (value) {
+                              if (value != null) {
+                                setState(() {
+                                  _status = value;
+                                });
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _memoController,
+                            maxLines: 4,
+                            decoration: const InputDecoration(
+                              labelText: '메모',
+                              border: OutlineInputBorder(),
                             ),
-                            const SizedBox(width: 12),
-                            OutlinedButton(
-                              onPressed: () => context.go('/assets'),
-                              child: const Text('완료'),
-                            ),
-                            const Spacer(),
-                            TextButton.icon(
-                              onPressed: _inspection == null
-                                  ? null
-                                  : () => _delete(provider),
-                              icon: const Icon(Icons.delete),
-                              label: const Text('삭제'),
-                              style: TextButton.styleFrom(
-                                foregroundColor: Colors.redAccent,
+                          ),
+                          const SizedBox(height: 24),
+                          Row(
+                            children: [
+                              FilledButton(
+                                onPressed: () => _save(provider),
+                                child: const Text('저장'),
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 12),
+                              OutlinedButton(
+                                onPressed: () => _cancelEditing(provider),
+                                child: const Text('취소'),
+                              ),
+                              const Spacer(),
+                              TextButton.icon(
+                                onPressed:
+                                    _inspection == null ? null : () => _delete(provider),
+                                icon: const Icon(Icons.delete),
+                                label: const Text('삭제'),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.redAccent,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Row(
+                      children: [
+                        FilledButton(
+                          onPressed: () {
+                            setState(() {
+                              _isEditing = true;
+                            });
+                          },
+                          child: const Text('수정'),
+                        ),
+                        const SizedBox(width: 12),
+                        OutlinedButton(
+                          onPressed: () => context.go('/assets'),
+                          child: const Text('완료'),
+                        ),
+                        const Spacer(),
+                        TextButton.icon(
+                          onPressed:
+                              _inspection == null ? null : () => _delete(provider),
+                          icon: const Icon(Icons.delete),
+                          label: const Text('삭제'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.redAccent,
+                          ),
                         ),
                       ],
                     ),
-                  ),
                 ] else if (!_assetNotFound) ...[
                   const SizedBox(height: 24),
                   const Center(child: Text('asset_uid를 검색하여 자산 정보를 확인하세요.')),
