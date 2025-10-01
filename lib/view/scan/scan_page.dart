@@ -295,24 +295,25 @@ class _ScanPageState extends State<ScanPage> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.6),
-                                borderRadius: BorderRadius.circular(24),
-                              ),
-                              child: const Text(
-                                '신규/재등록 + 코드',
-                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
+                            // Container(
+                            //   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                            //   decoration: BoxDecoration(
+                            //     color: Colors.black.withOpacity(0.6),
+                            //     borderRadius: BorderRadius.circular(24),
+                            //   ),
+                            //   child: const Text(
+                            //     '신규/재등록 + 코드',
+                            //     style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                            //   ),
+                            // ),
+                            // const SizedBox(height: 12),
 
                             if (activeUid == null)
                               Text(
                                 kIsWeb ? '카메라 접근을 허용했는지 확인하세요.' : 'QR 코드를 뷰파인더 중앙에 맞춰주세요.',
                                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                                   color: Colors.white,
+                                  fontWeight: FontWeight.w800,
                                   shadows: const [Shadow(blurRadius: 8)],
                                 ),
                                 textAlign: TextAlign.center,
