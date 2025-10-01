@@ -20,7 +20,15 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _memoController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
-  String _status = '사용';
+  final TextEditingController _assetNameController = TextEditingController();
+  final TextEditingController _assetModelController = TextEditingController();
+  final TextEditingController _assetSerialController = TextEditingController();
+  final TextEditingController _assetVendorController = TextEditingController();
+  final TextEditingController _assetLocationController = TextEditingController();
+  final TextEditingController _assetStatusController = TextEditingController();
+  final TextEditingController _assetTypeController = TextEditingController();
+  final TextEditingController _assetOrganizationController = TextEditingController();
+  String _inspectionStatus = '사용';
   Inspection? _inspection;
   String? _selectedAssetUid;
   bool _assetNotFound = false;
@@ -31,6 +39,14 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
   void dispose() {
     _memoController.dispose();
     _searchController.dispose();
+    _assetNameController.dispose();
+    _assetModelController.dispose();
+    _assetSerialController.dispose();
+    _assetVendorController.dispose();
+    _assetLocationController.dispose();
+    _assetStatusController.dispose();
+    _assetTypeController.dispose();
+    _assetOrganizationController.dispose();
     super.dispose();
   }
 
@@ -45,18 +61,25 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
     if (inspection != null) {
       _inspection = inspection;
       _selectedAssetUid = inspection.assetUid;
-      _status = inspection.status;
+      _inspectionStatus = _normalizeStatus(inspection.status);
       final memo = inspection.memo ?? '';
       _memoController.text = memo;
       _memoController.selection = TextSelection.collapsed(offset: memo.length);
       _searchController.text = inspection.assetUid;
+      final asset = provider.assetOf(inspection.assetUid);
+      if (asset != null) {
+        _populateAssetControllers(asset);
+      }
       return;
     }
 
     final asset = provider.assetOf(widget.inspectionId);
     if (asset != null) {
       _selectedAssetUid = asset.uid;
-      _status = asset.status.isNotEmpty ? asset.status : '사용';
+      _inspectionStatus = _normalizeStatus(
+        asset.status.isNotEmpty ? asset.status : '사용',
+      );
+      _populateAssetControllers(asset);
       _searchController.text = asset.uid;
     }
   }
@@ -67,38 +90,86 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
       setState(() {
         _selectedAssetUid = null;
         _inspection = null;
-        _status = '사용';
+        _inspectionStatus = '사용';
         _assetNotFound = false;
       });
       _memoController
         ..text = ''
         ..selection = const TextSelection.collapsed(offset: 0);
+      _clearAssetControllers();
       return;
     }
 
     final asset = provider.assetOf(query);
     final inspection = provider.latestByAssetUid(query);
-    final nextStatus = inspection?.status ?? (asset != null && asset.status.isNotEmpty
-        ? asset.status
-        : '사용');
+    final nextStatus = inspection?.status ??
+        (asset != null && asset.status.isNotEmpty ? asset.status : '사용');
     final memo = inspection?.memo ?? '';
 
     setState(() {
       _selectedAssetUid = asset?.uid;
       _inspection = inspection;
-      _status = nextStatus;
+      _inspectionStatus = _normalizeStatus(nextStatus);
       _assetNotFound = asset == null;
       _isEditing = false;
     });
     _memoController
       ..text = memo
       ..selection = TextSelection.collapsed(offset: memo.length);
+    if (asset != null) {
+      _populateAssetControllers(asset);
+    } else {
+      _clearAssetControllers();
+    }
 
     if (asset == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('자산을 찾을 수 없습니다: $query')),
       );
     }
+  }
+
+  void _populateAssetControllers(AssetInfo asset) {
+    _setControllerText(_assetNameController, asset.name);
+    _setControllerText(_assetModelController, asset.model);
+    _setControllerText(_assetSerialController, asset.serial);
+    _setControllerText(_assetVendorController, asset.vendor);
+    _setControllerText(_assetLocationController, asset.location);
+    _setControllerText(_assetStatusController, asset.status);
+    _setControllerText(_assetTypeController, asset.assets_types);
+    _setControllerText(_assetOrganizationController, asset.organization);
+  }
+
+  void _clearAssetControllers() {
+    for (final controller in [
+      _assetNameController,
+      _assetModelController,
+      _assetSerialController,
+      _assetVendorController,
+      _assetLocationController,
+      _assetStatusController,
+      _assetTypeController,
+      _assetOrganizationController,
+    ]) {
+      _setControllerText(controller, '');
+    }
+  }
+
+  void _setControllerText(TextEditingController controller, String value) {
+    controller
+      ..text = value
+      ..selection = TextSelection.collapsed(offset: value.length);
+  }
+
+  String _normalizeStatus(String status) {
+    const allowed = {'사용', '가용(창고)', '이동'};
+    if (allowed.contains(status)) {
+      return status;
+    }
+    if (status.isEmpty) {
+      return '사용';
+    }
+    return status;
   }
 
   void _save(InspectionProvider provider) {
@@ -117,18 +188,35 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
             Inspection(
               id: _inspection?.id ?? 'ins_${assetUid}_${now.millisecondsSinceEpoch}',
               assetUid: assetUid,
-              status: _status,
+              status: _inspectionStatus,
               memo: _memoController.text,
               scannedAt: now,
               synced: false,
             ))
         .copyWith(
-      status: _status,
+      status: _inspectionStatus,
       memo: _memoController.text,
       scannedAt: now,
       synced: false,
     );
     provider.addOrUpdate(inspection);
+    final asset = provider.assetOf(assetUid);
+    if (asset != null) {
+      provider.upsertAssetInfo(
+        AssetInfo(
+          uid: asset.uid,
+          name: _assetNameController.text.trim(),
+          model: _assetModelController.text.trim(),
+          serial: _assetSerialController.text.trim(),
+          vendor: _assetVendorController.text.trim(),
+          location: _assetLocationController.text.trim(),
+          status: _assetStatusController.text.trim(),
+          assets_types: _assetTypeController.text.trim(),
+          organization: _assetOrganizationController.text.trim(),
+          metadata: asset.metadata,
+        ),
+      );
+    }
     setState(() {
       _inspection = inspection;
       _isEditing = false;
@@ -146,9 +234,15 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
         ..text = memo
         ..selection = TextSelection.collapsed(offset: memo.length);
       setState(() {
-        _status = inspection.status;
+        _inspectionStatus = _normalizeStatus(inspection.status);
         _isEditing = false;
       });
+      final asset = _selectedAssetUid != null
+          ? provider.assetOf(_selectedAssetUid!)
+          : null;
+      if (asset != null) {
+        _populateAssetControllers(asset);
+      }
       return;
     }
 
@@ -159,9 +253,14 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
       ..text = ''
       ..selection = const TextSelection.collapsed(offset: 0);
     setState(() {
-      _status = nextStatus;
+      _inspectionStatus = _normalizeStatus(nextStatus);
       _isEditing = false;
     });
+    if (asset != null) {
+      _populateAssetControllers(asset);
+    } else {
+      _clearAssetControllers();
+    }
   }
 
   void _delete(InspectionProvider provider) async {
@@ -256,13 +355,40 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
             ),
             const SizedBox(height: 12),
             _infoRow('자산 UID', asset.uid),
-            _infoRow('모델명', asset.model),
-            _infoRow('시리얼', asset.serial),
-            _infoRow('제조사', asset.vendor),
-            _infoRow('위치', asset.location),
-            _infoRow('자산 상태', asset.status.isEmpty ? '-' : asset.status),
-            _infoRow('장비 종류', asset.assets_types.isEmpty ? '-' : asset.assets_types),
-            _infoRow('소속 조직', asset.organization.isEmpty ? '-' : asset.organization),
+            if (_isEditing)
+              _editField(controller: _assetNameController, label: '자산명')
+            else
+              _infoRow('자산명', asset.name),
+            if (_isEditing)
+              _editField(controller: _assetModelController, label: '모델명')
+            else
+              _infoRow('모델명', asset.model),
+            if (_isEditing)
+              _editField(controller: _assetSerialController, label: '시리얼')
+            else
+              _infoRow('시리얼', asset.serial),
+            if (_isEditing)
+              _editField(controller: _assetVendorController, label: '제조사')
+            else
+              _infoRow('제조사', asset.vendor),
+            if (_isEditing)
+              _editField(controller: _assetLocationController, label: '위치')
+            else
+              _infoRow('위치', asset.location),
+            if (_isEditing)
+              _editField(controller: _assetStatusController, label: '자산 상태')
+            else
+              _infoRow('자산 상태', asset.status.isEmpty ? '-' : asset.status),
+            if (_isEditing)
+              _editField(controller: _assetTypeController, label: '장비 종류')
+            else
+              _infoRow('장비 종류',
+                  asset.assets_types.isEmpty ? '-' : asset.assets_types),
+            if (_isEditing)
+              _editField(controller: _assetOrganizationController, label: '소속 조직')
+            else
+              _infoRow('소속 조직',
+                  asset.organization.isEmpty ? '-' : asset.organization),
             if (metadataRows.isNotEmpty) ...[
               const SizedBox(height: 16),
               const Divider(),
@@ -275,6 +401,22 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
               ...metadataRows,
             ],
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _editField({
+    required TextEditingController controller,
+    required String label,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: TextFormField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
         ),
       ),
     );
@@ -376,7 +518,7 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            _infoRow('상태', inspection.status),
+            _infoRow('상태', _isEditing ? _inspectionStatus : inspection.status),
             _infoRow('스캔 일시', provider.formatDateTime(inspection.scannedAt)),
             _infoRow('동기화', inspection.synced ? '완료' : '대기 중'),
             if ((inspection.memo ?? '').isNotEmpty)
@@ -449,7 +591,7 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<String>(
-                            value: _status,
+                            value: _inspectionStatus,
                             decoration: const InputDecoration(labelText: '상태'),
                             items: const [
                               DropdownMenuItem(value: '사용', child: Text('사용')),
@@ -459,7 +601,7 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
                             onChanged: (value) {
                               if (value != null) {
                                 setState(() {
-                                  _status = value;
+                                  _inspectionStatus = value;
                                 });
                               }
                             },
