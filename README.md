@@ -118,3 +118,5 @@ assets/dummy/mock/asset_inspections.json
    즉, codex/... 브랜치를 main 이름으로 바꾸려는 경우:
 
 git branch -M main
+
+코드등정렬방법 

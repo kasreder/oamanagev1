@@ -37,10 +37,8 @@ class _AssetsListPageState extends State<AssetsListPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalScrollController = ScrollController();
   final ScrollController _verticalScrollController = ScrollController();
-  static const double _tableMinWidth =
-  640; // 테이블이 답답해 보이지 않도록 최소 너비를 지정합니다.
-  static const EdgeInsets _cellPadding =
-  EdgeInsets.symmetric(horizontal: 5, vertical: 10);
+  static const double _tableMinWidth = 640; // 테이블이 답답해 보이지 않도록 최소 너비를 지정합니다.
+  static const EdgeInsets _cellPadding = EdgeInsets.symmetric(horizontal: 5, vertical: 10);
   static const double _defaultColumnWidth = 60;
   static const double _iconColumnWidth = 30;
   static const double _actionColumnWidth = 104;
@@ -63,20 +61,15 @@ class _AssetsListPageState extends State<AssetsListPage> {
       builder: (context, provider, _) {
         final filteredRows = _filterRows(provider);
         const pageSize = 20;
-        final totalPages =
-        filteredRows.isEmpty ? 0 : (filteredRows.length / pageSize).ceil();
-        final currentPage = totalPages == 0
-            ? 0
-            : (_currentPage.clamp(0, totalPages - 1)).toInt();
+        final totalPages = filteredRows.isEmpty ? 0 : (filteredRows.length / pageSize).ceil();
+        final currentPage = totalPages == 0 ? 0 : (_currentPage.clamp(0, totalPages - 1)).toInt();
         final pageRows = filteredRows.isEmpty
             ? const <_AssetRowData>[]
             : filteredRows.sublist(
-          currentPage * pageSize,
-          math.min((currentPage + 1) * pageSize, filteredRows.length),
-        );
-        final totalCount = provider.onlyUnsynced
-            ? provider.unsyncedCount
-            : provider.totalCount;
+                currentPage * pageSize,
+                math.min((currentPage + 1) * pageSize, filteredRows.length),
+              );
+        final totalCount = provider.onlyUnsynced ? provider.unsyncedCount : provider.totalCount;
         return AppScaffold(
           title: '자산 목록',
           selectedIndex: 1,
@@ -108,176 +101,157 @@ class _AssetsListPageState extends State<AssetsListPage> {
                 child: filteredRows.isEmpty
                     ? const Center(child: Text('표시할 실사 내역이 없습니다.'))
                     : LayoutBuilder(
-                  builder: (context, constraints) {
-                    final tableWidth = math.max(
-                      constraints.maxWidth,
-                      _tableMinWidth,
-                    );
-                    final columns = _buildColumns(context);
-                    return Scrollbar(
-                      controller: _horizontalScrollController,
-                      thumbVisibility: true,
-                      notificationPredicate: (notification) =>
-                      notification.metrics.axis == Axis.horizontal,
-                      child: SingleChildScrollView(
-                        controller: _horizontalScrollController,
-                        scrollDirection: Axis.horizontal,
-                        child: SizedBox(
-                          width: tableWidth,
-                          height: constraints.maxHeight,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              DataTable(
-                                headingRowColor:
-                                WidgetStateProperty.resolveWith(
-                                      (states) => Theme.of(context)
-                                      .colorScheme
-                                      .surfaceContainerHighest,
-                                ),
-                                columnSpacing: 0,
-                                horizontalMargin: 0,
-                                headingRowHeight: 48,
-                                dataRowMinHeight: 0,
-                                dataRowMaxHeight: 0,
-                                columns: columns,
-                                rows: const [],
-                              ),
-                              const Divider(height: 0),
-                              Expanded(
-                                child: Scrollbar(
-                                  controller: _verticalScrollController,
-                                  thumbVisibility: true,
-                                  child: SingleChildScrollView(
-                                    controller: _verticalScrollController,
-                                    child: DataTable(
-                                      showCheckboxColumn: false, // ✅ 기본 체크박스 삭제
-                                      headingRowHeight: 0,
-                                      columnSpacing: 0, // 컬럼 간 간격을 제거합니다.
+                        builder: (context, constraints) {
+                          final tableWidth = math.max(
+                            constraints.maxWidth,
+                            _tableMinWidth,
+                          );
+                          final columns = _buildColumns(context);
+                          return Scrollbar(
+                            controller: _horizontalScrollController,
+                            thumbVisibility: true,
+                            notificationPredicate: (notification) => notification.metrics.axis == Axis.horizontal,
+                            child: SingleChildScrollView(
+                              controller: _horizontalScrollController,
+                              scrollDirection: Axis.horizontal,
+                              child: SizedBox(
+                                width: tableWidth,
+                                height: constraints.maxHeight,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    DataTable(
+                                      headingRowColor: WidgetStateProperty.resolveWith(
+                                        (states) => Theme.of(context).colorScheme.surfaceContainerHighest,
+                                      ),
+                                      columnSpacing: 0,
                                       horizontalMargin: 0,
+                                      headingRowHeight: 48,
+                                      dataRowMinHeight: 0,
+                                      dataRowMaxHeight: 0,
                                       columns: columns,
-                                      rows: pageRows
-                                          .map(
-                                            (row) => DataRow(
-                                          onSelectChanged: (_) =>
-                                              context.go(
-                                                  '/assets/${row.inspection.id}'),
-                                          cells: [
-                                            DataCell(_cellText(
-                                                row.inspection.assetUid)),
-                                            DataCell(_cellText(
-                                                row.asset?.name ?? '-')),
-                                            DataCell(_cellText(
-                                                row.asset?.assets_types ?? '-')),
-                                            DataCell(_cellText(
-                                                row.asset?.model ?? '-')),
-                                            DataCell(_cellText(
-                                                row.inspection.status)),
-                                            DataCell(_cellText(
-                                                _resolveOrganization(
-                                                    row.asset,
-                                                    row.inspection))),
-                                            DataCell(_cellText(
-                                                row.asset?.location ?? '-')),
-                                            DataCell(
-                                              _cellText(
-                                                provider.formatDateTime(
-                                                  row.inspection.scannedAt,
-                                                ),
-                                              ),
-                                            ),
-                                            DataCell(
-                                              Padding(
-                                                padding: _cellPadding,
-                                                child: SizedBox(
-                                                  width: _iconColumnWidth,
-                                                  child: Align(
-                                                    alignment:
-                                                    Alignment.centerLeft,
-                                                    child: Icon(
-                                                      row.inspection.synced
-                                                          ? Icons.cloud_done
-                                                          : Icons.cloud_off,
-                                                      size: 18,
-                                                      color: row.inspection.synced
-                                                          ? Colors.green
-                                                          : Colors.orange,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                            DataCell(
-                                              _cellText200(
-                                                _formattedMemo(
-                                                    row.inspection.memo),
-                                                maxLines: 2,
-                                              ),
-                                            ),
-                                            // DataCell(
-                                            //   Padding(
-                                            //     padding: _cellPadding,
-                                            //     child: SizedBox(
-                                            //       width: _actionColumnWidth,
-                                            //       child: Align(
-                                            //         alignment:
-                                            //         Alignment.centerLeft,
-                                            //         child: IconButton(
-                                            //           tooltip: '삭제',
-                                            //           icon: const Icon(
-                                            //             Icons
-                                            //                 .delete_outline,
-                                            //           ),
-                                            //           color: Theme.of(context)
-                                            //               .colorScheme
-                                            //               .error,
-                                            //           onPressed: () async {
-                                            //             final confirmed =
-                                            //             await _confirmDelete(
-                                            //                 context);
-                                            //             if (!mounted ||
-                                            //                 !confirmed) {
-                                            //               return;
-                                            //             }
-                                            //             provider.remove(
-                                            //                 row.inspection.id);
-                                            //             if (!mounted) {
-                                            //               return;
-                                            //             }
-                                            //             ScaffoldMessenger
-                                            //                 .of(context)
-                                            //                 .showSnackBar(
-                                            //               SnackBar(
-                                            //                 content: Text(
-                                            //                   '${row.inspection.assetUid} 삭제됨',
-                                            //                 ),
-                                            //               ),
-                                            //             );
-                                            //           },
-                                            //         ),
-                                            //       ),
-                                            //     ),
-                                            //   ),
-                                            // ),
-                                          ],
-                                        ),
-                                      )
-                                          .toList(),
+                                      rows: const [],
                                     ),
-                                  ),
+                                    const Divider(height: 0),
+                                    Expanded(
+                                      child: Scrollbar(
+                                        controller: _verticalScrollController,
+                                        thumbVisibility: true,
+                                        child: SingleChildScrollView(
+                                          controller: _verticalScrollController,
+                                          child: DataTable(
+                                            showCheckboxColumn: false,
+                                            // ✅ 기본 체크박스 삭제
+                                            headingRowHeight: 0,
+                                            columnSpacing: 0,
+                                            // 컬럼 간 간격을 제거합니다.
+                                            horizontalMargin: 0,
+                                            columns: columns,
+                                            rows: pageRows
+                                                .map(
+                                                  (row) => DataRow(
+                                                    onSelectChanged: (_) => context.go('/assets/${row.inspection.id}'),
+                                                    cells: [
+                                                      DataCell(_cellText(row.inspection.assetUid)),
+                                                      DataCell(_cellText(row.asset?.name ?? '-')),
+                                                      DataCell(_cellText(row.asset?.assets_types ?? '-')),
+                                                      DataCell(_cellText(row.asset?.model ?? '-')),
+                                                      DataCell(_cellText(row.inspection.status)),
+                                                      DataCell(_cellText(_resolveOrganization(row.asset, row.inspection))),
+                                                      DataCell(_cellText(row.asset?.location ?? '-')),
+                                                      DataCell(
+                                                        _cellText(
+                                                          provider.formatDateTime(
+                                                            row.inspection.scannedAt,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      DataCell(
+                                                        Padding(
+                                                          padding: _cellPadding,
+                                                          child: SizedBox(
+                                                            width: _iconColumnWidth,
+                                                            child: Align(
+                                                              alignment: Alignment.centerLeft,
+                                                              child: Icon(
+                                                                row.inspection.synced ? Icons.cloud_done : Icons.cloud_off,
+                                                                size: 18,
+                                                                color: row.inspection.synced ? Colors.green : Colors.orange,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      DataCell(
+                                                        _cellText200(
+                                                          _formattedMemo(row.inspection.memo),
+                                                          maxLines: 2,
+                                                        ),
+                                                      ),
+                                                      // DataCell(
+                                                      //   Padding(
+                                                      //     padding: _cellPadding,
+                                                      //     child: SizedBox(
+                                                      //       width: _actionColumnWidth,
+                                                      //       child: Align(
+                                                      //         alignment:
+                                                      //         Alignment.centerLeft,
+                                                      //         child: IconButton(
+                                                      //           tooltip: '삭제',
+                                                      //           icon: const Icon(
+                                                      //             Icons
+                                                      //                 .delete_outline,
+                                                      //           ),
+                                                      //           color: Theme.of(context)
+                                                      //               .colorScheme
+                                                      //               .error,
+                                                      //           onPressed: () async {
+                                                      //             final confirmed =
+                                                      //             await _confirmDelete(
+                                                      //                 context);
+                                                      //             if (!mounted ||
+                                                      //                 !confirmed) {
+                                                      //               return;
+                                                      //             }
+                                                      //             provider.remove(
+                                                      //                 row.inspection.id);
+                                                      //             if (!mounted) {
+                                                      //               return;
+                                                      //             }
+                                                      //             ScaffoldMessenger
+                                                      //                 .of(context)
+                                                      //                 .showSnackBar(
+                                                      //               SnackBar(
+                                                      //                 content: Text(
+                                                      //                   '${row.inspection.assetUid} 삭제됨',
+                                                      //                 ),
+                                                      //               ),
+                                                      //             );
+                                                      //           },
+                                                      //         ),
+                                                      //       ),
+                                                      //     ),
+                                                      //   ),
+                                                      // ),
+                                                    ],
+                                                  ),
+                                                )
+                                                .toList(),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               ),
               if (totalPages > 1)
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  padding: const EdgeInsets.symmetric(vertical: 1),
                   child: _PaginationControls(
                     totalPages: totalPages,
                     currentPage: currentPage,
@@ -303,10 +277,10 @@ class _AssetsListPageState extends State<AssetsListPage> {
       return items
           .map(
             (inspection) => _AssetRowData(
-          inspection: inspection,
-          asset: provider.assetOf(inspection.assetUid),
-        ),
-      )
+              inspection: inspection,
+              asset: provider.assetOf(inspection.assetUid),
+            ),
+          )
           .toList(growable: false);
     }
 
@@ -322,9 +296,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
 
   // 데이터 테이블에 사용할 컬럼 정의를 생성합니다.
   List<DataColumn> _buildColumns(BuildContext context) {
-    final headerStyle = Theme.of(context)
-        .textTheme
-        .labelLarge; // 헤더는 기본 크기를 유지해 가독성을 확보합니다.
+    final headerStyle = Theme.of(context).textTheme.labelLarge; // 헤더는 기본 크기를 유지해 가독성을 확보합니다.
     return [
       DataColumn(
         label: _headerCell('자산번호', headerStyle),
@@ -353,7 +325,6 @@ class _AssetsListPageState extends State<AssetsListPage> {
       DataColumn(
         label: _headerCell30(
           '인증',
-
           headerStyle,
           width: _iconColumnWidth,
         ),
@@ -373,10 +344,10 @@ class _AssetsListPageState extends State<AssetsListPage> {
 
   // 일반 텍스트 헤더 셀을 생성합니다.
   Widget _headerCell(
-      String label,
-      TextStyle? style, {
-        double width = _defaultColumnWidth,
-      }) {
+    String label,
+    TextStyle? style, {
+    double width = _defaultColumnWidth,
+  }) {
     return Padding(
       padding: _cellPadding,
       child: SizedBox(
@@ -394,11 +365,12 @@ class _AssetsListPageState extends State<AssetsListPage> {
   }
 
   // 메모 전용으로 넓이를 확장한 헤더 셀입니다.
-  Widget _headerCell200( //메모
-      String label,
-      TextStyle? style, {
-        double width = 200,
-      }) {
+  Widget _headerCell200(
+    //메모
+    String label,
+    TextStyle? style, {
+    double width = 200,
+  }) {
     return Padding(
       padding: _cellPadding,
       child: SizedBox(
@@ -416,11 +388,12 @@ class _AssetsListPageState extends State<AssetsListPage> {
   }
 
   // 인증 아이콘 컬럼용 좁은 헤더 셀입니다.
-  Widget _headerCell30( //아이콘
-      String label,
-      TextStyle? style, {
-        double width = 30,
-      }) {
+  Widget _headerCell30(
+    //아이콘
+    String label,
+    TextStyle? style, {
+    double width = 30,
+  }) {
     return Padding(
       padding: _cellPadding,
       child: SizedBox(
@@ -472,13 +445,13 @@ class _AssetsListPageState extends State<AssetsListPage> {
 
   // 기본 폭의 셀 텍스트 위젯을 생성합니다.
   Widget _cellText(
-      String value, {
-        int maxLines = 1,
-        double width = _defaultColumnWidth,
-      }) {
+    String value, {
+    int maxLines = 1,
+    double width = _defaultColumnWidth,
+  }) {
     final textStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
-      fontSize: 13,
-    ); // 본문 글꼴 크기를 살짝 줄여 테이블을 더 촘촘하게 보여줍니다.
+          fontSize: 13,
+        ); // 본문 글꼴 크기를 살짝 줄여 테이블을 더 촘촘하게 보여줍니다.
     return Padding(
       padding: _cellPadding,
       child: SizedBox(
@@ -494,14 +467,15 @@ class _AssetsListPageState extends State<AssetsListPage> {
   }
 
   // 메모 표시를 위해 폭을 넓힌 셀 텍스트 위젯입니다.
-  Widget _cellText200( //메모
-      String value, {
-        int maxLines = 1,
-        double width = 200,
-      }) {
+  Widget _cellText200(
+    //메모
+    String value, {
+    int maxLines = 1,
+    double width = 200,
+  }) {
     final textStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
-      fontSize: 13,
-    ); // 본문 글꼴 크기를 살짝 줄여 테이블을 더 촘촘하게 보여줍니다.
+          fontSize: 13,
+        ); // 본문 글꼴 크기를 살짝 줄여 테이블을 더 촘촘하게 보여줍니다.
     return Padding(
       padding: _cellPadding,
       child: SizedBox(
@@ -528,22 +502,22 @@ class _AssetsListPageState extends State<AssetsListPage> {
   // 행 삭제 시 사용자에게 확인을 요청하는 다이얼로그를 띄웁니다.
   Future<bool> _confirmDelete(BuildContext context) async {
     return await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('삭제 확인'),
-        content: const Text('선택한 실사를 삭제할까요?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('취소'),
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('삭제 확인'),
+            content: const Text('선택한 실사를 삭제할까요?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('취소'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('삭제'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('삭제'),
-          ),
-        ],
-      ),
-    ) ??
+        ) ??
         false;
   }
 }
@@ -603,10 +577,10 @@ class _FilterSection extends StatelessWidget {
                   items: _AssetSearchField.values
                       .map(
                         (field) => DropdownMenuItem<_AssetSearchField>(
-                      value: field,
-                      child: Text(field.label),
-                    ),
-                  )
+                          value: field,
+                          child: Text(field.label),
+                        ),
+                      )
                       .toList(),
                   onChanged: onSearchFieldChanged,
                 ),
@@ -618,7 +592,7 @@ class _FilterSection extends StatelessWidget {
             children: [
               SegmentedButton<bool>(
                 segments: const [
-                  ButtonSegment<bool>(value: false, label: Text('전체')),
+                  ButtonSegment<bool>(value: false, label: Text('    전체   ')),
                   ButtonSegment<bool>(value: true, label: Text('미동기화')),
                 ],
                 selected: <bool>{provider.onlyUnsynced},
@@ -629,9 +603,7 @@ class _FilterSection extends StatelessWidget {
               ),
               const Spacer(),
               Text(
-                filteredCount == totalCount
-                    ? '$filteredCount건'
-                    : '$filteredCount건 / 총 ${totalCount}건',
+                filteredCount == totalCount ? '$filteredCount건' : '$filteredCount건 / 총 ${totalCount}건',
               ),
             ],
           ),
@@ -665,16 +637,17 @@ class _PaginationControls extends StatelessWidget {
     // 이전/다음 버튼과 페이지 숫자를 배열합니다.
     final buttons = <Widget>[
       IconButton(
+        padding: EdgeInsets.zero, // 내부 여백 제거
+        constraints: const BoxConstraints(), // 최소 크기 제약 제거
         icon: const Icon(Icons.chevron_left),
-        onPressed:
-        currentPage > 0 ? () => onPageSelected(currentPage - 1) : null,
+        onPressed: currentPage > 0 ? () => onPageSelected(currentPage - 1) : null,
       ),
       ..._pageNumberWidgets(context),
       IconButton(
+        padding: EdgeInsets.zero, // 내부 여백 제거
+        constraints: const BoxConstraints(), // 최소 크기 제약 제거
         icon: const Icon(Icons.chevron_right),
-        onPressed: currentPage < totalPages - 1
-            ? () => onPageSelected(currentPage + 1)
-            : null,
+        onPressed: currentPage < totalPages - 1 ? () => onPageSelected(currentPage + 1) : null,
       ),
     ];
 
@@ -692,34 +665,37 @@ class _PaginationControls extends StatelessWidget {
     return pages
         .map(
           (page) => page == null
-          ? const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 4),
-        child: Text('...'),
-      )
-          : Padding(
-        padding: const EdgeInsets.symmetric(
-            horizontal: 2), // 페이지 번호 사이 여백을 최소로 유지해 버튼 간격을 조절합니다.
-        child: TextButton(
-          onPressed: page == currentPage
-              ? null
-              : () => onPageSelected(page),
-          child: Text(
-            '${page + 1}',
-            style: page == currentPage
-                ? textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            )
-                : null,
-          ),
-        ),
-      ),
-    )
+              ? const Padding(
+                  padding: EdgeInsets.zero, // 내부 여백 제거,
+                  child: Text('...'),
+                )
+              : Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10), // 페이지 번호 사이 여백을 최소로 유지해 버튼 간격을 조절합니다.
+                  // padding: EdgeInsets.zero, // 내부 여백 제거
+                  child: TextButton(
+                    onPressed: page == currentPage ? null : () => onPageSelected(page),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4), // 살짝만 여유
+                      minimumSize: const Size(0, 0), // 기본 88x36 제약 해제
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap, // 터치 영역을 버튼 크기만큼만
+                    ),
+                    child: Text(
+                      '${page + 1}',
+                      style: page == currentPage
+                          ? textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            )
+                          : null,
+                    ),
+                  ),
+                ),
+        )
         .toList(growable: false);
   }
 
   // 페이지 수가 많을 때 가독성을 위한 범위를 계산합니다.
   List<int?> _visiblePageNumbers() {
-    const maxDisplay = 7;
+    const maxDisplay = 3;
     if (totalPages <= maxDisplay) {
       return List<int>.generate(totalPages, (index) => index);
     }
