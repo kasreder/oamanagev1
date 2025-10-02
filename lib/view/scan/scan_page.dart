@@ -347,20 +347,23 @@ class _ScanPageState extends State<ScanPage> {
                               Column(
                                 mainAxisSize: MainAxisSize.min,
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  for (var i = 0; i < _scannedBarcodes.length; i++) ...[
-                                    _ScannedBarcodeRow(
-                                      barcode: _scannedBarcodes[i].uid,
-                                      isRegistered: _scannedBarcodes[i].isRegistered,
-                                      onAction: _scannedBarcodes[i].isRegistered
-                                          ? () => _verifyAsset(_scannedBarcodes[i].uid)
-                                          : () => _registerAsset(_scannedBarcodes[i].uid),
-                                      onDelete: () => _removeBarcode(_scannedBarcodes[i].uid),
-                                    ),
-                                    if (i != _scannedBarcodes.length - 1)
-                                      const SizedBox(height: 8),
-                                  ],
-                                ],
+                                children: () {
+                                  // 화면에는 최대 5개만 출력 (이미 _onDetect에서도 5개로 유지 중)
+                                  final visible = _scannedBarcodes.take(5).toList();
+                                  return [
+                                    for (var i = 0; i < visible.length; i++) ...[
+                                      _ScannedBarcodeRow(
+                                        barcode: visible[i].uid,
+                                        isRegistered: visible[i].isRegistered,
+                                        onAction: visible[i].isRegistered
+                                            ? () => _verifyAsset(visible[i].uid)
+                                            : () => _registerAsset(visible[i].uid),
+                                        onDelete: () => _removeBarcode(visible[i].uid),
+                                      ),
+                                      if (i != visible.length - 1) const SizedBox(height: 8),
+                                    ],
+                                  ];
+                                }(),
                               ),
                           ],
                         ),
@@ -495,43 +498,50 @@ class _ScannedBarcodeRow extends StatelessWidget {
     final buttonLabel = isRegistered ? '인증' : '자산등록';
 
     return Container(
-      // 반투명한 배경과 둥근 모서리를 적용해 카메라 화면과 대비시키고,
-      // 최근 스캔 목록이 일목요연하게 보이도록 한다.
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), // 세로 여백 축소
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(0.65),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8), // 조금 더 작게
       ),
       child: Row(
         children: [
           Expanded(
             child: Text(
               barcode,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 6),
           FilledButton(
             onPressed: onAction,
-            style: FilledButton.styleFrom(minimumSize: const Size(90, 40)),
-            child: Text(buttonLabel),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(70, 32), // 버튼 크기 축소
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            ),
+            child: Text(
+              buttonLabel,
+              style: const TextStyle(fontSize: 13), // 글자 크기도 약간 줄임
+            ),
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 2),
           IconButton(
             onPressed: onDelete,
             style: IconButton.styleFrom(
               backgroundColor: Colors.white12,
               foregroundColor: Colors.white,
+              minimumSize: const Size(32, 32), // 아이콘 버튼 최소 크기 줄임
+              padding: EdgeInsets.zero,        // 내부 여백 제거
             ),
-            icon: const Icon(Icons.close),
+            icon: const Icon(Icons.close, size: 18), // 아이콘 크기 축소
           ),
         ],
       ),
     );
+
   }
 }
 
