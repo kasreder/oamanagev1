@@ -242,7 +242,7 @@ class _ScanPageState extends State<ScanPage> {
                           children: [
                             _OverlayIconButton(
                               icon: Icons.arrow_back,
-                              label: '뒤로가기',
+                              label: '뒤로가기6',
                               onPressed: () => context.pop(),
                             ),
                             Row(
@@ -360,7 +360,7 @@ class _ScanPageState extends State<ScanPage> {
                                             : () => _registerAsset(visible[i].uid),
                                         onDelete: () => _removeBarcode(visible[i].uid),
                                       ),
-                                      if (i != visible.length - 1) const SizedBox(height: 8),
+                                      if (i != visible.length - 1) const SizedBox(height: 2),
                                     ],
                                   ];
                                 }(),
@@ -498,7 +498,8 @@ class _ScannedBarcodeRow extends StatelessWidget {
     final buttonLabel = isRegistered ? '인증' : '자산등록';
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), // 세로 여백 축소
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), // 세로 여백 축소
+      margin: const EdgeInsets.only(top: 2),
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(0.65),
         borderRadius: BorderRadius.circular(8), // 조금 더 작게
@@ -515,12 +516,12 @@ class _ScannedBarcodeRow extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 2),
           FilledButton(
             onPressed: onAction,
             style: FilledButton.styleFrom(
               minimumSize: const Size(70, 32), // 버튼 크기 축소
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
             ),
             child: Text(
               buttonLabel,
