@@ -63,7 +63,9 @@ class _ScanPageState extends State<ScanPage> {
   }
 
   void _onDetect(BarcodeCapture capture) {
-    // 이미 처리 중이거나 일시정지 상태일 경우 추가 처리를 막는다.
+    // 바코드가 감지될 때마다 호출되는 콜백.
+    //   - 중복 스캔 방지를 위해 _isProcessing 플래그를 활용한다.
+    //   - 카메라가 일시정지된 경우나 바코드 배열이 비어 있는 경우 조용히 반환한다.
     if (_isProcessing || _isPaused || capture.barcodes.isEmpty) {
       return;
     }
@@ -184,15 +186,19 @@ class _ScanPageState extends State<ScanPage> {
           title: 'QR 스캔',
           selectedIndex: 0,
           showFooter: false,
+          // LayoutBuilder는 가용 공간 정보를 전달받아 다양한 화면 크기에서
+          // 동일한 UI 가이드를 유지하도록 돕는다.
           body: LayoutBuilder(
             builder: (context, constraints) {
               final size = Size(constraints.maxWidth, constraints.maxHeight);
 
               // ▶ 컷아웃(스캔/가이드) 크기와 위치 계산
+              //   - 화면 너비의 70%를 기본값으로 삼되, 너무 작거나 크게 표시되지 않도록 클램프한다.
+              //   - 세로 비율은 전체 높이의 35%를 사용하되 최대 높이를 제한한다.
               final cutoutWidth  = (size.width  * 0.70).clamp(120.0, size.width);
               final cutoutHeight = (size.height * 0.35).clamp(120.0, size.height * 0.6);
 
-              // 중앙(0.5)보다 위쪽으로: 0.35 지점
+              // 중앙(0.5)보다 위쪽으로: 0.35 지점에 배치하여 사용자가 손을 덜 가리고 스캔할 수 있게 한다.
               final centerY = size.height * 0.35;
 
               final cutoutRect = Rect.fromCenter(
@@ -203,13 +209,14 @@ class _ScanPageState extends State<ScanPage> {
 
               return Stack(
                 children: [
-                  // 카메라 & 스캔
+                  // 카메라 & 스캔 영역을 가장 아래 레이어에 배치한다.
                   Positioned.fill(
                     child: MobileScanner(
                       controller: _controller,
                       fit: BoxFit.cover,
                       scanWindow: cutoutRect, // ★ 실제 인식 영역을 위로 이동
                       onDetect: _onDetect,
+                      // 스캐너에서 발생한 에러는 사용자에게 즉시 텍스트로 안내한다.
                       errorBuilder: (context, error, child) {
                         final details = error.errorDetails?.toString();
                         return Center(
@@ -241,6 +248,7 @@ class _ScanPageState extends State<ScanPage> {
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                // 토치 상태는 ValueListenableBuilder를 통해 실시간 반영한다.
                                 ValueListenableBuilder<TorchState>(
                                   valueListenable: _torchStateNotifier,
                                   builder: (context, state, _) {
@@ -253,6 +261,7 @@ class _ScanPageState extends State<ScanPage> {
                                   },
                                 ),
                                 const SizedBox(width: 8),
+                                // 전/후면 카메라 상태 역시 별도 ValueNotifier로 관리한다.
                                 ValueListenableBuilder<CameraFacing>(
                                   valueListenable: _cameraFacingNotifier,
                                   builder: (context, facing, _) {
@@ -264,6 +273,7 @@ class _ScanPageState extends State<ScanPage> {
                                   },
                                 ),
                                 const SizedBox(width: 8),
+                                // 스캔 일시정지 여부에 따라 버튼 모양과 동작이 달라진다.
                                 _OverlayIconButton(
                                   icon: _isPaused ? Icons.play_arrow : Icons.pause,
                                   label: _isPaused ? '재시작' : '일시정지',
@@ -278,6 +288,7 @@ class _ScanPageState extends State<ScanPage> {
                   ),
 
                   // ===== 권한 에러/하단 패널/최근 UID - 그대로 유지 =====
+                  // 권한이 거부된 경우에는 카메라 화면 대신 안내 메시지를 표시한다.
                   if (_permissionError != null)
                     Container(
                       color: Colors.black54,
@@ -385,6 +396,8 @@ class _ScanPageState extends State<ScanPage> {
 
   Future<void> _togglePause() async {
     // 스캔을 일시정지하거나 재시작한다.
+    //   - stop() 호출 시 카메라 스트림이 중지되어 onDetect 콜백이 더 이상 호출되지 않는다.
+    //   - start() 호출 시 다시 스트림을 시작한다.
     if (_isPaused) {
       await _controller.start();
     } else {
@@ -397,12 +410,16 @@ class _ScanPageState extends State<ScanPage> {
   }
 
   void _removeBarcode(String uid) {
+    // 하단 목록에서 특정 UID를 제거한다.
+    // 최근 스캔한 값을 사용자가 직접 삭제할 수 있도록 제공되는 기능이다.
     setState(() {
       _scannedBarcodes.removeWhere((item) => item.uid == uid);
     });
   }
 
   Future<void> _playBeep({int count = 1}) async {
+    // 플랫폼 공용 SystemSound를 활용하여 간단한 클릭음을 재생한다.
+    // count 매개변수를 통해 동일한 사운드를 여러 번 연속 재생할 수 있다.
     for (var i = 0; i < count; i++) {
       await SystemSound.play(SystemSoundType.click);
       if (i < count - 1) {
@@ -412,11 +429,16 @@ class _ScanPageState extends State<ScanPage> {
   }
 
   void _triggerVibration() {
+    // 햅틱 피드백을 통해 사용자가 동일한 QR을 다시 스캔했음을 직관적으로 알 수 있게 한다.
     HapticFeedback.mediumImpact();
   }
 
   void _verifyAsset(String uid) {
     // 자산 검수(검증) 내역을 즉시 생성하여 저장한다.
+    //   1. InspectionProvider에서 자산 정보를 조회한다.
+    //   2. 현재 시간을 기록하여 고유한 검수 ID를 만든다.
+    //   3. status 값은 기존 자산 상태가 존재하면 그대로 사용하고, 없으면 기본값 '사용'을 적용한다.
+    //   4. 생성된 Inspection을 저장하고 사용자에게 스낵바로 알린다.
     final provider = context.read<InspectionProvider>();
     final now = DateTime.now();
     final asset = provider.assetOf(uid);
@@ -436,6 +458,7 @@ class _ScanPageState extends State<ScanPage> {
 
   void _registerAsset(String uid) {
     // 등록되지 않은 자산이라면 사용자에게 등록을 유도한다.
+    // 이후 자산 등록 화면으로 즉시 라우팅하여 흐름을 이어갈 수 있도록 한다.
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('새 자산 등록을 진행해주세요. ($uid)')),
     );
@@ -443,6 +466,8 @@ class _ScanPageState extends State<ScanPage> {
   }
 }
 
+/// 스캔된 바코드와 해당 자산의 등록 여부를 묶어 관리하는 단순 데이터 클래스.
+/// 최근 5개까지만 보관하여 사용자에게 직관적인 히스토리를 제공한다.
 class _ScannedBarcode {
   const _ScannedBarcode({required this.uid, required this.isRegistered});
 
@@ -450,6 +475,8 @@ class _ScannedBarcode {
   final bool isRegistered;
 }
 
+/// 최근 스캔된 바코드 한 항목을 표현하는 위젯.
+/// 등록 여부에 따라 버튼 라벨과 동작이 달라지며, 삭제 버튼으로 목록에서 제거할 수 있다.
 class _ScannedBarcodeRow extends StatelessWidget {
   const _ScannedBarcodeRow({
     required this.barcode,
@@ -468,6 +495,8 @@ class _ScannedBarcodeRow extends StatelessWidget {
     final buttonLabel = isRegistered ? '인증' : '자산등록';
 
     return Container(
+      // 반투명한 배경과 둥근 모서리를 적용해 카메라 화면과 대비시키고,
+      // 최근 스캔 목록이 일목요연하게 보이도록 한다.
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(0.65),
@@ -513,6 +542,7 @@ class _ScannerOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // overlay 터치 이벤트가 하위 위젯에 전달되도록 IgnorePointer로 감싼다.
+    // 즉, 오버레이는 시각적인 정보만 제공하며 사용자 입력은 MobileScanner로 전달된다.
     return IgnorePointer(
       child: CustomPaint(
         size: Size.infinite,
@@ -531,6 +561,7 @@ class _ScannerOverlayPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     // 화면 전체에 반투명 흰색을 깔고, 스캔 영역은 투명하게 처리한다.
+    // PathFillType.evenOdd를 사용하여 사각형 안쪽이 비어 보이도록 구성한다.
     final overlayPaint = Paint()
       ..color = Colors.white.withOpacity(0.85);
     final path = Path()
@@ -552,6 +583,7 @@ class _ScannerOverlayPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ScannerOverlayPainter oldDelegate) {
+    // 컷아웃 위치나 크기가 변경될 때만 다시 그려주면 된다.
     return oldDelegate.cutOutRect != cutOutRect;
   }
 }
@@ -570,6 +602,7 @@ class _OverlayIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 상단 컨트롤 버튼들을 일관된 스타일로 렌더링한다.
+    // 모든 버튼이 동일한 배경/모서리/텍스트 크기를 갖도록 중앙에서 조정한다.
     return ElevatedButton.icon(
       style: ElevatedButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
