@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -31,6 +32,8 @@ class ScanPage extends StatefulWidget {
 class _ScanPageState extends State<ScanPage> {
   // MobileScanner 컨트롤러: 카메라 제어와 스캔 결과 수신에 사용된다.
   final MobileScannerController _controller = MobileScannerController();
+  // 비프음 재생을 위한 오디오 플레이어 (저지연 모드 사용)
+  late final AudioPlayer _beepPlayer;
   // 토치(플래시) 상태를 즉시 반영하기 위한 ValueNotifier
   final ValueNotifier<TorchState> _torchStateNotifier =
       ValueNotifier<TorchState>(TorchState.off);
@@ -49,6 +52,8 @@ class _ScanPageState extends State<ScanPage> {
   @override
   void initState() {
     super.initState();
+    _beepPlayer = AudioPlayer(playerId: 'beep_player');
+    unawaited(_beepPlayer.setPlayerMode(PlayerMode.lowLatency));
     // 최초 진입 시 카메라 권한을 확인한다.
     _checkPermission();
   }
@@ -59,6 +64,7 @@ class _ScanPageState extends State<ScanPage> {
     _torchStateNotifier.dispose();
     _cameraFacingNotifier.dispose();
     _controller.dispose();
+    _beepPlayer.dispose();
     super.dispose();
   }
 
@@ -421,12 +427,18 @@ class _ScanPageState extends State<ScanPage> {
   }
 
   Future<void> _playBeep({int count = 1}) async {
-    // 플랫폼 공용 SystemSound를 활용하여 간단한 클릭음을 재생한다.
+    // 로컬 자산으로 저장된 비프음을 재생하여 스캔 성공을 알린다.
     // count 매개변수를 통해 동일한 사운드를 여러 번 연속 재생할 수 있다.
     for (var i = 0; i < count; i++) {
-      await SystemSound.play(SystemSoundType.click);
+      try {
+        await _beepPlayer.stop();
+        await _beepPlayer.play(const AssetSource('sounds/beep.mp3'));
+      } catch (error) {
+        debugPrint('비프음 재생 실패: $error');
+        break;
+      }
       if (i < count - 1) {
-        await Future.delayed(const Duration(milliseconds: 120));
+        await Future.delayed(const Duration(milliseconds: 160));
       }
     }
   }

@@ -40,6 +40,7 @@ dependencies:
   collection: ^1.18.0
   intl: ^0.19.0
   permission_handler: ^11.3.1
+  audioplayers: ^5.2.1
 
 dev_dependencies:
   flutter_test:
@@ -73,6 +74,7 @@ flutter:
     - assets/dummy/mock/users.json
     - assets/dummy/mock/assets.json
     - assets/dummy/mock/asset_inspections.json
+    - assets/sounds/beep.mp3
 
   # To add assets to your application, add an assets section, like this:
   # assets:
