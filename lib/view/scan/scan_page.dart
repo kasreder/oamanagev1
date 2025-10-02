@@ -242,7 +242,7 @@ class _ScanPageState extends State<ScanPage> {
                           children: [
                             _OverlayIconButton(
                               icon: Icons.arrow_back,
-                              label: '뒤로가기6',
+                              label: '뒤로가기',
                               onPressed: () => context.pop(),
                             ),
                             Row(
