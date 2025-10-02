@@ -432,7 +432,7 @@ class _ScanPageState extends State<ScanPage> {
     for (var i = 0; i < count; i++) {
       try {
         await _beepPlayer.stop();
-        await _beepPlayer.play(const AssetSource('sounds/beep.mp3'));
+        await _beepPlayer.play(AssetSource('sounds/Beep1.mp3'));
       } catch (error) {
         debugPrint('비프음 재생 실패: $error');
         break;
