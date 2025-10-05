@@ -18,6 +18,16 @@ class AssetVerificationListPage extends StatefulWidget {
 
 class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
   static const _allLabel = '전체';
+  static const Map<_TableColumn, double> _columnWidths = {
+    _TableColumn.team: 120,
+    _TableColumn.user: 140,
+    _TableColumn.asset: 160,
+    _TableColumn.assetCode: 160,
+    _TableColumn.manager: 140,
+    _TableColumn.location: 180,
+    _TableColumn.verificationStatus: 120,
+    _TableColumn.barcodePhoto: 140,
+  };
 
   _PrimaryFilterField _selectedPrimaryField = _PrimaryFilterField.team;
   String _selectedPrimaryValue = _allLabel;
@@ -184,30 +194,105 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
                                             headingRowHeight: 44,
                                             dataRowMinHeight: 44,
                                             dataRowMaxHeight: 72,
-                                            columns: const [
-                                              DataColumn(label: Text('팀')),
-                                              DataColumn(label: Text('사용자')),
-                                              DataColumn(label: Text('장비')),
-                                              DataColumn(label: Text('자산번호')),
-                                              DataColumn(label: Text('관리자')),
-                                              DataColumn(label: Text('위치')),
-                                              DataColumn(label: Text('인증여부')),
-                                              DataColumn(label: Text('바코드사진')),
+                                            columns: [
+                                              DataColumn(
+                                                label: _buildColumnLabel(
+                                                  '팀',
+                                                  _TableColumn.team,
+                                                ),
+                                              ),
+                                              DataColumn(
+                                                label: _buildColumnLabel(
+                                                  '사용자',
+                                                  _TableColumn.user,
+                                                ),
+                                              ),
+                                              DataColumn(
+                                                label: _buildColumnLabel(
+                                                  '장비',
+                                                  _TableColumn.asset,
+                                                ),
+                                              ),
+                                              DataColumn(
+                                                label: _buildColumnLabel(
+                                                  '자산번호',
+                                                  _TableColumn.assetCode,
+                                                ),
+                                              ),
+                                              DataColumn(
+                                                label: _buildColumnLabel(
+                                                  '관리자',
+                                                  _TableColumn.manager,
+                                                ),
+                                              ),
+                                              DataColumn(
+                                                label: _buildColumnLabel(
+                                                  '위치',
+                                                  _TableColumn.location,
+                                                ),
+                                              ),
+                                              DataColumn(
+                                                label: _buildColumnLabel(
+                                                  '인증여부',
+                                                  _TableColumn.verificationStatus,
+                                                ),
+                                              ),
+                                              DataColumn(
+                                                label: _buildColumnLabel(
+                                                  '바코드사진',
+                                                  _TableColumn.barcodePhoto,
+                                                ),
+                                              ),
                                             ],
                                             rows: [
                                               for (final row in pageRows)
                                                 DataRow(
                                                   cells: [
-                                                    DataCell(Text(row.teamName)),
-                                                    DataCell(Text(row.userName)),
-                                                    DataCell(Text(row.assetType)),
-                                                    DataCell(Text(row.assetCode)),
-                                                    DataCell(Text(row.manager)),
-                                                    DataCell(Text(row.location)),
                                                     DataCell(
-                                                      _VerificationCell(isVerified: row.isVerified),
+                                                      _buildTableText(
+                                                        row.teamName,
+                                                        _TableColumn.team,
+                                                      ),
                                                     ),
-                                                    DataCell(Text(row.hasPhoto ? '사진 있음' : '없음')),
+                                                    DataCell(
+                                                      _buildTableText(
+                                                        row.userName,
+                                                        _TableColumn.user,
+                                                      ),
+                                                    ),
+                                                    DataCell(
+                                                      _buildTableText(
+                                                        row.assetType,
+                                                        _TableColumn.asset,
+                                                      ),
+                                                    ),
+                                                    DataCell(
+                                                      _buildTableText(
+                                                        row.assetCode,
+                                                        _TableColumn.assetCode,
+                                                      ),
+                                                    ),
+                                                    DataCell(
+                                                      _buildTableText(
+                                                        row.manager,
+                                                        _TableColumn.manager,
+                                                      ),
+                                                    ),
+                                                    DataCell(
+                                                      _buildTableText(
+                                                        row.location,
+                                                        _TableColumn.location,
+                                                      ),
+                                                    ),
+                                                    DataCell(
+                                                      _buildVerificationCell(row.isVerified),
+                                                    ),
+                                                    DataCell(
+                                                      _buildTableText(
+                                                        row.hasPhoto ? '사진 있음' : '없음',
+                                                        _TableColumn.barcodePhoto,
+                                                      ),
+                                                    ),
                                                   ],
                                                 ),
                                             ],
@@ -305,6 +390,37 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
 
     }).toList(growable: false);
   }
+
+  Widget _buildColumnLabel(String label, _TableColumn column) {
+    return SizedBox(
+      width: _columnWidths[column],
+      child: Text(
+        label,
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+
+  Widget _buildTableText(String text, _TableColumn column) {
+    return SizedBox(
+      width: _columnWidths[column],
+      child: Text(
+        text,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+
+  Widget _buildVerificationCell(bool isVerified) {
+    return SizedBox(
+      width: _columnWidths[_TableColumn.verificationStatus],
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: _VerificationCell(isVerified: isVerified),
+      ),
+    );
+  }
 }
 
 enum _PrimaryFilterField { team, name, assetType }
@@ -363,6 +479,17 @@ extension on _BarcodePhotoFilter {
         return '사진 없음';
     }
   }
+}
+
+enum _TableColumn {
+  team,
+  user,
+  asset,
+  assetCode,
+  manager,
+  location,
+  verificationStatus,
+  barcodePhoto,
 }
 
 class _FilterSection extends StatelessWidget {
