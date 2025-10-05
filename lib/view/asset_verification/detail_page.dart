@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+// lib/view/asset_verification/detail_page.dart
 
+import 'package:flutter/material.dart';
 import '../common/app_scaffold.dart';
 
 class AssetVerificationDetailPage extends StatelessWidget {
