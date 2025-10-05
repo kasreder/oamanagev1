@@ -35,6 +35,7 @@ class InspectionRepository {
         if (assetUid == null) {
           continue;
         }
+        final userId = _stringOrNull(item['user_id']) ?? _stringOrNull(item['userId']);
         final rawId = item['id'];
         final id = rawId == null
             ? 'ins_$assetUid'
@@ -48,6 +49,15 @@ class InspectionRepository {
             ) ??
             DateTime.now();
         final memo = _buildMemo(item) ?? _stringOrNull(item['memo']);
+        final assetType =
+            _stringOrNull(item['asset_type']) ?? _stringOrNull(item['assetType']);
+        final isVerified = item['is_verified'] as bool? ??
+            item['isVerified'] as bool? ??
+            true;
+        final barcodePhoto = _stringOrNull(item['barcode_photo']) ??
+            _stringOrNull(item['barcodePhoto']) ??
+            _stringOrNull(item['barcode_photo_url']) ??
+            _stringOrNull(item['barcodePhotoUrl']);
         items.add(
           Inspection(
             id: id,
@@ -57,6 +67,10 @@ class InspectionRepository {
             scannedAt: parsedDate,
             synced: item['synced'] as bool? ?? ((item['inspection_count'] as int? ?? 0) % 2 == 0),
             userTeam: _stringOrNull(item['user_team']),
+            userId: userId,
+            assetType: assetType,
+            isVerified: isVerified,
+            barcodePhotoUrl: barcodePhoto,
           ),
         );
       }

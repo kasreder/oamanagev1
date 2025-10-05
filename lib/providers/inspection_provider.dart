@@ -178,8 +178,10 @@ class InspectionProvider extends ChangeNotifier {
           (jsonDecode(raw) as List<dynamic>).cast<Map<String, dynamic>>();
       final entries = <MapEntry<String, UserInfo>>[];
       for (final item in decoded) {
-        final id = _stringOrNull(item['employee_id']) ?? _stringOrNull(item['id']);
-        if (id == null) {
+        final employeeId = _stringOrNull(item['employee_id']);
+        final numericId = _stringOrNull(item['id']);
+        final primaryId = employeeId ?? numericId;
+        if (primaryId == null) {
           continue;
         }
         final departmentParts = [
@@ -191,18 +193,17 @@ class InspectionProvider extends ChangeNotifier {
         final department = departmentParts.isEmpty
             ? (_stringOrNull(item['department']) ?? '')
             : departmentParts.join(' > ');
-        entries.add(
-          MapEntry(
-            id,
-            UserInfo(
-              id: id,
-              name: _stringOrNull(item['employee_name']) ??
-                  _stringOrNull(item['name']) ??
-                  '',
-              department: department,
-            ),
-          ),
+        final info = UserInfo(
+          id: primaryId,
+          name: _stringOrNull(item['employee_name']) ??
+              _stringOrNull(item['name']) ??
+              '',
+          department: department,
         );
+        entries.add(MapEntry(primaryId, info));
+        if (employeeId != null && numericId != null && employeeId != numericId) {
+          entries.add(MapEntry(numericId, info));
+        }
       }
       _userMap
         ..clear()
