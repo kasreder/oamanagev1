@@ -10,6 +10,10 @@ class Inspection {
     required this.scannedAt,
     required this.synced,
     this.userTeam,
+    this.userId,
+    this.assetType,
+    this.isVerified,
+    this.hasBarcodePhoto = false,
   });
 
   final String id;
@@ -19,6 +23,10 @@ class Inspection {
   DateTime scannedAt;
   bool synced;
   String? userTeam;
+  String? userId;
+  String? assetType;
+  bool? isVerified;
+  bool hasBarcodePhoto;
 
   factory Inspection.fromJson(Map<String, dynamic> json) {
     return Inspection(
@@ -29,6 +37,10 @@ class Inspection {
       scannedAt: DateTime.parse(json['scannedAt'] as String),
       synced: json['synced'] as bool? ?? false,
       userTeam: json['userTeam'] as String?,
+      userId: json['userId'] as String?,
+      assetType: json['assetType'] as String?,
+      isVerified: json['isVerified'] as bool?,
+      hasBarcodePhoto: json['hasBarcodePhoto'] as bool? ?? false,
     );
   }
 
@@ -41,6 +53,10 @@ class Inspection {
       'scannedAt': scannedAt.toUtc().toIso8601String(),
       'synced': synced,
       'userTeam': userTeam,
+      'userId': userId,
+      'assetType': assetType,
+      'isVerified': isVerified,
+      'hasBarcodePhoto': hasBarcodePhoto,
     };
   }
 
@@ -50,6 +66,10 @@ class Inspection {
     DateTime? scannedAt,
     bool? synced,
     String? userTeam,
+    String? userId,
+    String? assetType,
+    bool? isVerified,
+    bool? hasBarcodePhoto,
   }) {
     return Inspection(
       id: id,
@@ -59,6 +79,10 @@ class Inspection {
       scannedAt: scannedAt ?? this.scannedAt,
       synced: synced ?? this.synced,
       userTeam: userTeam ?? this.userTeam,
+      userId: userId ?? this.userId,
+      assetType: assetType ?? this.assetType,
+      isVerified: isVerified ?? this.isVerified,
+      hasBarcodePhoto: hasBarcodePhoto ?? this.hasBarcodePhoto,
     );
   }
 

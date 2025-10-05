@@ -48,6 +48,18 @@ class InspectionRepository {
             ) ??
             DateTime.now();
         final memo = _buildMemo(item) ?? _stringOrNull(item['memo']);
+        final userId =
+            _stringOrNull(item['user_id']) ?? _stringOrNull(item['userId']);
+        final assetType =
+            _stringOrNull(item['asset_type']) ?? _stringOrNull(item['assetType']);
+        final isVerified =
+            _boolOrNull(item['is_verified']) ?? _boolOrNull(item['isVerified']);
+        final hasBarcodePhoto =
+            _boolOrNull(item['has_barcode_photo']) ??
+                _boolOrNull(item['barcode_photo']) ??
+                _boolOrNull(item['barcodePhoto']) ??
+                _boolOrNull(item['barcode_photo_exists']) ??
+                (_stringOrNull(item['barcode_photo_url']) != null);
         items.add(
           Inspection(
             id: id,
@@ -57,6 +69,10 @@ class InspectionRepository {
             scannedAt: parsedDate,
             synced: item['synced'] as bool? ?? ((item['inspection_count'] as int? ?? 0) % 2 == 0),
             userTeam: _stringOrNull(item['user_team']),
+            userId: userId,
+            assetType: assetType,
+            isVerified: isVerified,
+            hasBarcodePhoto: hasBarcodePhoto,
           ),
         );
       }
@@ -155,6 +171,31 @@ class InspectionRepository {
     if (value == null) return null;
     final stringValue = value.toString().trim();
     return stringValue.isEmpty ? null : stringValue;
+  }
+
+  bool? _boolOrNull(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is bool) {
+      return value;
+    }
+    if (value is num) {
+      return value != 0;
+    }
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      if (normalized.isEmpty) {
+        return null;
+      }
+      if (<String>{'true', 'y', 'yes', '1'}.contains(normalized)) {
+        return true;
+      }
+      if (<String>{'false', 'n', 'no', '0'}.contains(normalized)) {
+        return false;
+      }
+    }
+    return null;
   }
 
   /// 점검자/자산 정보를 기반으로 한 다중 행 메모를 생성한다.
