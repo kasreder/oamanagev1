@@ -17,25 +17,72 @@ class AssetVerificationListPage extends StatefulWidget {
 }
 
 class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
-  final TextEditingController _teamController = TextEditingController();
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _assetTypeController = TextEditingController();
-  _VerificationStatusFilter _verificationFilter = _VerificationStatusFilter.all;
-  _BarcodePhotoFilter _barcodePhotoFilter = _BarcodePhotoFilter.all;
+  static const _allLabel = '전체';
+
+  _PrimaryFilterField _selectedPrimaryField = _PrimaryFilterField.team;
+  String _selectedPrimaryValue = _allLabel;
+  _PrimaryFilterField _appliedPrimaryField = _PrimaryFilterField.team;
+  String _appliedPrimaryValue = _allLabel;
+
+  _SecondaryFilterField _selectedSecondaryField = _SecondaryFilterField.verificationStatus;
+  _VerificationStatusFilter _selectedVerificationValue = _VerificationStatusFilter.all;
+  _BarcodePhotoFilter _selectedBarcodeValue = _BarcodePhotoFilter.all;
+  _SecondaryFilterField _appliedSecondaryField = _SecondaryFilterField.verificationStatus;
+  _VerificationStatusFilter _appliedVerificationValue = _VerificationStatusFilter.all;
+  _BarcodePhotoFilter _appliedBarcodeValue = _BarcodePhotoFilter.all;
   int _currentPage = 0;
 
   static const _pageSize = 20;
 
-  @override
-  void dispose() {
-    _teamController.dispose();
-    _nameController.dispose();
-    _assetTypeController.dispose();
-    super.dispose();
+  void _onPrimaryFieldChanged(_PrimaryFilterField? value) {
+    if (value == null) return;
+    setState(() {
+      _selectedPrimaryField = value;
+      _selectedPrimaryValue = _allLabel;
+    });
   }
 
-  void _onFilterChanged() {
+  void _onPrimaryValueChanged(String? value) {
+    if (value == null) return;
     setState(() {
+      _selectedPrimaryValue = value;
+    });
+  }
+
+  void _onSecondaryFieldChanged(_SecondaryFilterField? value) {
+    if (value == null) return;
+    setState(() {
+      _selectedSecondaryField = value;
+      if (value == _SecondaryFilterField.verificationStatus) {
+        _selectedVerificationValue = _VerificationStatusFilter.all;
+      } else {
+        _selectedBarcodeValue = _BarcodePhotoFilter.all;
+      }
+    });
+  }
+
+  void _onVerificationValueChanged(_VerificationStatusFilter? value) {
+    if (value == null) return;
+    setState(() {
+      _selectedVerificationValue = value;
+    });
+  }
+
+  void _onBarcodeValueChanged(_BarcodePhotoFilter? value) {
+    if (value == null) return;
+    setState(() {
+      _selectedBarcodeValue = value;
+    });
+  }
+
+  void _onSearch() {
+    setState(() {
+      _appliedPrimaryField = _selectedPrimaryField;
+      _appliedPrimaryValue = _selectedPrimaryValue;
+      _appliedSecondaryField = _selectedSecondaryField;
+      _appliedVerificationValue = _selectedVerificationValue;
+      _appliedBarcodeValue = _selectedBarcodeValue;
+
       _currentPage = 0;
     });
   }
@@ -48,11 +95,17 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
 
   void _resetFilters() {
     setState(() {
-      _teamController.clear();
-      _nameController.clear();
-      _assetTypeController.clear();
-      _verificationFilter = _VerificationStatusFilter.all;
-      _barcodePhotoFilter = _BarcodePhotoFilter.all;
+      _selectedPrimaryField = _PrimaryFilterField.team;
+      _selectedPrimaryValue = _allLabel;
+      _appliedPrimaryField = _PrimaryFilterField.team;
+      _appliedPrimaryValue = _allLabel;
+      _selectedSecondaryField = _SecondaryFilterField.verificationStatus;
+      _selectedVerificationValue = _VerificationStatusFilter.all;
+      _selectedBarcodeValue = _BarcodePhotoFilter.all;
+      _appliedSecondaryField = _SecondaryFilterField.verificationStatus;
+      _appliedVerificationValue = _VerificationStatusFilter.all;
+      _appliedBarcodeValue = _BarcodePhotoFilter.all;
+
       _currentPage = 0;
     });
   }
@@ -61,7 +114,19 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
   Widget build(BuildContext context) {
     return Consumer<InspectionProvider>(
       builder: (context, provider, _) {
-        final filteredRows = _filterRows(provider);
+        final rows = _rowsFromProvider(provider);
+        final primaryOptions = _primaryOptionsByField(rows);
+        final primaryValuesForSelectedField =
+            primaryOptions[_selectedPrimaryField] ?? const [_allLabel];
+        if (!primaryValuesForSelectedField.contains(_selectedPrimaryValue)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            setState(() {
+              _selectedPrimaryValue = _allLabel;
+            });
+          });
+        }
+        final filteredRows = _applyFilters(rows);
         final totalPages = filteredRows.isEmpty ? 0 : (filteredRows.length / _pageSize).ceil();
         final currentPage = totalPages == 0 ? 0 : _currentPage.clamp(0, totalPages - 1).toInt();
         final pageRows = filteredRows.isEmpty
@@ -79,27 +144,19 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
             child: Column(
               children: [
                 _FilterSection(
-                  teamController: _teamController,
-                  nameController: _nameController,
-                  assetTypeController: _assetTypeController,
-                  verificationFilter: _verificationFilter,
-                  barcodePhotoFilter: _barcodePhotoFilter,
-                  onVerificationFilterChanged: (value) {
-                    if (value == null) return;
-                    setState(() {
-                      _verificationFilter = value;
-                      _currentPage = 0;
-                    });
-                  },
-                  onBarcodeFilterChanged: (value) {
-                    if (value == null) return;
-                    setState(() {
-                      _barcodePhotoFilter = value;
-                      _currentPage = 0;
-                    });
-                  },
+                  primaryField: _selectedPrimaryField,
+                  primaryValue: _selectedPrimaryValue,
+                  primaryValueOptions: primaryOptions,
+                  onPrimaryFieldChanged: _onPrimaryFieldChanged,
+                  onPrimaryValueChanged: _onPrimaryValueChanged,
+                  secondaryField: _selectedSecondaryField,
+                  selectedVerificationValue: _selectedVerificationValue,
+                  selectedBarcodeValue: _selectedBarcodeValue,
+                  onSecondaryFieldChanged: _onSecondaryFieldChanged,
+                  onVerificationValueChanged: _onVerificationValueChanged,
+                  onBarcodeValueChanged: _onBarcodeValueChanged,
+                  onSearch: _onSearch,
                   onFilterReset: _resetFilters,
-                  onQueryChanged: _onFilterChanged,
                   resultCount: filteredRows.length,
                 ),
                 const SizedBox(height: 16),
@@ -182,7 +239,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     );
   }
 
-  List<_RowData> _filterRows(InspectionProvider provider) {
+  List<_RowData> _rowsFromProvider(InspectionProvider provider) {
     final rows = provider.items
         .map((inspection) => _RowData.fromInspection(inspection, provider))
         .toList(growable: false);
@@ -201,27 +258,80 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
       return a.assetCode.compareTo(b.assetCode);
     });
 
-    final teamQuery = _teamController.text.trim().toLowerCase();
-    final nameQuery = _nameController.text.trim().toLowerCase();
-    final assetTypeQuery = _assetTypeController.text.trim().toLowerCase();
+    return rows;
+  }
 
+  Map<_PrimaryFilterField, List<String>> _primaryOptionsByField(List<_RowData> rows) {
+    final options = <_PrimaryFilterField, List<String>>{};
+
+    List<String> buildOptions(Iterable<String> values) {
+      final unique = values.toSet().toList()
+        ..sort((a, b) => a.compareTo(b));
+      return [_allLabel, ...unique];
+    }
+
+    options[_PrimaryFilterField.team] = buildOptions(rows.map((row) => row.teamName));
+    options[_PrimaryFilterField.name] = buildOptions(rows.map((row) => row.userName));
+    options[_PrimaryFilterField.assetType] = buildOptions(rows.map((row) => row.assetType));
+
+    return options;
+  }
+
+  List<_RowData> _applyFilters(List<_RowData> rows) {
     return rows.where((row) {
-      final matchesTeam = teamQuery.isEmpty || row.teamName.toLowerCase().contains(teamQuery);
-      final matchesName = nameQuery.isEmpty || row.userName.toLowerCase().contains(nameQuery);
-      final matchesAssetType = assetTypeQuery.isEmpty || row.assetType.toLowerCase().contains(assetTypeQuery);
-      final matchesVerification = switch (_verificationFilter) {
-        _VerificationStatusFilter.all => true,
-        _VerificationStatusFilter.verified => row.isVerified,
-        _VerificationStatusFilter.unverified => !row.isVerified,
-      };
-      final matchesBarcode = switch (_barcodePhotoFilter) {
-        _BarcodePhotoFilter.all => true,
-        _BarcodePhotoFilter.withPhoto => row.hasPhoto,
-        _BarcodePhotoFilter.withoutPhoto => !row.hasPhoto,
+      final matchesPrimary = switch (_appliedPrimaryField) {
+        _PrimaryFilterField.team =>
+            _appliedPrimaryValue == _allLabel || row.teamName == _appliedPrimaryValue,
+        _PrimaryFilterField.name =>
+            _appliedPrimaryValue == _allLabel || row.userName == _appliedPrimaryValue,
+        _PrimaryFilterField.assetType =>
+            _appliedPrimaryValue == _allLabel || row.assetType == _appliedPrimaryValue,
       };
 
-      return matchesTeam && matchesName && matchesAssetType && matchesVerification && matchesBarcode;
+      final matchesSecondary = switch (_appliedSecondaryField) {
+        _SecondaryFilterField.verificationStatus => switch (_appliedVerificationValue) {
+            _VerificationStatusFilter.all => true,
+            _VerificationStatusFilter.verified => row.isVerified,
+            _VerificationStatusFilter.unverified => !row.isVerified,
+          },
+        _SecondaryFilterField.barcodePhoto => switch (_appliedBarcodeValue) {
+            _BarcodePhotoFilter.all => true,
+            _BarcodePhotoFilter.withPhoto => row.hasPhoto,
+            _BarcodePhotoFilter.withoutPhoto => !row.hasPhoto,
+          },
+      };
+
+      return matchesPrimary && matchesSecondary;
+
     }).toList(growable: false);
+  }
+}
+
+enum _PrimaryFilterField { team, name, assetType }
+
+extension on _PrimaryFilterField {
+  String get label {
+    switch (this) {
+      case _PrimaryFilterField.team:
+        return '팀';
+      case _PrimaryFilterField.name:
+        return '이름';
+      case _PrimaryFilterField.assetType:
+        return '장비';
+    }
+  }
+}
+
+enum _SecondaryFilterField { verificationStatus, barcodePhoto }
+
+extension on _SecondaryFilterField {
+  String get label {
+    switch (this) {
+      case _SecondaryFilterField.verificationStatus:
+        return '인증여부';
+      case _SecondaryFilterField.barcodePhoto:
+        return '바코드 사진';
+    }
   }
 }
 
@@ -257,31 +367,42 @@ extension on _BarcodePhotoFilter {
 
 class _FilterSection extends StatelessWidget {
   const _FilterSection({
-    required this.teamController,
-    required this.nameController,
-    required this.assetTypeController,
-    required this.verificationFilter,
-    required this.barcodePhotoFilter,
-    required this.onVerificationFilterChanged,
-    required this.onBarcodeFilterChanged,
+    required this.primaryField,
+    required this.primaryValue,
+    required this.primaryValueOptions,
+    required this.onPrimaryFieldChanged,
+    required this.onPrimaryValueChanged,
+    required this.secondaryField,
+    required this.selectedVerificationValue,
+    required this.selectedBarcodeValue,
+    required this.onSecondaryFieldChanged,
+    required this.onVerificationValueChanged,
+    required this.onBarcodeValueChanged,
+    required this.onSearch,
     required this.onFilterReset,
-    required this.onQueryChanged,
     required this.resultCount,
   });
 
-  final TextEditingController teamController;
-  final TextEditingController nameController;
-  final TextEditingController assetTypeController;
-  final _VerificationStatusFilter verificationFilter;
-  final _BarcodePhotoFilter barcodePhotoFilter;
-  final ValueChanged<_VerificationStatusFilter?> onVerificationFilterChanged;
-  final ValueChanged<_BarcodePhotoFilter?> onBarcodeFilterChanged;
+  final _PrimaryFilterField primaryField;
+  final String primaryValue;
+  final Map<_PrimaryFilterField, List<String>> primaryValueOptions;
+  final ValueChanged<_PrimaryFilterField?> onPrimaryFieldChanged;
+  final ValueChanged<String?> onPrimaryValueChanged;
+  final _SecondaryFilterField secondaryField;
+  final _VerificationStatusFilter selectedVerificationValue;
+  final _BarcodePhotoFilter selectedBarcodeValue;
+  final ValueChanged<_SecondaryFilterField?> onSecondaryFieldChanged;
+  final ValueChanged<_VerificationStatusFilter?> onVerificationValueChanged;
+  final ValueChanged<_BarcodePhotoFilter?> onBarcodeValueChanged;
+  final VoidCallback onSearch;
   final VoidCallback onFilterReset;
-  final VoidCallback onQueryChanged;
   final int resultCount;
 
   @override
   Widget build(BuildContext context) {
+    final primaryOptions = primaryValueOptions[primaryField] ?? const ['전체'];
+    final adjustedPrimaryValue = primaryOptions.contains(primaryValue) ? primaryValue : primaryOptions.first;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -294,42 +415,9 @@ class _FilterSection extends StatelessWidget {
               children: [
                 SizedBox(
                   width: 200,
-                  child: TextField(
-                    controller: teamController,
-                    decoration: const InputDecoration(
-                      labelText: '팀',
-                      border: OutlineInputBorder(),
-                    ),
-                    onChanged: (_) => onQueryChanged(),
-                  ),
-                ),
-                SizedBox(
-                  width: 200,
-                  child: TextField(
-                    controller: nameController,
-                    decoration: const InputDecoration(
-                      labelText: '이름',
-                      border: OutlineInputBorder(),
-                    ),
-                    onChanged: (_) => onQueryChanged(),
-                  ),
-                ),
-                SizedBox(
-                  width: 200,
-                  child: TextField(
-                    controller: assetTypeController,
-                    decoration: const InputDecoration(
-                      labelText: '장비',
-                      border: OutlineInputBorder(),
-                    ),
-                    onChanged: (_) => onQueryChanged(),
-                  ),
-                ),
-                SizedBox(
-                  width: 200,
-                  child: DropdownButtonFormField<_VerificationStatusFilter>(
-                    value: verificationFilter,
-                    items: _VerificationStatusFilter.values
+                  child: DropdownButtonFormField<_PrimaryFilterField>(
+                    value: primaryField,
+                    items: _PrimaryFilterField.values
                         .map(
                           (value) => DropdownMenuItem(
                             value: value,
@@ -337,18 +425,37 @@ class _FilterSection extends StatelessWidget {
                           ),
                         )
                         .toList(growable: false),
-                    onChanged: onVerificationFilterChanged,
+                    onChanged: onPrimaryFieldChanged,
                     decoration: const InputDecoration(
-                      labelText: '인증여부',
+                      labelText: '검색 항목',
                       border: OutlineInputBorder(),
                     ),
                   ),
                 ),
                 SizedBox(
                   width: 200,
-                  child: DropdownButtonFormField<_BarcodePhotoFilter>(
-                    value: barcodePhotoFilter,
-                    items: _BarcodePhotoFilter.values
+                  child: DropdownButtonFormField<String>(
+                    value: adjustedPrimaryValue,
+                    items: primaryOptions
+                        .map(
+                          (value) => DropdownMenuItem(
+                            value: value,
+                            child: Text(value),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: onPrimaryValueChanged,
+                    decoration: const InputDecoration(
+                      labelText: '검색 값',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 200,
+                  child: DropdownButtonFormField<_SecondaryFilterField>(
+                    value: secondaryField,
+                    items: _SecondaryFilterField.values
                         .map(
                           (value) => DropdownMenuItem(
                             value: value,
@@ -356,11 +463,22 @@ class _FilterSection extends StatelessWidget {
                           ),
                         )
                         .toList(growable: false),
-                    onChanged: onBarcodeFilterChanged,
+                    onChanged: onSecondaryFieldChanged,
                     decoration: const InputDecoration(
-                      labelText: '바코드 사진',
+                      labelText: '상태 항목',
                       border: OutlineInputBorder(),
                     ),
+                  ),
+                ),
+                SizedBox(
+                  width: 200,
+                  child: _SecondaryValueDropdown(
+                    field: secondaryField,
+                    selectedVerificationValue: selectedVerificationValue,
+                    selectedBarcodeValue: selectedBarcodeValue,
+                    onVerificationValueChanged: onVerificationValueChanged,
+                    onBarcodeValueChanged: onBarcodeValueChanged,
+
                   ),
                 ),
               ],
@@ -370,6 +488,13 @@ class _FilterSection extends StatelessWidget {
               children: [
                 Text('검색 결과: ${resultCount}건'),
                 const Spacer(),
+                ElevatedButton.icon(
+                  onPressed: onSearch,
+                  icon: const Icon(Icons.search),
+                  label: const Text('검색'),
+                ),
+                const SizedBox(width: 12),
+
                 TextButton.icon(
                   onPressed: onFilterReset,
                   icon: const Icon(Icons.refresh),
@@ -381,6 +506,62 @@ class _FilterSection extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _SecondaryValueDropdown extends StatelessWidget {
+  const _SecondaryValueDropdown({
+    required this.field,
+    required this.selectedVerificationValue,
+    required this.selectedBarcodeValue,
+    required this.onVerificationValueChanged,
+    required this.onBarcodeValueChanged,
+  });
+
+  final _SecondaryFilterField field;
+  final _VerificationStatusFilter selectedVerificationValue;
+  final _BarcodePhotoFilter selectedBarcodeValue;
+  final ValueChanged<_VerificationStatusFilter?> onVerificationValueChanged;
+  final ValueChanged<_BarcodePhotoFilter?> onBarcodeValueChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    switch (field) {
+      case _SecondaryFilterField.verificationStatus:
+        return DropdownButtonFormField<_VerificationStatusFilter>(
+          value: selectedVerificationValue,
+          items: _VerificationStatusFilter.values
+              .map(
+                (value) => DropdownMenuItem(
+                  value: value,
+                  child: Text(value.label),
+                ),
+              )
+              .toList(growable: false),
+          onChanged: onVerificationValueChanged,
+          decoration: const InputDecoration(
+            labelText: '상태 값',
+            border: OutlineInputBorder(),
+          ),
+        );
+      case _SecondaryFilterField.barcodePhoto:
+        return DropdownButtonFormField<_BarcodePhotoFilter>(
+          value: selectedBarcodeValue,
+          items: _BarcodePhotoFilter.values
+              .map(
+                (value) => DropdownMenuItem(
+                  value: value,
+                  child: Text(value.label),
+                ),
+              )
+              .toList(growable: false),
+          onChanged: onBarcodeValueChanged,
+          decoration: const InputDecoration(
+            labelText: '상태 값',
+            border: OutlineInputBorder(),
+          ),
+        );
+    }
   }
 }
 
