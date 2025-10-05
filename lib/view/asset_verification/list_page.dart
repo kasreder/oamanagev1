@@ -82,6 +82,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
       _appliedSecondaryField = _selectedSecondaryField;
       _appliedVerificationValue = _selectedVerificationValue;
       _appliedBarcodeValue = _selectedBarcodeValue;
+
       _currentPage = 0;
     });
   }
@@ -104,6 +105,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
       _appliedSecondaryField = _SecondaryFilterField.verificationStatus;
       _appliedVerificationValue = _VerificationStatusFilter.all;
       _appliedBarcodeValue = _BarcodePhotoFilter.all;
+
       _currentPage = 0;
     });
   }
@@ -300,6 +302,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
       };
 
       return matchesPrimary && matchesSecondary;
+
     }).toList(growable: false);
   }
 }
@@ -399,6 +402,7 @@ class _FilterSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final primaryOptions = primaryValueOptions[primaryField] ?? const ['전체'];
     final adjustedPrimaryValue = primaryOptions.contains(primaryValue) ? primaryValue : primaryOptions.first;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -474,6 +478,7 @@ class _FilterSection extends StatelessWidget {
                     selectedBarcodeValue: selectedBarcodeValue,
                     onVerificationValueChanged: onVerificationValueChanged,
                     onBarcodeValueChanged: onBarcodeValueChanged,
+
                   ),
                 ),
               ],
@@ -489,6 +494,7 @@ class _FilterSection extends StatelessWidget {
                   label: const Text('검색'),
                 ),
                 const SizedBox(width: 12),
+
                 TextButton.icon(
                   onPressed: onFilterReset,
                   icon: const Icon(Icons.refresh),
