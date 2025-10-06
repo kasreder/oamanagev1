@@ -194,6 +194,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
                                         dataRowMinHeight: 44,
                                         dataRowMaxHeight: 72,
                                         columns: [
+
                                               DataColumn(
                                                 label: _buildColumnLabel(
                                                   '팀',
