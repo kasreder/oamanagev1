@@ -47,6 +47,10 @@ class AssetVerificationDetailsGroupPage extends StatelessWidget {
                     .toList(growable: false);
                 final verificationTargets =
                     validEntries.map((entry) => entry.assetUid).toList(growable: false);
+                final primaryEntry = validEntries.isNotEmpty ? validEntries.first : null;
+                final primaryUser = primaryEntry == null
+                    ? null
+                    : resolveUser(provider, primaryEntry.inspection, primaryEntry.asset);
 
                 return FutureBuilder<Set<String>>(
                   future: BarcodePhotoRegistry.loadCodes(),
@@ -80,7 +84,11 @@ class AssetVerificationDetailsGroupPage extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(height: 16),
-                            VerificationActionSection(assetUids: verificationTargets),
+                            VerificationActionSection(
+                              assetUids: verificationTargets,
+                              primaryAssetUid: primaryEntry?.assetUid,
+                              primaryUser: primaryUser,
+                            ),
                           ] else
                             Card(
                               child: Padding(

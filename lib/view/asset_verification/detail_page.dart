@@ -163,7 +163,11 @@ class AssetVerificationDetailPage extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    VerificationActionSection(assetUids: [resolvedAssetCode]),
+                    VerificationActionSection(
+                      assetUids: [resolvedAssetCode],
+                      primaryAssetUid: resolvedAssetCode,
+                      primaryUser: user,
+                    ),
                   ],
                 ),
               );
