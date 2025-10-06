@@ -26,7 +26,7 @@ class InspectionRepository {
   Future<void> loadFromAssets() async {
     try {
       final raw = await _loadInspectionRaw();
-      final decoded = (jsonDecode(raw) as List<dynamic>).cast<Map<String, dynamic>>();
+      final decoded = await _decodeInspectionsWithFallback(raw);
       final statusMap = await _loadAssetStatuses();
       final items = <Inspection>[];
       for (final item in decoded) {
@@ -80,6 +80,11 @@ class InspectionRepository {
       _sortItems();
     } on FlutterError {
       _items.clear();
+    } on FormatException catch (error) {
+      if (kDebugMode) {
+        debugPrint('Failed to parse inspection assets: $error');
+      }
+      _items.clear();
     }
   }
 
@@ -129,6 +134,30 @@ class InspectionRepository {
     } on FlutterError {
       return rootBundle.loadString('assets/mock/asset_inspections.json');
     }
+  }
+
+  /// 더미 실사 JSON을 안전하게 디코드한다.
+  ///
+  /// 주 파일 파싱에 실패하면 폴백 에셋을 재시도한다.
+  Future<List<Map<String, dynamic>>> _decodeInspectionsWithFallback(String raw) async {
+    try {
+      return _decodeInspectionList(raw);
+    } on FormatException catch (error) {
+      if (kDebugMode) {
+        debugPrint('Failed to parse dummy inspections: $error. Falling back to default mock data.');
+      }
+      final fallbackRaw = await rootBundle.loadString('assets/mock/asset_inspections.json');
+      return _decodeInspectionList(fallbackRaw);
+    }
+  }
+
+  /// 실사 JSON 문자열을 디코드하여 리스트로 반환한다.
+  List<Map<String, dynamic>> _decodeInspectionList(String raw) {
+    final decoded = jsonDecode(raw);
+    if (decoded is! List) {
+      throw const FormatException('Expected a JSON array of inspections.');
+    }
+    return decoded.cast<Map<String, dynamic>>();
   }
 
   /// 자산 상태 정보를 읽어서 UID → 상태 맵을 구성한다.
