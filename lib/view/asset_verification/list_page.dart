@@ -233,6 +233,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
                                             headingRowHeight: 44,
                                             dataRowMinHeight: 0,
                                             dataRowMaxHeight: 0,
+                                            showCheckboxColumn: true,
                                             columns: columns,
                                             rows: const [],
                                           ),
@@ -249,7 +250,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
                                                   headingRowHeight: 0,
                                                   dataRowMinHeight: 44,
                                                   dataRowMaxHeight: 72,
-                                                  showCheckboxColumn: false,
+                                                  showCheckboxColumn: true,
                                                   columns: columns,
                                                   rows: rows,
 
