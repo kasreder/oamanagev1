@@ -242,7 +242,9 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
                                           ),
                                         ],
                                       ),
-                                  );
+                                  ),
+                                ),
+                                );
                               },
                             ),
                           ),
