@@ -35,6 +35,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
   final ScrollController _verticalScrollController = ScrollController();
 
   Set<String> _barcodePhotoAssetCodes = const <String>{};
+  Set<String> _selectedAssetCodes = <String>{};
 
   _PrimaryFilterField _selectedPrimaryField = _PrimaryFilterField.team;
   String _selectedPrimaryValue = _allLabel;
@@ -165,6 +166,17 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
           });
         }
         final filteredRows = _applyFilters(rows);
+        final visibleAssetCodes = filteredRows.map((row) => row.assetCode).toSet();
+        if (_selectedAssetCodes.difference(visibleAssetCodes).isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            setState(() {
+              _selectedAssetCodes = _selectedAssetCodes
+                  .where((code) => visibleAssetCodes.contains(code))
+                  .toSet();
+            });
+          });
+        }
         final totalPages = filteredRows.isEmpty ? 0 : (filteredRows.length / _pageSize).ceil();
         final currentPage = totalPages == 0 ? 0 : _currentPage.clamp(0, totalPages - 1).toInt();
         final pageRows = filteredRows.isEmpty
@@ -173,6 +185,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
                 currentPage * _pageSize,
                 math.min((currentPage + 1) * _pageSize, filteredRows.length),
               );
+        final selectedCount = _selectedAssetCodes.length;
 
         return AppScaffold(
           title: '팀별 자산 인증 현황',
@@ -196,6 +209,8 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
                   onSearch: _onSearch,
                   onFilterReset: _resetFilters,
                   resultCount: filteredRows.length,
+                  selectedCount: selectedCount,
+                  onVerifySelected: () => _onVerifySelected(context, filteredRows),
                 ),
                 const SizedBox(height: 16),
                 Expanded(
@@ -233,6 +248,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
                                             headingRowHeight: 44,
                                             dataRowMinHeight: 0,
                                             dataRowMaxHeight: 0,
+                                            showCheckboxColumn: true,
                                             columns: columns,
                                             rows: const [],
                                           ),
@@ -249,7 +265,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
                                                   headingRowHeight: 0,
                                                   dataRowMinHeight: 44,
                                                   dataRowMaxHeight: 72,
-                                                  showCheckboxColumn: false,
+                                                  showCheckboxColumn: true,
                                                   columns: columns,
                                                   rows: rows,
 
@@ -282,6 +298,38 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
         );
       },
     );
+  }
+
+  void _toggleSelection(String assetCode, bool isSelected) {
+    setState(() {
+      final updated = _selectedAssetCodes.toSet();
+      if (isSelected) {
+        updated.add(assetCode);
+      } else {
+        updated.remove(assetCode);
+      }
+      _selectedAssetCodes = updated;
+    });
+  }
+
+  void _onVerifySelected(BuildContext context, List<_RowData> filteredRows) {
+    final availableCodes = filteredRows.map((row) => row.assetCode).toSet();
+    final selected = _selectedAssetCodes.where(availableCodes.contains).toList();
+    if (selected.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('선택된 자산이 없습니다.')),
+      );
+      return;
+    }
+
+    if (selected.length == 1) {
+      final assetCode = selected.first;
+      context.push('/asset_verification/${Uri.encodeComponent(assetCode)}');
+      return;
+    }
+
+    final joined = selected.map(Uri.encodeComponent).join(',');
+    context.push('/asset_verification_group?assetUids=$joined');
   }
 
   List<_RowData> _rowsFromProvider(InspectionProvider provider) {
@@ -430,8 +478,9 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     return [
       for (final row in pageRows)
         DataRow(
-          onSelectChanged: (_) {
-            context.push('/asset_verification/${Uri.encodeComponent(row.assetCode)}');
+          selected: _selectedAssetCodes.contains(row.assetCode),
+          onSelectChanged: (selected) {
+            _toggleSelection(row.assetCode, selected ?? false);
           },
           cells: [
             DataCell(
@@ -453,10 +502,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
               ),
             ),
             DataCell(
-              _buildTableText(
-                row.assetCode,
-                _TableColumn.assetCode,
-              ),
+              _buildAssetCodeCell(context, row.assetCode),
             ),
             DataCell(
               _buildTableText(
@@ -482,6 +528,18 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
           ],
         ),
     ];
+  }
+
+  Widget _buildAssetCodeCell(BuildContext context, String assetCode) {
+    return InkWell(
+      onTap: () {
+        context.push('/asset_verification/${Uri.encodeComponent(assetCode)}');
+      },
+      child: _buildTableText(
+        assetCode,
+        _TableColumn.assetCode,
+      ),
+    );
   }
 }
 
@@ -570,6 +628,8 @@ class _FilterSection extends StatelessWidget {
     required this.onSearch,
     required this.onFilterReset,
     required this.resultCount,
+    required this.selectedCount,
+    required this.onVerifySelected,
   });
 
   final _PrimaryFilterField primaryField;
@@ -586,6 +646,8 @@ class _FilterSection extends StatelessWidget {
   final VoidCallback onSearch;
   final VoidCallback onFilterReset;
   final int resultCount;
+  final int selectedCount;
+  final VoidCallback onVerifySelected;
 
   @override
   Widget build(BuildContext context) {
@@ -676,7 +738,15 @@ class _FilterSection extends StatelessWidget {
             Row(
               children: [
                 Text('검색 결과: ${resultCount}건'),
+                const SizedBox(width: 16),
+                Text('선택: ${selectedCount}건'),
                 const Spacer(),
+                ElevatedButton.icon(
+                  onPressed: selectedCount > 0 ? onVerifySelected : null,
+                  icon: const Icon(Icons.verified),
+                  label: const Text('인증하기'),
+                ),
+                const SizedBox(width: 12),
                 ElevatedButton.icon(
                   onPressed: onSearch,
                   icon: const Icon(Icons.search),
