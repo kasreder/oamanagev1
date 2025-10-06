@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../view/asset_verification/detail_page.dart';
+import '../view/asset_verification/details_group_page.dart';
 import '../view/asset_verification/list_page.dart';
 import '../view/home/home_page.dart';
 import '../view/assets/detail_page.dart';
@@ -51,6 +52,20 @@ class AppRouter {
         builder: (context, state) {
           final assetUid = state.pathParameters['assetUid']!;
           return AssetVerificationDetailPage(assetUid: assetUid);
+        },
+      ),
+      GoRoute(
+        path: '/asset_verification_group',
+        builder: (context, state) {
+          final raw = state.uri.queryParameters['assetUids'] ?? '';
+          final assets = raw.isEmpty
+              ? const <String>[]
+              : raw
+                  .split(',')
+                  .map((value) => Uri.decodeComponent(value))
+                  .where((value) => value.trim().isNotEmpty)
+                  .toList(growable: false);
+          return AssetVerificationDetailsGroupPage(assetUids: assets);
         },
       ),
     ],
