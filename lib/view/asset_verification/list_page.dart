@@ -180,21 +180,21 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
                               builder: (context, constraints) {
                                 return Scrollbar(
                                   thumbVisibility: true,
-                                  notificationPredicate: (notification) => notification.metrics.axis == Axis.horizontal,
+                                  notificationPredicate: (notification) =>
+                                      notification.metrics.axis == Axis.horizontal,
                                   child: SingleChildScrollView(
                                     scrollDirection: Axis.horizontal,
                                     child: ConstrainedBox(
-                                      constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                                      child: Scrollbar(
-                                        thumbVisibility: true,
-                                        notificationPredicate: (notification) => notification.metrics.axis == Axis.vertical,
-                                        child: SingleChildScrollView(
-                                          child: DataTable(
-                                            columnSpacing: 32,
-                                            headingRowHeight: 44,
-                                            dataRowMinHeight: 44,
-                                            dataRowMaxHeight: 72,
-                                            columns: [
+                                      constraints: BoxConstraints(
+                                        minWidth: constraints.maxWidth,
+                                      ),
+                                      child: DataTable(
+                                        columnSpacing: 32,
+                                        headingRowHeight: 44,
+                                        dataRowMinHeight: 44,
+                                        dataRowMaxHeight: 72,
+                                        columns: [
+
                                               DataColumn(
                                                 label: _buildColumnLabel(
                                                   '팀',
@@ -299,9 +299,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
                                           ),
                                         ),
                                       ),
-                                    ),
-                                  ),
-                                );
+                                  );
                               },
                             ),
                           ),
