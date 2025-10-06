@@ -29,9 +29,9 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     _TableColumn.barcodePhoto: 140,
   };
   static const double _tableMinWidth = 1160;
-
   final ScrollController _horizontalScrollController = ScrollController();
   final ScrollController _verticalScrollController = ScrollController();
+
 
   _PrimaryFilterField _selectedPrimaryField = _PrimaryFilterField.team;
   String _selectedPrimaryValue = _allLabel;
@@ -235,15 +235,14 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
                                                   showCheckboxColumn: false,
                                                   columns: columns,
                                                   rows: rows,
+
                                                 ),
                                               ),
                                             ),
                                           ),
                                         ],
                                       ),
-                                    ),
-                                  ),
-                                );
+                                  );
                               },
                             ),
                           ),
@@ -343,6 +342,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
           style: const TextStyle(fontWeight: FontWeight.w600),
           overflow: TextOverflow.ellipsis,
         ),
+
       ),
     );
   }
@@ -357,6 +357,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
+
       ),
     );
   }
