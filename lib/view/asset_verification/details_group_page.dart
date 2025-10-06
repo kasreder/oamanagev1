@@ -47,6 +47,10 @@ class AssetVerificationDetailsGroupPage extends StatelessWidget {
                     .toList(growable: false);
                 final verificationTargets =
                     validEntries.map((entry) => entry.assetUid).toList(growable: false);
+                final primaryEntry = validEntries.isNotEmpty ? validEntries.first : null;
+                final primaryUser = primaryEntry == null
+                    ? null
+                    : resolveUser(provider, primaryEntry.inspection, primaryEntry.asset);
 
                 return FutureBuilder<Set<String>>(
                   future: BarcodePhotoRegistry.loadCodes(),
@@ -55,42 +59,57 @@ class AssetVerificationDetailsGroupPage extends StatelessWidget {
                     final isLoadingPhotos =
                         snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData;
 
-                    return SingleChildScrollView(
+                    return Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          if (missingAssets.isNotEmpty)
-                            Card(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Text(
-                                  '다음 자산의 정보를 찾을 수 없습니다: ${missingAssets.join(', ')}',
-                                  style: const TextStyle(color: Colors.redAccent),
-                                ),
+                          Expanded(
+                            child: SingleChildScrollView(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  if (missingAssets.isNotEmpty)
+                                    Card(
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Text(
+                                          '다음 자산의 정보를 찾을 수 없습니다: ${missingAssets.join(', ')}',
+                                          style: const TextStyle(color: Colors.redAccent),
+                                        ),
+                                      ),
+                                    ),
+                                  if (validEntries.isNotEmpty)
+                                    ...validEntries.map(
+                                      (entry) => _GroupAssetCard(
+                                        entry: entry,
+                                        hasPhoto: barcodeAssetCodes
+                                            .contains(entry.assetUid.trim().toLowerCase()),
+                                        isLoadingPhoto: isLoadingPhotos,
+                                      ),
+                                    )
+                                  else
+                                    Card(
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Text(
+                                          '표시할 자산 상세 정보가 없습니다.',
+                                          style: Theme.of(context).textTheme.bodyMedium,
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
-                          if (validEntries.isNotEmpty) ...[ 
-                            ...validEntries.map(
-                              (entry) => _GroupAssetCard(
-                                entry: entry,
-                                hasPhoto: barcodeAssetCodes
-                                    .contains(entry.assetUid.trim().toLowerCase()),
-                                isLoadingPhoto: isLoadingPhotos,
-                              ),
-                            ),
+                          ),
+                          if (validEntries.isNotEmpty) ...[
                             const SizedBox(height: 16),
-                            VerificationActionSection(assetUids: verificationTargets),
-                          ] else
-                            Card(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Text(
-                                  '표시할 자산 상세 정보가 없습니다.',
-                                  style: Theme.of(context).textTheme.bodyMedium,
-                                ),
-                              ),
+                            VerificationActionSection(
+                              assetUids: verificationTargets,
+                              primaryAssetUid: primaryEntry?.assetUid,
+                              primaryUser: primaryUser,
                             ),
+                          ],
                         ],
                       ),
                     );
@@ -148,6 +167,24 @@ class _GroupAssetCard extends StatelessWidget {
       null => Colors.grey,
     };
 
+    final infoCells = <_DetailCell>[
+      _DetailCell('팀', Text(teamName.isNotEmpty ? teamName : '정보 없음')),
+      _DetailCell('사용자', Text(_resolveUserName(context, inspection, asset))),
+      _DetailCell('장비', Text(assetType.isNotEmpty ? assetType : '정보 없음')),
+      _DetailCell('관리자', Text(manager.isNotEmpty ? manager : '정보 없음')),
+      _DetailCell('위치', Text(location.isNotEmpty ? location : '정보 없음')),
+      _DetailCell(
+        '바코드사진',
+        Text(
+          isLoadingPhoto
+              ? '불러오는 중...'
+              : hasPhoto
+                  ? '사진 있음'
+                  : '사진 없음',
+        ),
+      ),
+    ];
+
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       child: Padding(
@@ -175,18 +212,28 @@ class _GroupAssetCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            _InfoRow(label: '팀', value: teamName),
-            _InfoRow(label: '사용자', value: _resolveUserName(context, inspection, asset)),
-            _InfoRow(label: '장비', value: assetType.isNotEmpty ? assetType : '정보 없음'),
-            _InfoRow(label: '관리자', value: manager.isNotEmpty ? manager : '정보 없음'),
-            _InfoRow(label: '위치', value: location.isNotEmpty ? location : '정보 없음'),
-            _InfoRow(
-              label: '바코드사진',
-              value: isLoadingPhoto
-                  ? '불러오는 중...'
-                  : hasPhoto
-                      ? '사진 있음'
-                      : '사진 없음',
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                headingTextStyle: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
+                columns: [
+                  for (final cell in infoCells) DataColumn(label: Text(cell.label)),
+                ],
+                rows: [
+                  DataRow(
+                    cells: [
+                      for (final cell in infoCells)
+                        DataCell(Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: cell.value,
+                        )),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -205,32 +252,9 @@ class _GroupAssetCard extends StatelessWidget {
   }
 }
 
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.label, required this.value});
+class _DetailCell {
+  const _DetailCell(this.label, this.value);
 
   final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final style = Theme.of(context).textTheme.bodyMedium;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 90,
-            child: Text(
-              label,
-              style: style?.copyWith(fontWeight: FontWeight.w600),
-            ),
-          ),
-          Expanded(
-            child: Text(value),
-          ),
-        ],
-      ),
-    );
-  }
+  final Widget value;
 }
