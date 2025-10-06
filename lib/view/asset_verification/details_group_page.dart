@@ -108,6 +108,7 @@ class AssetVerificationDetailsGroupPage extends StatelessWidget {
                               assetUids: verificationTargets,
                               primaryAssetUid: primaryEntry?.assetUid,
                               primaryUser: primaryUser,
+
                             ),
                           ],
                         ],

@@ -21,6 +21,7 @@ class VerificationActionSection extends StatefulWidget {
 }
 
 class _VerificationActionSectionState extends State<VerificationActionSection> {
+
   final GlobalKey<SignaturePadState> _signatureKey = GlobalKey<SignaturePadState>();
 
   bool _isSavingSignature = false;
@@ -34,6 +35,7 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
   }
 
   @override
+
   void didUpdateWidget(covariant VerificationActionSection oldWidget) {
     super.didUpdateWidget(oldWidget);
     final assetChanged = oldWidget.primaryAssetUid != widget.primaryAssetUid;
@@ -45,6 +47,7 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
   }
 
   void _clearSignature() {
+
     _signatureKey.currentState?.clear();
     setState(() {});
   }
@@ -121,6 +124,7 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
         _isSavingSignature = false;
       });
       _showSnackBar('서명이 저장되어 인증이 완료되었습니다. (${file.path})');
+
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -159,6 +163,7 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
                   .textTheme
                   .bodyMedium
                   ?.copyWith(fontWeight: FontWeight.w600),
+
             ),
             const SizedBox(height: 8),
             SizedBox(
