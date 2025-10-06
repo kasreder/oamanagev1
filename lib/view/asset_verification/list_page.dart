@@ -1,8 +1,10 @@
 // lib/view/asset_verification/list_page.dart
 
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/inspection.dart';
@@ -32,6 +34,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
   final ScrollController _horizontalScrollController = ScrollController();
   final ScrollController _verticalScrollController = ScrollController();
 
+  Set<String> _barcodePhotoAssetCodes = const <String>{};
 
   _PrimaryFilterField _selectedPrimaryField = _PrimaryFilterField.team;
   String _selectedPrimaryValue = _allLabel;
@@ -49,10 +52,24 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
   static const _pageSize = 20;
 
   @override
+  void initState() {
+    super.initState();
+    _loadBarcodePhotoAssets();
+  }
+
+  @override
   void dispose() {
     _horizontalScrollController.dispose();
     _verticalScrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadBarcodePhotoAssets() async {
+    final codes = await _BarcodePhotoAssetRegistry.load();
+    if (!mounted) return;
+    setState(() {
+      _barcodePhotoAssetCodes = codes;
+    });
   }
 
   void _onPrimaryFieldChanged(_PrimaryFilterField? value) {
@@ -269,7 +286,13 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
 
   List<_RowData> _rowsFromProvider(InspectionProvider provider) {
     final rows = provider.items
-        .map((inspection) => _RowData.fromInspection(inspection, provider))
+        .map(
+          (inspection) => _RowData.fromInspection(
+            inspection,
+            provider,
+            _barcodePhotoAssetCodes,
+          ),
+        )
         .toList(growable: false);
 
     rows.sort((a, b) {
@@ -449,7 +472,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
             ),
             DataCell(
               _buildTableText(
-                row.hasPhoto ? '사진 있음' : '없음',
+                row.hasPhoto ? '사진 있음' : '사진 없음',
                 _TableColumn.barcodePhoto,
               ),
             ),
@@ -882,13 +905,15 @@ class _RowData {
   factory _RowData.fromInspection(
     Inspection inspection,
     InspectionProvider provider,
+    Set<String> availableBarcodePhotos,
   ) {
     final asset = provider.assetOf(inspection.assetUid);
     final user = _resolveUser(provider, inspection, asset);
     final assetType = _resolveAssetType(inspection, asset);
     final manager = _resolveManager(asset);
     final location = _resolveLocation(asset);
-    final hasPhoto = _hasBarcodePhoto(inspection, asset);
+    final hasPhoto =
+        _hasBarcodePhoto(inspection.assetUid, availableBarcodePhotos);
 
     return _RowData(
       teamName: _normalizeTeamName(inspection.userTeam),
@@ -965,13 +990,38 @@ String _resolveLocation(AssetInfo? asset) {
   return asset.location.trim();
 }
 
-bool _hasBarcodePhoto(Inspection inspection, AssetInfo? asset) {
-  final candidates = <String?>[
-    inspection.barcodePhotoUrl,
-    asset?.metadata['barcode_photo'],
-    asset?.metadata['barcode_photo_url'],
-    asset?.metadata['barcodePhoto'],
-    asset?.metadata['barcodePhotoUrl'],
-  ];
-  return candidates.any((value) => value != null && value.trim().isNotEmpty);
+bool _hasBarcodePhoto(String assetCode, Set<String> availableBarcodePhotos) {
+  final normalizedCode = assetCode.trim().toLowerCase();
+  if (normalizedCode.isEmpty) {
+    return false;
+  }
+  return availableBarcodePhotos.contains(normalizedCode);
+}
+
+class _BarcodePhotoAssetRegistry {
+  static Set<String>? _cachedCodes;
+
+  static Future<Set<String>> load() async {
+    if (_cachedCodes != null) {
+      return _cachedCodes!;
+    }
+
+    final manifestContent = await rootBundle.loadString('AssetManifest.json');
+    final Map<String, dynamic> manifestMap =
+        json.decode(manifestContent) as Map<String, dynamic>;
+
+    final codes = manifestMap.keys
+        .where((key) => key.startsWith('assets/dummy/images/'))
+        .map((key) => key.split('/').last)
+        .map((fileName) {
+          final dotIndex = fileName.lastIndexOf('.');
+          return dotIndex == -1 ? fileName : fileName.substring(0, dotIndex);
+        })
+        .where((fileName) => fileName.trim().isNotEmpty)
+        .map((fileName) => fileName.trim().toLowerCase())
+        .toSet();
+
+    _cachedCodes = codes;
+    return _cachedCodes!;
+  }
 }
