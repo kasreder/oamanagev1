@@ -28,6 +28,10 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     _TableColumn.verificationStatus: 120,
     _TableColumn.barcodePhoto: 140,
   };
+  static const double _tableMinWidth = 1160;
+  final ScrollController _horizontalScrollController = ScrollController();
+  final ScrollController _verticalScrollController = ScrollController();
+
 
   _PrimaryFilterField _selectedPrimaryField = _PrimaryFilterField.team;
   String _selectedPrimaryValue = _allLabel;
@@ -43,6 +47,13 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
   int _currentPage = 0;
 
   static const _pageSize = 20;
+
+  @override
+  void dispose() {
+    _horizontalScrollController.dispose();
+    _verticalScrollController.dispose();
+    super.dispose();
+  }
 
   void _onPrimaryFieldChanged(_PrimaryFilterField? value) {
     if (value == null) return;
@@ -178,126 +189,58 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
                             padding: const EdgeInsets.all(12),
                             child: LayoutBuilder(
                               builder: (context, constraints) {
+                                final tableWidth = math.max(
+                                  constraints.maxWidth,
+                                  _tableMinWidth,
+                                );
+                                final columns = _buildColumns();
+                                final rows = _buildRows(pageRows);
+
                                 return Scrollbar(
+                                  controller: _horizontalScrollController,
                                   thumbVisibility: true,
                                   notificationPredicate: (notification) =>
                                       notification.metrics.axis == Axis.horizontal,
                                   child: SingleChildScrollView(
+                                    controller: _horizontalScrollController,
                                     scrollDirection: Axis.horizontal,
-                                    child: ConstrainedBox(
-                                      constraints: BoxConstraints(
-                                        minWidth: constraints.maxWidth,
-                                      ),
-                                      child: DataTable(
-                                        columnSpacing: 32,
-                                        headingRowHeight: 44,
-                                        dataRowMinHeight: 44,
-                                        dataRowMaxHeight: 72,
-                                        columns: [
-
-                                              DataColumn(
-                                                label: _buildColumnLabel(
-                                                  '팀',
-                                                  _TableColumn.team,
-                                                ),
-                                              ),
-                                              DataColumn(
-                                                label: _buildColumnLabel(
-                                                  '사용자',
-                                                  _TableColumn.user,
-                                                ),
-                                              ),
-                                              DataColumn(
-                                                label: _buildColumnLabel(
-                                                  '장비',
-                                                  _TableColumn.asset,
-                                                ),
-                                              ),
-                                              DataColumn(
-                                                label: _buildColumnLabel(
-                                                  '자산번호',
-                                                  _TableColumn.assetCode,
-                                                ),
-                                              ),
-                                              DataColumn(
-                                                label: _buildColumnLabel(
-                                                  '관리자',
-                                                  _TableColumn.manager,
-                                                ),
-                                              ),
-                                              DataColumn(
-                                                label: _buildColumnLabel(
-                                                  '위치',
-                                                  _TableColumn.location,
-                                                ),
-                                              ),
-                                              DataColumn(
-                                                label: _buildColumnLabel(
-                                                  '인증여부',
-                                                  _TableColumn.verificationStatus,
-                                                ),
-                                              ),
-                                              DataColumn(
-                                                label: _buildColumnLabel(
-                                                  '바코드사진',
-                                                  _TableColumn.barcodePhoto,
-                                                ),
-                                              ),
-                                            ],
-                                            rows: [
-                                              for (final row in pageRows)
-                                                DataRow(
-                                                  cells: [
-                                                    DataCell(
-                                                      _buildTableText(
-                                                        row.teamName,
-                                                        _TableColumn.team,
-                                                      ),
-                                                    ),
-                                                    DataCell(
-                                                      _buildTableText(
-                                                        row.userName,
-                                                        _TableColumn.user,
-                                                      ),
-                                                    ),
-                                                    DataCell(
-                                                      _buildTableText(
-                                                        row.assetType,
-                                                        _TableColumn.asset,
-                                                      ),
-                                                    ),
-                                                    DataCell(
-                                                      _buildTableText(
-                                                        row.assetCode,
-                                                        _TableColumn.assetCode,
-                                                      ),
-                                                    ),
-                                                    DataCell(
-                                                      _buildTableText(
-                                                        row.manager,
-                                                        _TableColumn.manager,
-                                                      ),
-                                                    ),
-                                                    DataCell(
-                                                      _buildTableText(
-                                                        row.location,
-                                                        _TableColumn.location,
-                                                      ),
-                                                    ),
-                                                    DataCell(
-                                                      _buildVerificationCell(row.isVerified),
-                                                    ),
-                                                    DataCell(
-                                                      _buildTableText(
-                                                        row.hasPhoto ? '사진 있음' : '없음',
-                                                        _TableColumn.barcodePhoto,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                            ],
+                                    child: SizedBox(
+                                      width: tableWidth,
+                                      height: constraints.maxHeight,
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                                        children: [
+                                          DataTable(
+                                            columnSpacing: 32,
+                                            horizontalMargin: 0,
+                                            headingRowHeight: 44,
+                                            dataRowMinHeight: 0,
+                                            dataRowMaxHeight: 0,
+                                            columns: columns,
+                                            rows: const [],
                                           ),
-                                        ),
+                                          const Divider(height: 0),
+                                          Expanded(
+                                            child: Scrollbar(
+                                              controller: _verticalScrollController,
+                                              thumbVisibility: true,
+                                              child: SingleChildScrollView(
+                                                controller: _verticalScrollController,
+                                                child: DataTable(
+                                                  columnSpacing: 32,
+                                                  horizontalMargin: 0,
+                                                  headingRowHeight: 0,
+                                                  dataRowMinHeight: 44,
+                                                  dataRowMaxHeight: 72,
+                                                  showCheckboxColumn: false,
+                                                  columns: columns,
+                                                  rows: rows,
+
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                   );
                               },
@@ -392,9 +335,14 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
   Widget _buildColumnLabel(String label, _TableColumn column) {
     return SizedBox(
       width: _columnWidths[column],
-      child: Text(
-        label,
-        style: const TextStyle(fontWeight: FontWeight.w600),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          label,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+          overflow: TextOverflow.ellipsis,
+        ),
+
       ),
     );
   }
@@ -402,10 +350,14 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
   Widget _buildTableText(String text, _TableColumn column) {
     return SizedBox(
       width: _columnWidths[column],
-      child: Text(
-        text,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          text,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+
       ),
     );
   }
@@ -418,6 +370,90 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
         child: _VerificationCell(isVerified: isVerified),
       ),
     );
+  }
+
+  List<DataColumn> _buildColumns() {
+    return [
+      DataColumn(
+        label: _buildColumnLabel('팀', _TableColumn.team),
+      ),
+      DataColumn(
+        label: _buildColumnLabel('사용자', _TableColumn.user),
+      ),
+      DataColumn(
+        label: _buildColumnLabel('장비', _TableColumn.asset),
+      ),
+      DataColumn(
+        label: _buildColumnLabel('자산번호', _TableColumn.assetCode),
+      ),
+      DataColumn(
+        label: _buildColumnLabel('관리자', _TableColumn.manager),
+      ),
+      DataColumn(
+        label: _buildColumnLabel('위치', _TableColumn.location),
+      ),
+      DataColumn(
+        label: _buildColumnLabel('인증여부', _TableColumn.verificationStatus),
+      ),
+      DataColumn(
+        label: _buildColumnLabel('바코드사진', _TableColumn.barcodePhoto),
+      ),
+    ];
+  }
+
+  List<DataRow> _buildRows(List<_RowData> pageRows) {
+    return [
+      for (final row in pageRows)
+        DataRow(
+          cells: [
+            DataCell(
+              _buildTableText(
+                row.teamName,
+                _TableColumn.team,
+              ),
+            ),
+            DataCell(
+              _buildTableText(
+                row.userName,
+                _TableColumn.user,
+              ),
+            ),
+            DataCell(
+              _buildTableText(
+                row.assetType,
+                _TableColumn.asset,
+              ),
+            ),
+            DataCell(
+              _buildTableText(
+                row.assetCode,
+                _TableColumn.assetCode,
+              ),
+            ),
+            DataCell(
+              _buildTableText(
+                row.manager,
+                _TableColumn.manager,
+              ),
+            ),
+            DataCell(
+              _buildTableText(
+                row.location,
+                _TableColumn.location,
+              ),
+            ),
+            DataCell(
+              _buildVerificationCell(row.isVerified),
+            ),
+            DataCell(
+              _buildTableText(
+                row.hasPhoto ? '사진 있음' : '없음',
+                _TableColumn.barcodePhoto,
+              ),
+            ),
+          ],
+        ),
+    ];
   }
 }
 
