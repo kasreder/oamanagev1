@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../providers/inspection_provider.dart';
 import '../common/app_scaffold.dart';
 import 'verification_utils.dart';
+import 'widgets/verification_action_section.dart';
 
 class AssetVerificationDetailPage extends StatelessWidget {
   const AssetVerificationDetailPage({super.key, required this.assetUid});
@@ -35,6 +36,7 @@ class AssetVerificationDetailPage extends StatelessWidget {
           final assetType = resolveAssetType(inspection, asset);
           final manager = resolveManager(asset);
           final location = resolveLocation(asset);
+          final resolvedAssetCode = inspection?.assetUid ?? assetUid;
           final isVerified = inspection?.isVerified;
           final verificationLabel = switch (isVerified) {
             true => '인증 완료',
@@ -90,7 +92,7 @@ class AssetVerificationDetailPage extends StatelessWidget {
                             ),
                             _DetailRow(
                               label: '자산번호',
-                              child: SelectableText(inspection?.assetUid ?? assetUid),
+                              child: SelectableText(resolvedAssetCode),
                             ),
                             _DetailRow(
                               label: '관리자',
@@ -160,6 +162,8 @@ class AssetVerificationDetailPage extends StatelessWidget {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    VerificationActionSection(assetUids: [resolvedAssetCode]),
                   ],
                 ),
               );
