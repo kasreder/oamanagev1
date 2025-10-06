@@ -21,18 +21,12 @@ class VerificationActionSection extends StatefulWidget {
 }
 
 class _VerificationActionSectionState extends State<VerificationActionSection> {
-  final TextEditingController _noteController = TextEditingController();
+
   final GlobalKey<SignaturePadState> _signatureKey = GlobalKey<SignaturePadState>();
 
   bool _isSavingSignature = false;
   bool _isLoadingSignature = false;
   String? _savedSignaturePath;
-
-  @override
-  void dispose() {
-    _noteController.dispose();
-    super.dispose();
-  }
 
   @override
   void initState() {
@@ -41,6 +35,7 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
   }
 
   @override
+
   void didUpdateWidget(covariant VerificationActionSection oldWidget) {
     super.didUpdateWidget(oldWidget);
     final assetChanged = oldWidget.primaryAssetUid != widget.primaryAssetUid;
@@ -51,17 +46,8 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
     }
   }
 
-  void _submit() {
-    FocusScope.of(context).unfocus();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('인증 기능이 준비 중입니다.'),
-      ),
-    );
-  }
+  void _clearSignature() {
 
-  void _clear() {
-    _noteController.clear();
     _signatureKey.currentState?.clear();
     setState(() {});
   }
@@ -137,7 +123,8 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
         _savedSignaturePath = file.path;
         _isSavingSignature = false;
       });
-      _showSnackBar('서명이 저장되었습니다. (${file.path})');
+      _showSnackBar('서명이 저장되어 인증이 완료되었습니다. (${file.path})');
+
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -176,6 +163,7 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
                   .textTheme
                   .bodyMedium
                   ?.copyWith(fontWeight: FontWeight.w600),
+
             ),
             const SizedBox(height: 8),
             SizedBox(
@@ -186,10 +174,7 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
             Row(
               children: [
                 OutlinedButton.icon(
-                  onPressed: () {
-                    _signatureKey.currentState?.clear();
-                    setState(() {});
-                  },
+                  onPressed: _clearSignature,
                   icon: const Icon(Icons.refresh),
                   label: const Text('서명 다시하기'),
                 ),
@@ -211,43 +196,29 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
             if (_isLoadingSignature)
               const Text('저장된 서명을 확인하는 중입니다...')
             else if (_savedSignaturePath != null)
-              SelectableText('저장 위치: $_savedSignaturePath')
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Chip(
+                    avatar: const Icon(
+                      Icons.verified_outlined,
+                      color: Colors.white,
+                    ),
+                    backgroundColor: Colors.green,
+                    label: const Text(
+                      '인증 완료',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  SelectableText('저장 위치: $_savedSignaturePath'),
+                ],
+              )
             else
-              const Text('저장된 서명이 없습니다.'),
-            const SizedBox(height: 4),
-            const Text(
-              '※ 서명 이미지는 임시로 assets/dummy/sign 폴더에 저장됩니다.',
-              style: TextStyle(color: Colors.grey),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _noteController,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: '비고',
-                hintText: '인증 관련 메모를 입력하세요.',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                ElevatedButton.icon(
-                  onPressed: _submit,
-                  icon: const Icon(Icons.verified_outlined),
-                  label: const Text('인증 완료 처리'),
-                ),
-                const SizedBox(width: 12),
-                OutlinedButton.icon(
-                  onPressed: _clear,
-                  icon: const Icon(Icons.clear),
-                  label: const Text('입력 초기화'),
-                ),
-              ],
-            ),
+              const Text('서명 저장 시 인증이 완료됩니다.'),
             const SizedBox(height: 8),
             const Text(
-              '※ 실제 인증 절차 연동 전까지는 알림 메시지만 표시됩니다.',
+              '※ 서명 이미지는 임시로 assets/dummy/sign 폴더에 저장됩니다.',
               style: TextStyle(color: Colors.grey),
             ),
           ],
