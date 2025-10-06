@@ -26,6 +26,14 @@ const OUT = String(args.out ?? './mock');
 
 /* ------------ utils ------------ */
 const pick = (arr) => arr[randomInt(0, arr.length)];
+const shuffle = (arr) => {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = randomInt(0, i + 1);
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+};
 const pad = (n, w) => String(n).padStart(w, '0');
 const iso = (d) => new Date(d).toISOString();
 const chance = (p) => Math.random() < p;
@@ -236,16 +244,14 @@ function generateAssets(n, users) {
 
 function generateInspections(total, assets, users) {
   const list = [];
-  const countPerAsset = new Map();
+  const uniqueTotal = Math.min(total, assets.length);
+  const assetPool = shuffle(assets).slice(0, uniqueTotal);
 
-  for (let i = 0; i < total; i++) {
-    const asset = pick(assets);
+  for (let i = 0; i < assetPool.length; i++) {
+    const asset = assetPool[i];
     const user = asset.user_id ? users[asset.user_id - 1] : pick(users);
     const inspector = koreanName();
     const deptConfirm = user?.organization_dept ?? pick(DEPTS);
-
-    const next = (countPerAsset.get(asset.id) ?? 0) + 1;
-    countPerAsset.set(asset.id, next);
 
     const when = randBetweenDays(150, 0);
 
@@ -265,7 +271,7 @@ function generateInspections(total, assets, users) {
         usage: asset.user_id ? "개인" : "공용",
         serial_number: asset.serial_number
       },
-      inspection_count: next,
+      inspection_count: 1,
       inspection_date: iso(when),
       // maintenance_company_staff 제거됨
       department_confirm: deptConfirm,
@@ -285,17 +291,6 @@ function generateInspections(total, assets, users) {
     }
 
     list.push(base);
-  }
-
-  // 동일 자산의 점검 이력 순번 재정렬
-  const byAsset = new Map();
-  for (const it of list) {
-    if (!byAsset.has(it.asset_id)) byAsset.set(it.asset_id, []);
-    byAsset.get(it.asset_id).push(it);
-  }
-  for (const arr of byAsset.values()) {
-    arr.sort((a,b) => new Date(a.inspection_date) - new Date(b.inspection_date));
-    arr.forEach((it, idx) => it.inspection_count = idx + 1);
   }
   return list;
 }
