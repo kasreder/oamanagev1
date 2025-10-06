@@ -1,15 +1,15 @@
 // lib/view/asset_verification/list_page.dart
 
-import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/inspection.dart';
 import '../../providers/inspection_provider.dart';
 import '../common/app_scaffold.dart';
+import 'verification_utils.dart';
 
 class AssetVerificationListPage extends StatefulWidget {
   const AssetVerificationListPage({super.key});
@@ -65,7 +65,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
   }
 
   Future<void> _loadBarcodePhotoAssets() async {
-    final codes = await _BarcodePhotoAssetRegistry.load();
+    final codes = await BarcodePhotoRegistry.loadCodes();
     if (!mounted) return;
     setState(() {
       _barcodePhotoAssetCodes = codes;
@@ -211,7 +211,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
                                   _tableMinWidth,
                                 );
                                 final columns = _buildColumns();
-                                final rows = _buildRows(pageRows);
+                                final rows = _buildRows(context, pageRows);
 
                                 return Scrollbar(
                                   controller: _horizontalScrollController,
@@ -426,10 +426,13 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     ];
   }
 
-  List<DataRow> _buildRows(List<_RowData> pageRows) {
+  List<DataRow> _buildRows(BuildContext context, List<_RowData> pageRows) {
     return [
       for (final row in pageRows)
         DataRow(
+          onSelectChanged: (_) {
+            context.push('/asset_verification/${Uri.encodeComponent(row.assetCode)}');
+          },
           cells: [
             DataCell(
               _buildTableText(
@@ -908,15 +911,15 @@ class _RowData {
     Set<String> availableBarcodePhotos,
   ) {
     final asset = provider.assetOf(inspection.assetUid);
-    final user = _resolveUser(provider, inspection, asset);
-    final assetType = _resolveAssetType(inspection, asset);
-    final manager = _resolveManager(asset);
-    final location = _resolveLocation(asset);
-    final hasPhoto =
-        _hasBarcodePhoto(inspection.assetUid, availableBarcodePhotos);
+    final user = resolveUser(provider, inspection, asset);
+    final assetType = resolveAssetType(inspection, asset);
+    final manager = resolveManager(asset);
+    final location = resolveLocation(asset);
+    final normalizedCode = inspection.assetUid.trim().toLowerCase();
+    final hasPhoto = normalizedCode.isNotEmpty && availableBarcodePhotos.contains(normalizedCode);
 
     return _RowData(
-      teamName: _normalizeTeamName(inspection.userTeam),
+      teamName: normalizeTeamName(inspection.userTeam),
       assetCode: inspection.assetUid,
       userName: user?.name ?? '정보 없음',
       assetType: assetType.isNotEmpty ? assetType : '정보 없음',
@@ -925,103 +928,5 @@ class _RowData {
       isVerified: inspection.isVerified,
       hasPhoto: hasPhoto,
     );
-  }
-}
-
-String _normalizeTeamName(String? team) {
-  final name = team?.trim();
-  if (name == null || name.isEmpty) {
-    return '미지정 팀';
-  }
-  return name;
-}
-
-UserInfo? _resolveUser(
-  InspectionProvider provider,
-  Inspection inspection,
-  AssetInfo? asset,
-) {
-  final candidates = <String?>[
-    inspection.userId,
-    asset?.metadata['user_id'],
-    asset?.metadata['employee_id'],
-  ];
-  for (final id in candidates) {
-    if (id == null) continue;
-    final user = provider.userOf(id);
-    if (user != null) {
-      return user;
-    }
-  }
-  return null;
-}
-
-String _resolveAssetType(Inspection inspection, AssetInfo? asset) {
-  final fromInspection = inspection.assetType?.trim();
-  if (fromInspection != null && fromInspection.isNotEmpty) {
-    return fromInspection;
-  }
-  final fromAsset = asset?.assets_types.trim();
-  if (fromAsset != null && fromAsset.isNotEmpty) {
-    return fromAsset;
-  }
-  return '';
-}
-
-String _resolveManager(AssetInfo? asset) {
-  final manager = asset?.metadata['member_name']?.trim();
-  if (manager == null || manager.isEmpty) {
-    return '';
-  }
-  return manager;
-}
-
-String _resolveLocation(AssetInfo? asset) {
-  if (asset == null) return '';
-  final parts = <String?>[
-    asset.metadata['building1'],
-    asset.metadata['building'],
-    asset.metadata['floor'],
-  ].whereType<String>().map((value) => value.trim()).where((value) => value.isNotEmpty);
-  final joined = parts.join(' ');
-  if (joined.isNotEmpty) {
-    return joined;
-  }
-  return asset.location.trim();
-}
-
-bool _hasBarcodePhoto(String assetCode, Set<String> availableBarcodePhotos) {
-  final normalizedCode = assetCode.trim().toLowerCase();
-  if (normalizedCode.isEmpty) {
-    return false;
-  }
-  return availableBarcodePhotos.contains(normalizedCode);
-}
-
-class _BarcodePhotoAssetRegistry {
-  static Set<String>? _cachedCodes;
-
-  static Future<Set<String>> load() async {
-    if (_cachedCodes != null) {
-      return _cachedCodes!;
-    }
-
-    final manifestContent = await rootBundle.loadString('AssetManifest.json');
-    final Map<String, dynamic> manifestMap =
-        json.decode(manifestContent) as Map<String, dynamic>;
-
-    final codes = manifestMap.keys
-        .where((key) => key.startsWith('assets/dummy/images/'))
-        .map((key) => key.split('/').last)
-        .map((fileName) {
-          final dotIndex = fileName.lastIndexOf('.');
-          return dotIndex == -1 ? fileName : fileName.substring(0, dotIndex);
-        })
-        .where((fileName) => fileName.trim().isNotEmpty)
-        .map((fileName) => fileName.trim().toLowerCase())
-        .toSet();
-
-    _cachedCodes = codes;
-    return _cachedCodes!;
   }
 }
