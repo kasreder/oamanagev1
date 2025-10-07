@@ -355,10 +355,10 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     );
   }
 
-  Widget _buildVerificationCell(bool isVerified) {
+  Widget _buildVerificationCell(_RowData row) {
     return _buildCellContainer(
       _TableColumn.verificationStatus,
-      child: _VerificationCell(isVerified: isVerified),
+      child: _VerificationCell(inspection: row.inspection),
     );
   }
 
@@ -579,7 +579,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
               ),
             ),
             DataCell(
-              _buildVerificationCell(row.isVerified),
+              _buildVerificationCell(row),
             ),
             DataCell(
               _buildTableText(
@@ -761,13 +761,13 @@ class _FilterSection extends StatelessWidget {
 }
 
 class _VerificationCell extends StatelessWidget {
-  const _VerificationCell({required this.isVerified});
+  const _VerificationCell({required this.inspection});
 
-  final bool isVerified;
+  final Inspection inspection;
 
   @override
   Widget build(BuildContext context) {
-    if (isVerified) {
+    if (inspection.isVerified) {
       return const Text(
         '완료',
         style: TextStyle(
@@ -777,14 +777,28 @@ class _VerificationCell extends StatelessWidget {
       );
     }
     return TextButton(
-      onPressed: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('인증 기능이 준비 중입니다.'),
-          ),
-        );
-      },
+      onPressed: () => _verify(context),
       child: const Text('인증하기'),
+    );
+  }
+
+  void _verify(BuildContext context) {
+    final provider = context.read<InspectionProvider>();
+    final now = DateTime.now();
+    final updatedMemo = (inspection.memo?.trim().isNotEmpty ?? false)
+        ? inspection.memo
+        : '웹 인증';
+    final updated = inspection.copyWith(
+      isVerified: true,
+      synced: false,
+      scannedAt: now,
+      memo: updatedMemo,
+    );
+    provider.addOrUpdate(updated);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('인증이 완료되었습니다. (${inspection.assetUid})'),
+      ),
     );
   }
 }
@@ -892,24 +906,26 @@ class _PaginationControls extends StatelessWidget {
 
 class _RowData {
   _RowData({
+    required this.inspection,
     required this.teamName,
     required this.assetCode,
     required this.userName,
     required this.assetType,
     required this.manager,
     required this.location,
-    required this.isVerified,
     required this.hasPhoto,
   });
 
+  final Inspection inspection;
   final String teamName;
   final String assetCode;
   final String userName;
   final String assetType;
   final String manager;
   final String location;
-  final bool isVerified;
   final bool hasPhoto;
+
+  bool get isVerified => inspection.isVerified;
 
   factory _RowData.fromInspection(
     Inspection inspection,
@@ -925,13 +941,13 @@ class _RowData {
     final hasPhoto = normalizedCode.isNotEmpty && availableBarcodePhotos.contains(normalizedCode);
 
     return _RowData(
+      inspection: inspection,
       teamName: normalizeTeamName(inspection.userTeam),
       assetCode: inspection.assetUid,
       userName: user?.name ?? '정보 없음',
       assetType: assetType.isNotEmpty ? assetType : '정보 없음',
       manager: manager.isNotEmpty ? manager : '정보 없음',
       location: location.isNotEmpty ? location : '정보 없음',
-      isVerified: inspection.isVerified,
       hasPhoto: hasPhoto,
     );
   }
