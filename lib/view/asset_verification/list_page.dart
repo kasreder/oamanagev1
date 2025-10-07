@@ -970,12 +970,14 @@ class _RowData {
     final assetType = resolveAssetType(inspection, asset);
     final manager = resolveManager(asset);
     final location = resolveLocation(asset);
+    // 자산 정보에 조직명이 있으면 해당 값을 팀 이름으로 사용한다.
+    final teamName = resolveTeamName(inspection, asset);
     final normalizedCode = inspection.assetUid.trim().toLowerCase();
     final hasPhoto = normalizedCode.isNotEmpty && availableBarcodePhotos.contains(normalizedCode);
 
     return _RowData(
       inspection: inspection,
-      teamName: normalizeTeamName(inspection.userTeam),
+      teamName: teamName,
       assetCode: inspection.assetUid,
       userName: user?.name ?? '정보 없음',
       assetType: assetType.isNotEmpty ? assetType : '정보 없음',
