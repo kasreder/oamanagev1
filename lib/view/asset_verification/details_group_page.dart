@@ -52,10 +52,10 @@ class AssetVerificationDetailsGroupPage extends StatelessWidget {
                     ? null
                     : resolveUser(provider, primaryEntry.inspection, primaryEntry.asset);
 
-                return FutureBuilder<Set<String>>(
-                  future: BarcodePhotoRegistry.loadCodes(),
+                return FutureBuilder<Map<String, String>>(
+                  future: BarcodePhotoRegistry.loadAllPaths(),
                   builder: (context, snapshot) {
-                    final barcodeAssetCodes = snapshot.data ?? const <String>{};
+                    final barcodePhotoPaths = snapshot.data ?? const <String, String>{};
                     final isLoadingPhotos =
                         snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData;
 
@@ -80,13 +80,10 @@ class AssetVerificationDetailsGroupPage extends StatelessWidget {
                                       ),
                                     ),
                                   if (validEntries.isNotEmpty)
-                                    ...validEntries.map(
-                                      (entry) => _GroupAssetCard(
-                                        entry: entry,
-                                        hasPhoto: barcodeAssetCodes
-                                            .contains(entry.assetUid.trim().toLowerCase()),
-                                        isLoadingPhoto: isLoadingPhotos,
-                                      ),
+                                    _GroupAssetCard(
+                                      entries: validEntries,
+                                      photoPaths: barcodePhotoPaths,
+                                      isLoadingPhoto: isLoadingPhotos,
                                     )
                                   else
                                     Card(
@@ -136,55 +133,53 @@ class _GroupAssetEntry {
 
 class _GroupAssetCard extends StatelessWidget {
   const _GroupAssetCard({
-    required this.entry,
-    required this.hasPhoto,
+    required this.entries,
+    required this.photoPaths,
     required this.isLoadingPhoto,
   });
 
-  final _GroupAssetEntry entry;
-  final bool hasPhoto;
+  final List<_GroupAssetEntry> entries;
+  final Map<String, String> photoPaths;
   final bool isLoadingPhoto;
 
   @override
   Widget build(BuildContext context) {
-    final inspection = entry.inspection;
-    final asset = entry.asset;
+    final provider = Provider.of<InspectionProvider>(context, listen: false);
+    final rows = entries.map((entry) {
+      final inspection = entry.inspection;
+      final asset = entry.asset;
+      final teamName = normalizeTeamName(
+        inspection?.userTeam ?? asset?.metadata['organization_team'],
+      );
+      final assetType = resolveAssetType(inspection, asset);
+      final manager = resolveManager(asset);
+      final location = resolveLocation(asset);
+      final verificationState = inspection?.isVerified;
+      final verificationLabel = switch (verificationState) {
+        true => '인증 완료',
+        false => '미인증',
+        null => '실사 내역 없음',
+      };
+      final verificationColor = switch (verificationState) {
+        true => Colors.green,
+        false => Colors.orange,
+        null => Colors.grey,
+      };
+      final normalizedAssetUid = entry.assetUid.trim().toLowerCase();
+      final photoPath = photoPaths[normalizedAssetUid];
 
-    final teamName = normalizeTeamName(
-      inspection?.userTeam ?? asset?.metadata['organization_team'],
-    );
-    final assetType = resolveAssetType(inspection, asset);
-    final manager = resolveManager(asset);
-    final location = resolveLocation(asset);
-    final verificationState = inspection?.isVerified;
-    final verificationLabel = switch (verificationState) {
-      true => '인증 완료',
-      false => '미인증',
-      null => '실사 내역 없음',
-    };
-    final verificationColor = switch (verificationState) {
-      true => Colors.green,
-      false => Colors.orange,
-      null => Colors.grey,
-    };
-
-    final infoCells = <_DetailCell>[
-      _DetailCell('팀', Text(teamName.isNotEmpty ? teamName : '정보 없음')),
-      _DetailCell('사용자', Text(_resolveUserName(context, inspection, asset))),
-      _DetailCell('장비', Text(assetType.isNotEmpty ? assetType : '정보 없음')),
-      _DetailCell('관리자', Text(manager.isNotEmpty ? manager : '정보 없음')),
-      _DetailCell('위치', Text(location.isNotEmpty ? location : '정보 없음')),
-      _DetailCell(
-        '바코드사진',
-        Text(
-          isLoadingPhoto
-              ? '불러오는 중...'
-              : hasPhoto
-                  ? '사진 있음'
-                  : '사진 없음',
-        ),
-      ),
-    ];
+      return _GroupAssetRowData(
+        assetUid: entry.assetUid,
+        teamName: teamName,
+        userName: _resolveUserName(provider, inspection, asset),
+        assetType: assetType,
+        manager: manager,
+        location: location,
+        verificationLabel: verificationLabel,
+        verificationColor: verificationColor,
+        photoPath: photoPath,
+      );
+    }).toList(growable: false);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -193,26 +188,6 @@ class _GroupAssetCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  entry.assetUid,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                Chip(
-                  backgroundColor: verificationColor.withOpacity(0.15),
-                  label: Text(
-                    verificationLabel,
-                    style: TextStyle(
-                      color: verificationColor,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: DataTable(
@@ -221,18 +196,46 @@ class _GroupAssetCard extends StatelessWidget {
                     .bodyMedium
                     ?.copyWith(fontWeight: FontWeight.w700),
                 columns: [
-                  for (final cell in infoCells) DataColumn(label: Text(cell.label)),
+                  const DataColumn(label: Text('자산번호')),
+                  const DataColumn(label: Text('팀')),
+                  const DataColumn(label: Text('사용자')),
+                  const DataColumn(label: Text('장비')),
+                  const DataColumn(label: Text('관리자')),
+                  const DataColumn(label: Text('위치')),
+                  const DataColumn(label: Text('인증상태')),
+                  const DataColumn(label: Text('바코드사진')),
                 ],
                 rows: [
-                  DataRow(
-                    cells: [
-                      for (final cell in infoCells)
-                        DataCell(Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: cell.value,
-                        )),
-                    ],
-                  ),
+                  for (final row in rows)
+                    DataRow(
+                      cells: [
+                        DataCell(_wrapCell(SelectableText(row.assetUid))),
+                        DataCell(_wrapCell(Text(row.teamName.isNotEmpty ? row.teamName : '정보 없음'))),
+                        DataCell(_wrapCell(Text(row.userName))),
+                        DataCell(_wrapCell(Text(row.assetType.isNotEmpty ? row.assetType : '정보 없음'))),
+                        DataCell(_wrapCell(Text(row.manager.isNotEmpty ? row.manager : '정보 없음'))),
+                        DataCell(_wrapCell(Text(row.location.isNotEmpty ? row.location : '정보 없음'))),
+                        DataCell(
+                          _wrapCell(
+                            Chip(
+                              backgroundColor: row.verificationColor.withOpacity(0.15),
+                              label: Text(
+                                row.verificationLabel,
+                                style: TextStyle(
+                                  color: row.verificationColor,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        DataCell(
+                          _wrapCell(
+                            _buildPhotoCell(row.photoPath),
+                          ),
+                        ),
+                      ],
+                    ),
                 ],
               ),
             ),
@@ -242,20 +245,60 @@ class _GroupAssetCard extends StatelessWidget {
     );
   }
 
+  Widget _wrapCell(Widget child) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: child,
+    );
+  }
+
+  Widget _buildPhotoCell(String? photoPath) {
+    if (isLoadingPhoto) {
+      return const Text('불러오는 중...');
+    }
+    if (photoPath == null) {
+      return const Text('사진 없음');
+    }
+    return SizedBox(
+      width: 40,
+      height: 20,
+      child: Image.asset(
+        photoPath,
+        fit: BoxFit.cover,
+      ),
+    );
+  }
+
   String _resolveUserName(
-    BuildContext context,
+    InspectionProvider provider,
     Inspection? inspection,
     AssetInfo? asset,
   ) {
-    final provider = Provider.of<InspectionProvider>(context, listen: false);
     final user = resolveUser(provider, inspection, asset);
     return user?.name ?? '정보 없음';
   }
 }
 
-class _DetailCell {
-  const _DetailCell(this.label, this.value);
+class _GroupAssetRowData {
+  const _GroupAssetRowData({
+    required this.assetUid,
+    required this.teamName,
+    required this.userName,
+    required this.assetType,
+    required this.manager,
+    required this.location,
+    required this.verificationLabel,
+    required this.verificationColor,
+    required this.photoPath,
+  });
 
-  final String label;
-  final Widget value;
+  final String assetUid;
+  final String teamName;
+  final String userName;
+  final String assetType;
+  final String manager;
+  final String location;
+  final String verificationLabel;
+  final Color verificationColor;
+  final String? photoPath;
 }
