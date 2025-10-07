@@ -1,7 +1,6 @@
 // lib/view/asset_verification/list_page.dart
 
 import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -542,7 +541,8 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Checkbox(
-                    value: (checkboxValue ?? false),
+                    value: checkboxValue,
+
                     tristate: hasRows,
                     onChanged: hasRows
                         ? (value) =>
