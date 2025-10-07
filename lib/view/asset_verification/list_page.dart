@@ -41,6 +41,10 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     _TableColumn.barcodePhoto: 1,
   };
   static const double _tableMinWidth = 1160;
+  static const double _headerHeight = 48;
+  static const double _checkboxHorizontalMargin = 16;
+  static const double _checkboxColumnWidth =
+      _checkboxHorizontalMargin * 2 + Checkbox.width;
   final ScrollController _horizontalScrollController = ScrollController();
   final ScrollController _verticalScrollController = ScrollController();
 
@@ -252,30 +256,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.stretch,
                                         children: [
-                                          DataTable(
-                                            columnSpacing: 0,
-                                            horizontalMargin: 0,
-                                            headingRowHeight: 48,
-                                            dataRowMinHeight: 0,
-                                            dataRowMaxHeight: 0,
-                                            columns: columns,
-                                            // ✅ 헤더 체크박스 여백을 본문과 동일하게
-                                            checkboxHorizontalMargin: 16,
-                                            showCheckboxColumn: true,
-                                            // ✅ 헤더 체크박스 표시 + 전체 선택/해제
-                                            onSelectAll: (isAllSelected) {
-                                              setState(() {
-                                                if (isAllSelected == true) {
-                                                  _selectedAssetCodes = pageRows.map((r) => r.assetCode).toSet();
-                                                } else {
-                                                  _selectedAssetCodes.clear();
-                                                }
-                                              });
-                                            },
-
-                                            // 헤더 전용이라 데이터 행은 없음 (빈 리스트 OK)
-                                            rows: const [],
-                                          ),
+                                          _buildTableHeader(pageRows),
 
                                           const Divider(height: 0),
                                           Expanded(
@@ -509,8 +490,91 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
   Widget _barcodePhotoHeaderCell(TextStyle? style) =>
       _headerCell('바코드사진', _TableColumn.barcodePhoto, style);
 
+  Widget _buildTableHeader(List<_RowData> pageRows) {
+    final theme = Theme.of(context);
+    final dataTableTheme = DataTableTheme.of(context);
+    final headerColor =
+        dataTableTheme.headingRowColor?.resolve(const <MaterialState>{}) ??
+            theme.colorScheme.surface;
+    final headerHeight =
+        dataTableTheme.headingRowHeight ?? _headerHeight;
+    final headerStyle =
+        dataTableTheme.headingTextStyle ?? theme.textTheme.labelLarge;
+
+    final headerCells = <Widget>[
+      _teamHeaderCell(headerStyle),
+      _userHeaderCell(headerStyle),
+      _assetHeaderCell(headerStyle),
+      _assetCodeHeaderCell(headerStyle),
+      _managerHeaderCell(headerStyle),
+      _locationHeaderCell(headerStyle),
+      _verificationHeaderCell(headerStyle),
+      _barcodePhotoHeaderCell(headerStyle),
+    ];
+
+    final selectedOnPage = pageRows
+        .where((row) => _selectedAssetCodes.contains(row.assetCode))
+        .length;
+    final hasRows = pageRows.isNotEmpty;
+    final allSelected = hasRows && selectedOnPage == pageRows.length;
+    final anySelected = selectedOnPage > 0;
+    final bool? checkboxValue = !hasRows
+        ? false
+        : allSelected
+            ? true
+            : anySelected
+                ? null
+                : false;
+
+    return Material(
+      color: headerColor,
+      child: SizedBox(
+        height: headerHeight,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: _checkboxColumnWidth,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: _checkboxHorizontalMargin,
+                ),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Checkbox(
+                    value: checkboxValue,
+                    tristate: hasRows,
+                    onChanged: hasRows
+                        ? (value) =>
+                            _onHeaderCheckboxChanged(pageRows, value ?? false)
+                        : null,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ),
+            ),
+            ...headerCells,
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _onHeaderCheckboxChanged(List<_RowData> pageRows, bool shouldSelectAll) {
+    setState(() {
+      if (shouldSelectAll) {
+        _selectedAssetCodes = pageRows.map((r) => r.assetCode).toSet();
+      } else {
+        _selectedAssetCodes.clear();
+      }
+    });
+  }
+
   List<DataColumn> _buildColumns() {
-    final headerStyle = Theme.of(context).textTheme.labelLarge;
+    final theme = Theme.of(context);
+    final headerStyle =
+        DataTableTheme.of(context).headingTextStyle ?? theme.textTheme.labelLarge;
     return [
       DataColumn(
         label: _teamHeaderCell(headerStyle),
