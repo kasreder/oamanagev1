@@ -21,7 +21,6 @@ class VerificationActionSection extends StatefulWidget {
 }
 
 class _VerificationActionSectionState extends State<VerificationActionSection> {
-
   final GlobalKey<SignaturePadState> _signatureKey = GlobalKey<SignaturePadState>();
 
   bool _isSavingSignature = false;
@@ -35,19 +34,16 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
   }
 
   @override
-
   void didUpdateWidget(covariant VerificationActionSection oldWidget) {
     super.didUpdateWidget(oldWidget);
     final assetChanged = oldWidget.primaryAssetUid != widget.primaryAssetUid;
-    final userChanged = oldWidget.primaryUser?.id != widget.primaryUser?.id ||
-        oldWidget.primaryUser?.name != widget.primaryUser?.name;
+    final userChanged = oldWidget.primaryUser?.id != widget.primaryUser?.id || oldWidget.primaryUser?.name != widget.primaryUser?.name;
     if (assetChanged || userChanged) {
       _loadExistingSignature();
     }
   }
 
   void _clearSignature() {
-
     _signatureKey.currentState?.clear();
     setState(() {});
   }
@@ -124,7 +120,6 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
         _isSavingSignature = false;
       });
       _showSnackBar('서명이 저장되어 인증이 완료되었습니다. (${file.path})');
-
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -146,29 +141,19 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '인증 처리',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 12),
-            Text('선택된 자산: $assetCount건'),
-            const SizedBox(height: 12),
-            Text(
-              '자필 서명 (필압 지원)',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
-
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 200,
-              child: SignaturePad(key: _signatureKey),
+            Row(
+              children: [
+                Text(
+                  '사인란',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(width: 12),
+                Text(' 인증처리 할 선택 자산: $assetCount건'),
+              ],
             ),
             const SizedBox(height: 8),
             Row(
@@ -191,6 +176,11 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
                   label: Text(_isSavingSignature ? '저장 중...' : '서명 저장'),
                 ),
               ],
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 100,
+              child: SignaturePad(key: _signatureKey),
             ),
             const SizedBox(height: 8),
             if (_isLoadingSignature)
@@ -216,11 +206,6 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
               )
             else
               const Text('서명 저장 시 인증이 완료됩니다.'),
-            const SizedBox(height: 8),
-            const Text(
-              '※ 서명 이미지는 임시로 assets/dummy/sign 폴더에 저장됩니다.',
-              style: TextStyle(color: Colors.grey),
-            ),
           ],
         ),
       ),
