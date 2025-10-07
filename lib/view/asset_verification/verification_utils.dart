@@ -86,6 +86,11 @@ class BarcodePhotoRegistry {
     return paths[normalized];
   }
 
+  static Future<Map<String, String>> loadAllPaths() async {
+    final paths = await _loadPaths();
+    return Map.unmodifiable(paths);
+  }
+
   static Future<bool> hasPhoto(String assetCode) async {
     final paths = await _loadPaths();
     final normalized = _normalize(assetCode);
