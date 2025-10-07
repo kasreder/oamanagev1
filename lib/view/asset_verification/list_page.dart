@@ -781,7 +781,28 @@ class _VerificationCell extends StatelessWidget {
         final assetCode = Uri.encodeComponent(inspection.assetUid);
         context.push('/asset_verification/$assetCode');
       },
+
       child: const Text('인증하기'),
+    );
+  }
+
+  void _verify(BuildContext context) {
+    final provider = context.read<InspectionProvider>();
+    final now = DateTime.now();
+    final updatedMemo = (inspection.memo?.trim().isNotEmpty ?? false)
+        ? inspection.memo
+        : '웹 인증';
+    final updated = inspection.copyWith(
+      isVerified: true,
+      synced: false,
+      scannedAt: now,
+      memo: updatedMemo,
+    );
+    provider.addOrUpdate(updated);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('인증이 완료되었습니다. (${inspection.assetUid})'),
+      ),
     );
   }
 }
