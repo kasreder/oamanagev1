@@ -154,7 +154,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
           title: '팀별 자산 인증 현황',
           selectedIndex: 2,
           body: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(5),
             child: Column(
               children: [
                 _FilterSection(
@@ -168,7 +168,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
                   selectedCount: selectedCount,
                   onVerifySelected: () => _onVerifySelected(context, filteredRows),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 1),
                 Expanded(
                   child: filteredRows.isEmpty
                       ? const Center(child: Text('표시할 자산 실사 이력이 없습니다.'))
@@ -340,7 +340,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
       case _TableColumn.verificationStatus:
         return row.isVerified ? '완료' : '미인증';
       case _TableColumn.barcodePhoto:
-        return row.hasPhoto ? '사진 있음' : '사진 없음';
+        return row.hasPhoto ? '사진 있음' : '없음';
     }
   }
 
@@ -666,9 +666,9 @@ class _FilterSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(10),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Row(
               children: [
@@ -680,6 +680,7 @@ class _FilterSection extends StatelessWidget {
                         .map(
                           (value) => DropdownMenuItem(
                             value: value,
+                            alignment: Alignment.center,
                             child: Text(value.label),
                           ),
                         )
@@ -691,6 +692,7 @@ class _FilterSection extends StatelessWidget {
                       contentPadding: EdgeInsets.zero,
                     ),
                     isDense: true,
+                    alignment: Alignment.center,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -706,17 +708,34 @@ class _FilterSection extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                ElevatedButton.icon(
+                const SizedBox(width: 6),
+                ElevatedButton(
                   onPressed: onSearch,
-                  icon: const Icon(Icons.search),
-                  label: const Text('검색'),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(40, 40), // ✅ 버튼 전체 크기
+                    padding: EdgeInsets.zero, // ✅ 내부 여백 제거
+                    shape: const CircleBorder(), // ✅ 완전한 원형 버튼
+                    visualDensity: VisualDensity.compact, // ✅ 시각적 여백 줄이기
+                    ),
+                  child: const Icon(
+                      Icons.search,
+                    size: 18,
+                  ),
                 ),
-                const SizedBox(width: 12),
-                TextButton.icon(
+
+                const SizedBox(width: 6),
+                ElevatedButton(
                   onPressed: onFilterReset,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('초기화'),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(40, 40), // ✅ 버튼 전체 크기
+                    padding: EdgeInsets.zero, // ✅ 내부 여백 제거
+                    shape: const CircleBorder(), // ✅ 완전한 원형 버튼
+                    visualDensity: VisualDensity.compact, // ✅ 시각적 여백 줄이기
+                  ),
+                  child: const Icon(
+                    Icons.refresh,
+                    size: 18, // ✅ 아이콘 크기 축소
+                  ),
                 ),
               ],
             ),
