@@ -93,7 +93,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
               ];
 
               return Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(5),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -104,7 +104,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                           children: [
                             Card(
                               child: Padding(
-                                padding: const EdgeInsets.all(20),
+                                padding: const EdgeInsets.all(5),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -112,7 +112,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                                       '자산 정보',
                                       style: Theme.of(context).textTheme.titleMedium,
                                     ),
-                                    const SizedBox(height: 16),
+                                    const SizedBox(height: 5),
                                     SingleChildScrollView(
                                       scrollDirection: Axis.horizontal,
                                       child: DataTable(
@@ -149,7 +149,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 2),
                             Card(
                               child: Padding(
                                 padding: const EdgeInsets.all(20),
@@ -216,7 +216,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 2),
                     VerificationActionSection(
                       assetUids: [resolvedAssetCode],
                       primaryAssetUid: resolvedAssetCode,

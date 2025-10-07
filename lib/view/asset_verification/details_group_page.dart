@@ -60,7 +60,7 @@ class AssetVerificationDetailsGroupPage extends StatelessWidget {
                         snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData;
 
                     return Padding(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(5),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -72,7 +72,7 @@ class AssetVerificationDetailsGroupPage extends StatelessWidget {
                                   if (missingAssets.isNotEmpty)
                                     Card(
                                       child: Padding(
-                                        padding: const EdgeInsets.all(16),
+                                        padding: const EdgeInsets.all(5),
                                         child: Text(
                                           '다음 자산의 정보를 찾을 수 없습니다: ${missingAssets.join(', ')}',
                                           style: const TextStyle(color: Colors.redAccent),
@@ -88,7 +88,7 @@ class AssetVerificationDetailsGroupPage extends StatelessWidget {
                                   else
                                     Card(
                                       child: Padding(
-                                        padding: const EdgeInsets.all(16),
+                                        padding: const EdgeInsets.all(5),
                                         child: Text(
                                           '표시할 자산 상세 정보가 없습니다.',
                                           style: Theme.of(context).textTheme.bodyMedium,
