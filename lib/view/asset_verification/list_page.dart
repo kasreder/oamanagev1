@@ -673,7 +673,7 @@ class _FilterSection extends StatelessWidget {
             Row(
               children: [
                 SizedBox(
-                  width: 200,
+                  width: 100,
                   child: DropdownButtonFormField<_TableColumn>(
                     value: selectedColumn,
                     items: _TableColumn.values
