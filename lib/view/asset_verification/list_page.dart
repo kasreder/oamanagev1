@@ -18,7 +18,6 @@ class AssetVerificationListPage extends StatefulWidget {
 }
 
 class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
-  static const _allLabel = '전체';
   static const Map<_TableColumn, double> _columnWidths = {
     _TableColumn.team: 100,
     _TableColumn.user: 100,
@@ -50,17 +49,11 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
   Set<String> _barcodePhotoAssetCodes = const <String>{};
   Set<String> _selectedAssetCodes = <String>{};
 
-  _PrimaryFilterField _selectedPrimaryField = _PrimaryFilterField.team;
-  String _selectedPrimaryValue = _allLabel;
-  _PrimaryFilterField _appliedPrimaryField = _PrimaryFilterField.team;
-  String _appliedPrimaryValue = _allLabel;
-
-  _SecondaryFilterField _selectedSecondaryField = _SecondaryFilterField.verificationStatus;
-  _VerificationStatusFilter _selectedVerificationValue = _VerificationStatusFilter.all;
-  _BarcodePhotoFilter _selectedBarcodeValue = _BarcodePhotoFilter.all;
-  _SecondaryFilterField _appliedSecondaryField = _SecondaryFilterField.verificationStatus;
-  _VerificationStatusFilter _appliedVerificationValue = _VerificationStatusFilter.all;
-  _BarcodePhotoFilter _appliedBarcodeValue = _BarcodePhotoFilter.all;
+  _TableColumn _selectedSearchColumn = _TableColumn.team;
+  String _searchKeyword = '';
+  _TableColumn _appliedSearchColumn = _TableColumn.team;
+  String _appliedSearchKeyword = '';
+  late final TextEditingController _searchController;
   int _currentPage = 0;
 
   static const _pageSize = 20;
@@ -68,11 +61,13 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
   @override
   void initState() {
     super.initState();
+    _searchController = TextEditingController(text: _searchKeyword);
     _loadBarcodePhotoAssets();
   }
 
   @override
   void dispose() {
+    _searchController.dispose();
     _horizontalScrollController.dispose();
     _verticalScrollController.dispose();
     super.dispose();
@@ -86,54 +81,25 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     });
   }
 
-  void _onPrimaryFieldChanged(_PrimaryFilterField? value) {
+  void _onSearchColumnChanged(_TableColumn? value) {
     if (value == null) return;
     setState(() {
-      _selectedPrimaryField = value;
-      _selectedPrimaryValue = _allLabel;
+      _selectedSearchColumn = value;
     });
   }
 
-  void _onPrimaryValueChanged(String? value) {
-    if (value == null) return;
+  void _onSearchKeywordChanged(String value) {
     setState(() {
-      _selectedPrimaryValue = value;
-    });
-  }
-
-  void _onSecondaryFieldChanged(_SecondaryFilterField? value) {
-    if (value == null) return;
-    setState(() {
-      _selectedSecondaryField = value;
-      if (value == _SecondaryFilterField.verificationStatus) {
-        _selectedVerificationValue = _VerificationStatusFilter.all;
-      } else {
-        _selectedBarcodeValue = _BarcodePhotoFilter.all;
-      }
-    });
-  }
-
-  void _onVerificationValueChanged(_VerificationStatusFilter? value) {
-    if (value == null) return;
-    setState(() {
-      _selectedVerificationValue = value;
-    });
-  }
-
-  void _onBarcodeValueChanged(_BarcodePhotoFilter? value) {
-    if (value == null) return;
-    setState(() {
-      _selectedBarcodeValue = value;
+      _searchKeyword = value;
     });
   }
 
   void _onSearch() {
+    final keyword = _searchController.text;
     setState(() {
-      _appliedPrimaryField = _selectedPrimaryField;
-      _appliedPrimaryValue = _selectedPrimaryValue;
-      _appliedSecondaryField = _selectedSecondaryField;
-      _appliedVerificationValue = _selectedVerificationValue;
-      _appliedBarcodeValue = _selectedBarcodeValue;
+      _searchKeyword = keyword;
+      _appliedSearchColumn = _selectedSearchColumn;
+      _appliedSearchKeyword = keyword.trim();
 
       _currentPage = 0;
     });
@@ -147,16 +113,11 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
 
   void _resetFilters() {
     setState(() {
-      _selectedPrimaryField = _PrimaryFilterField.team;
-      _selectedPrimaryValue = _allLabel;
-      _appliedPrimaryField = _PrimaryFilterField.team;
-      _appliedPrimaryValue = _allLabel;
-      _selectedSecondaryField = _SecondaryFilterField.verificationStatus;
-      _selectedVerificationValue = _VerificationStatusFilter.all;
-      _selectedBarcodeValue = _BarcodePhotoFilter.all;
-      _appliedSecondaryField = _SecondaryFilterField.verificationStatus;
-      _appliedVerificationValue = _VerificationStatusFilter.all;
-      _appliedBarcodeValue = _BarcodePhotoFilter.all;
+      _selectedSearchColumn = _TableColumn.team;
+      _appliedSearchColumn = _TableColumn.team;
+      _searchKeyword = '';
+      _appliedSearchKeyword = '';
+      _searchController.text = '';
 
       _currentPage = 0;
     });
@@ -167,17 +128,6 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     return Consumer<InspectionProvider>(
       builder: (context, provider, _) {
         final rows = _rowsFromProvider(provider);
-        final primaryOptions = _primaryOptionsByField(rows);
-        final primaryValuesForSelectedField =
-            primaryOptions[_selectedPrimaryField] ?? const [_allLabel];
-        if (!primaryValuesForSelectedField.contains(_selectedPrimaryValue)) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            setState(() {
-              _selectedPrimaryValue = _allLabel;
-            });
-          });
-        }
         final filteredRows = _applyFilters(rows);
         final visibleAssetCodes = filteredRows.map((row) => row.assetCode).toSet();
         if (_selectedAssetCodes.difference(visibleAssetCodes).isNotEmpty) {
@@ -208,17 +158,10 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
             child: Column(
               children: [
                 _FilterSection(
-                  primaryField: _selectedPrimaryField,
-                  primaryValue: _selectedPrimaryValue,
-                  primaryValueOptions: primaryOptions,
-                  onPrimaryFieldChanged: _onPrimaryFieldChanged,
-                  onPrimaryValueChanged: _onPrimaryValueChanged,
-                  secondaryField: _selectedSecondaryField,
-                  selectedVerificationValue: _selectedVerificationValue,
-                  selectedBarcodeValue: _selectedBarcodeValue,
-                  onSecondaryFieldChanged: _onSecondaryFieldChanged,
-                  onVerificationValueChanged: _onVerificationValueChanged,
-                  onBarcodeValueChanged: _onBarcodeValueChanged,
+                  selectedColumn: _selectedSearchColumn,
+                  onColumnChanged: _onSearchColumnChanged,
+                  searchController: _searchController,
+                  onKeywordChanged: _onSearchKeywordChanged,
                   onSearch: _onSearch,
                   onFilterReset: _resetFilters,
                   resultCount: filteredRows.length,
@@ -366,49 +309,39 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     return rows;
   }
 
-  Map<_PrimaryFilterField, List<String>> _primaryOptionsByField(List<_RowData> rows) {
-    final options = <_PrimaryFilterField, List<String>>{};
-
-    List<String> buildOptions(Iterable<String> values) {
-      final unique = values.toSet().toList()
-        ..sort((a, b) => a.compareTo(b));
-      return [_allLabel, ...unique];
+  List<_RowData> _applyFilters(List<_RowData> rows) {
+    final keyword = _appliedSearchKeyword.trim().toLowerCase();
+    if (keyword.isEmpty) {
+      return rows;
     }
 
-    options[_PrimaryFilterField.team] = buildOptions(rows.map((row) => row.teamName));
-    options[_PrimaryFilterField.name] = buildOptions(rows.map((row) => row.userName));
-    options[_PrimaryFilterField.assetType] = buildOptions(rows.map((row) => row.assetType));
-
-    return options;
+    return rows
+        .where((row) {
+          final value = _valueForColumn(row, _appliedSearchColumn).toLowerCase();
+          return value.contains(keyword);
+        })
+        .toList(growable: false);
   }
 
-  List<_RowData> _applyFilters(List<_RowData> rows) {
-    return rows.where((row) {
-      final matchesPrimary = switch (_appliedPrimaryField) {
-        _PrimaryFilterField.team =>
-            _appliedPrimaryValue == _allLabel || row.teamName == _appliedPrimaryValue,
-        _PrimaryFilterField.name =>
-            _appliedPrimaryValue == _allLabel || row.userName == _appliedPrimaryValue,
-        _PrimaryFilterField.assetType =>
-            _appliedPrimaryValue == _allLabel || row.assetType == _appliedPrimaryValue,
-      };
-
-      final matchesSecondary = switch (_appliedSecondaryField) {
-        _SecondaryFilterField.verificationStatus => switch (_appliedVerificationValue) {
-            _VerificationStatusFilter.all => true,
-            _VerificationStatusFilter.verified => row.isVerified,
-            _VerificationStatusFilter.unverified => !row.isVerified,
-          },
-        _SecondaryFilterField.barcodePhoto => switch (_appliedBarcodeValue) {
-            _BarcodePhotoFilter.all => true,
-            _BarcodePhotoFilter.withPhoto => row.hasPhoto,
-            _BarcodePhotoFilter.withoutPhoto => !row.hasPhoto,
-          },
-      };
-
-      return matchesPrimary && matchesSecondary;
-
-    }).toList(growable: false);
+  String _valueForColumn(_RowData row, _TableColumn column) {
+    switch (column) {
+      case _TableColumn.team:
+        return row.teamName;
+      case _TableColumn.user:
+        return row.userName;
+      case _TableColumn.asset:
+        return row.assetType;
+      case _TableColumn.assetCode:
+        return row.assetCode;
+      case _TableColumn.manager:
+        return row.manager;
+      case _TableColumn.location:
+        return row.location;
+      case _TableColumn.verificationStatus:
+        return row.isVerified ? '완료' : '미인증';
+      case _TableColumn.barcodePhoto:
+        return row.hasPhoto ? '사진 있음' : '사진 없음';
+    }
   }
 
   Widget _buildTableText(String text, _TableColumn column) {
@@ -672,64 +605,6 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
   }
 }
 
-enum _PrimaryFilterField { team, name, assetType }
-
-extension on _PrimaryFilterField {
-  String get label {
-    switch (this) {
-      case _PrimaryFilterField.team:
-        return '팀';
-      case _PrimaryFilterField.name:
-        return '이름';
-      case _PrimaryFilterField.assetType:
-        return '장비';
-    }
-  }
-}
-
-enum _SecondaryFilterField { verificationStatus, barcodePhoto }
-
-extension on _SecondaryFilterField {
-  String get label {
-    switch (this) {
-      case _SecondaryFilterField.verificationStatus:
-        return '인증여부';
-      case _SecondaryFilterField.barcodePhoto:
-        return '바코드 사진';
-    }
-  }
-}
-
-enum _VerificationStatusFilter { all, verified, unverified }
-
-extension on _VerificationStatusFilter {
-  String get label {
-    switch (this) {
-      case _VerificationStatusFilter.all:
-        return '전체';
-      case _VerificationStatusFilter.verified:
-        return '인증 완료';
-      case _VerificationStatusFilter.unverified:
-        return '미인증';
-    }
-  }
-}
-
-enum _BarcodePhotoFilter { all, withPhoto, withoutPhoto }
-
-extension on _BarcodePhotoFilter {
-  String get label {
-    switch (this) {
-      case _BarcodePhotoFilter.all:
-        return '전체';
-      case _BarcodePhotoFilter.withPhoto:
-        return '사진 있음';
-      case _BarcodePhotoFilter.withoutPhoto:
-        return '사진 없음';
-    }
-  }
-}
-
 enum _TableColumn {
   team,
   user,
@@ -741,19 +616,35 @@ enum _TableColumn {
   barcodePhoto,
 }
 
+extension on _TableColumn {
+  String get label {
+    switch (this) {
+      case _TableColumn.team:
+        return '팀';
+      case _TableColumn.user:
+        return '사용자';
+      case _TableColumn.asset:
+        return '장비';
+      case _TableColumn.assetCode:
+        return '자산번호';
+      case _TableColumn.manager:
+        return '관리자';
+      case _TableColumn.location:
+        return '위치';
+      case _TableColumn.verificationStatus:
+        return '인증여부';
+      case _TableColumn.barcodePhoto:
+        return '바코드사진';
+    }
+  }
+}
+
 class _FilterSection extends StatelessWidget {
   const _FilterSection({
-    required this.primaryField,
-    required this.primaryValue,
-    required this.primaryValueOptions,
-    required this.onPrimaryFieldChanged,
-    required this.onPrimaryValueChanged,
-    required this.secondaryField,
-    required this.selectedVerificationValue,
-    required this.selectedBarcodeValue,
-    required this.onSecondaryFieldChanged,
-    required this.onVerificationValueChanged,
-    required this.onBarcodeValueChanged,
+    required this.selectedColumn,
+    required this.onColumnChanged,
+    required this.searchController,
+    required this.onKeywordChanged,
     required this.onSearch,
     required this.onFilterReset,
     required this.resultCount,
@@ -761,17 +652,10 @@ class _FilterSection extends StatelessWidget {
     required this.onVerifySelected,
   });
 
-  final _PrimaryFilterField primaryField;
-  final String primaryValue;
-  final Map<_PrimaryFilterField, List<String>> primaryValueOptions;
-  final ValueChanged<_PrimaryFilterField?> onPrimaryFieldChanged;
-  final ValueChanged<String?> onPrimaryValueChanged;
-  final _SecondaryFilterField secondaryField;
-  final _VerificationStatusFilter selectedVerificationValue;
-  final _BarcodePhotoFilter selectedBarcodeValue;
-  final ValueChanged<_SecondaryFilterField?> onSecondaryFieldChanged;
-  final ValueChanged<_VerificationStatusFilter?> onVerificationValueChanged;
-  final ValueChanged<_BarcodePhotoFilter?> onBarcodeValueChanged;
+  final _TableColumn selectedColumn;
+  final ValueChanged<_TableColumn?> onColumnChanged;
+  final TextEditingController searchController;
+  final ValueChanged<String> onKeywordChanged;
   final VoidCallback onSearch;
   final VoidCallback onFilterReset;
   final int resultCount;
@@ -780,24 +664,19 @@ class _FilterSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primaryOptions = primaryValueOptions[primaryField] ?? const ['전체'];
-    final adjustedPrimaryValue = primaryOptions.contains(primaryValue) ? primaryValue : primaryOptions.first;
-
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Wrap(
-              spacing: 16,
-              runSpacing: 12,
+            Row(
               children: [
                 SizedBox(
                   width: 200,
-                  child: DropdownButtonFormField<_PrimaryFilterField>(
-                    value: primaryField,
-                    items: _PrimaryFilterField.values
+                  child: DropdownButtonFormField<_TableColumn>(
+                    value: selectedColumn,
+                    items: _TableColumn.values
                         .map(
                           (value) => DropdownMenuItem(
                             value: value,
@@ -805,61 +684,39 @@ class _FilterSection extends StatelessWidget {
                           ),
                         )
                         .toList(growable: false),
-                    onChanged: onPrimaryFieldChanged,
+                    onChanged: onColumnChanged,
                     decoration: const InputDecoration(
-                      labelText: '검색 항목',
+                      labelText: '항목',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    isDense: true,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: searchController,
+                    onChanged: onKeywordChanged,
+                    onSubmitted: (_) => onSearch(),
+                    textInputAction: TextInputAction.search,
+                    decoration: const InputDecoration(
+                      labelText: '검색명',
                       border: OutlineInputBorder(),
                     ),
                   ),
                 ),
-                SizedBox(
-                  width: 200,
-                  child: DropdownButtonFormField<String>(
-                    value: adjustedPrimaryValue,
-                    items: primaryOptions
-                        .map(
-                          (value) => DropdownMenuItem(
-                            value: value,
-                            child: Text(value),
-                          ),
-                        )
-                        .toList(growable: false),
-                    onChanged: onPrimaryValueChanged,
-                    decoration: const InputDecoration(
-                      labelText: '검색 값',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
+                const SizedBox(width: 12),
+                ElevatedButton.icon(
+                  onPressed: onSearch,
+                  icon: const Icon(Icons.search),
+                  label: const Text('검색'),
                 ),
-                SizedBox(
-                  width: 200,
-                  child: DropdownButtonFormField<_SecondaryFilterField>(
-                    value: secondaryField,
-                    items: _SecondaryFilterField.values
-                        .map(
-                          (value) => DropdownMenuItem(
-                            value: value,
-                            child: Text(value.label),
-                          ),
-                        )
-                        .toList(growable: false),
-                    onChanged: onSecondaryFieldChanged,
-                    decoration: const InputDecoration(
-                      labelText: '상태 항목',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-                SizedBox(
-                  width: 200,
-                  child: _SecondaryValueDropdown(
-                    field: secondaryField,
-                    selectedVerificationValue: selectedVerificationValue,
-                    selectedBarcodeValue: selectedBarcodeValue,
-                    onVerificationValueChanged: onVerificationValueChanged,
-                    onBarcodeValueChanged: onBarcodeValueChanged,
-
-                  ),
+                const SizedBox(width: 12),
+                TextButton.icon(
+                  onPressed: onFilterReset,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('초기화'),
                 ),
               ],
             ),
@@ -875,81 +732,12 @@ class _FilterSection extends StatelessWidget {
                   icon: const Icon(Icons.verified),
                   label: const Text('인증하기'),
                 ),
-                const SizedBox(width: 12),
-                ElevatedButton.icon(
-                  onPressed: onSearch,
-                  icon: const Icon(Icons.search),
-                  label: const Text('검색'),
-                ),
-                const SizedBox(width: 12),
-
-                TextButton.icon(
-                  onPressed: onFilterReset,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('필터 초기화'),
-                ),
               ],
             ),
           ],
         ),
       ),
     );
-  }
-}
-
-class _SecondaryValueDropdown extends StatelessWidget {
-  const _SecondaryValueDropdown({
-    required this.field,
-    required this.selectedVerificationValue,
-    required this.selectedBarcodeValue,
-    required this.onVerificationValueChanged,
-    required this.onBarcodeValueChanged,
-  });
-
-  final _SecondaryFilterField field;
-  final _VerificationStatusFilter selectedVerificationValue;
-  final _BarcodePhotoFilter selectedBarcodeValue;
-  final ValueChanged<_VerificationStatusFilter?> onVerificationValueChanged;
-  final ValueChanged<_BarcodePhotoFilter?> onBarcodeValueChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    switch (field) {
-      case _SecondaryFilterField.verificationStatus:
-        return DropdownButtonFormField<_VerificationStatusFilter>(
-          value: selectedVerificationValue,
-          items: _VerificationStatusFilter.values
-              .map(
-                (value) => DropdownMenuItem(
-                  value: value,
-                  child: Text(value.label),
-                ),
-              )
-              .toList(growable: false),
-          onChanged: onVerificationValueChanged,
-          decoration: const InputDecoration(
-            labelText: '상태 값',
-            border: OutlineInputBorder(),
-          ),
-        );
-      case _SecondaryFilterField.barcodePhoto:
-        return DropdownButtonFormField<_BarcodePhotoFilter>(
-          value: selectedBarcodeValue,
-          items: _BarcodePhotoFilter.values
-              .map(
-                (value) => DropdownMenuItem(
-                  value: value,
-                  child: Text(value.label),
-                ),
-              )
-              .toList(growable: false),
-          onChanged: onBarcodeValueChanged,
-          decoration: const InputDecoration(
-            labelText: '상태 값',
-            border: OutlineInputBorder(),
-          ),
-        );
-    }
   }
 }
 
