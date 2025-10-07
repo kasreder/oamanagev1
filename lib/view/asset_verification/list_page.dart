@@ -777,7 +777,11 @@ class _VerificationCell extends StatelessWidget {
       );
     }
     return TextButton(
-      onPressed: () => _verify(context),
+      onPressed: () {
+        final assetCode = Uri.encodeComponent(inspection.assetUid);
+        context.push('/asset_verification/$assetCode');
+      },
+
       child: const Text('인증하기'),
     );
   }
