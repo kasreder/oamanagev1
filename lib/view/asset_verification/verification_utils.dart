@@ -15,6 +15,14 @@ String normalizeTeamName(String? team) {
   return name;
 }
 
+String resolveTeamName(Inspection inspection, AssetInfo? asset) {
+  final assetOrganization = asset?.organization ?? '';
+  if (assetOrganization.trim().isNotEmpty) {
+    return normalizeTeamName(assetOrganization);
+  }
+  return normalizeTeamName(inspection.userTeam);
+}
+
 UserInfo? resolveUser(
   InspectionProvider provider,
   Inspection? inspection,
