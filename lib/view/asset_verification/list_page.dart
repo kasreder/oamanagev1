@@ -30,6 +30,16 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     _TableColumn.verificationStatus: 120,
     _TableColumn.barcodePhoto: 140,
   };
+  static const Map<_TableColumn, double> _columnSpacing = {
+    _TableColumn.team: 12,
+    _TableColumn.user: 20,
+    _TableColumn.asset: 20,
+    _TableColumn.assetCode: 16,
+    _TableColumn.manager: 20,
+    _TableColumn.location: 24,
+    _TableColumn.verificationStatus: 12,
+    _TableColumn.barcodePhoto: 12,
+  };
   static const double _tableMinWidth = 1160;
   final ScrollController _horizontalScrollController = ScrollController();
   final ScrollController _verticalScrollController = ScrollController();
@@ -243,8 +253,9 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
                                         crossAxisAlignment: CrossAxisAlignment.stretch,
                                         children: [
                                           DataTable(
-                                            columnSpacing: 32,
+                                            columnSpacing: 0,
                                             horizontalMargin: 0,
+                                            checkboxHorizontalMargin: 12,
                                             headingRowHeight: 44,
                                             dataRowMinHeight: 0,
                                             dataRowMaxHeight: 0,
@@ -260,8 +271,9 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
                                               child: SingleChildScrollView(
                                                 controller: _verticalScrollController,
                                                 child: DataTable(
-                                                  columnSpacing: 32,
+                                                  columnSpacing: 0,
                                                   horizontalMargin: 0,
+                                                  checkboxHorizontalMargin: 12,
                                                   headingRowHeight: 0,
                                                   dataRowMinHeight: 44,
                                                   dataRowMaxHeight: 72,
@@ -406,41 +418,46 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
   }
 
   Widget _buildColumnLabel(String label, _TableColumn column) {
-    return SizedBox(
-      width: _columnWidths[column],
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          label,
-          style: const TextStyle(fontWeight: FontWeight.w600),
-          overflow: TextOverflow.ellipsis,
-        ),
-
+    return _buildCellContainer(
+      column,
+      child: Text(
+        label,
+        style: const TextStyle(fontWeight: FontWeight.w600),
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }
 
   Widget _buildTableText(String text, _TableColumn column) {
-    return SizedBox(
-      width: _columnWidths[column],
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          text,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-
+    return _buildCellContainer(
+      column,
+      child: Text(
+        text,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }
 
   Widget _buildVerificationCell(bool isVerified) {
-    return SizedBox(
-      width: _columnWidths[_TableColumn.verificationStatus],
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: _VerificationCell(isVerified: isVerified),
+    return _buildCellContainer(
+      _TableColumn.verificationStatus,
+      child: _VerificationCell(isVerified: isVerified),
+    );
+  }
+
+  Widget _buildCellContainer(
+    _TableColumn column, {
+    required Widget child,
+  }) {
+    return Padding(
+      padding: EdgeInsets.only(right: _columnSpacing[column] ?? 0),
+      child: SizedBox(
+        width: _columnWidths[column],
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: child,
+        ),
       ),
     );
   }
