@@ -417,17 +417,6 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     }).toList(growable: false);
   }
 
-  Widget _buildColumnLabel(String label, _TableColumn column) {
-    return _buildCellContainer(
-      column,
-      child: Text(
-        label,
-        style: const TextStyle(fontWeight: FontWeight.w600),
-        overflow: TextOverflow.ellipsis,
-      ),
-    );
-  }
-
   Widget _buildTableText(String text, _TableColumn column) {
     return _buildCellContainer(
       column,
@@ -450,10 +439,12 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     _TableColumn column, {
     required Widget child,
   }) {
+    final spacing = _columnSpacing[column] ?? 0;
+    final width = _columnWidths[column];
     return Padding(
-      padding: EdgeInsets.only(right: _columnSpacing[column] ?? 0),
+      padding: EdgeInsets.only(right: spacing),
       child: SizedBox(
-        width: _columnWidths[column],
+        width: width,
         child: Align(
           alignment: Alignment.centerLeft,
           child: child,
@@ -462,31 +453,74 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     );
   }
 
+  Widget _headerCell(
+    String label,
+    _TableColumn column,
+    TextStyle? style,
+  ) {
+    final effectiveStyle = style == null
+        ? const TextStyle(fontWeight: FontWeight.w600)
+        : style.copyWith(fontWeight: FontWeight.w600);
+    return _buildCellContainer(
+      column,
+      child: Text(
+        label,
+        style: effectiveStyle,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+
+  Widget _teamHeaderCell(TextStyle? style) =>
+      _headerCell('팀', _TableColumn.team, style);
+
+  Widget _userHeaderCell(TextStyle? style) =>
+      _headerCell('사용자', _TableColumn.user, style);
+
+  Widget _assetHeaderCell(TextStyle? style) =>
+      _headerCell('장비', _TableColumn.asset, style);
+
+  Widget _assetCodeHeaderCell(TextStyle? style) =>
+      _headerCell('자산번호', _TableColumn.assetCode, style);
+
+  Widget _managerHeaderCell(TextStyle? style) =>
+      _headerCell('관리자', _TableColumn.manager, style);
+
+  Widget _locationHeaderCell(TextStyle? style) =>
+      _headerCell('위치', _TableColumn.location, style);
+
+  Widget _verificationHeaderCell(TextStyle? style) =>
+      _headerCell('인증여부', _TableColumn.verificationStatus, style);
+
+  Widget _barcodePhotoHeaderCell(TextStyle? style) =>
+      _headerCell('바코드사진', _TableColumn.barcodePhoto, style);
+
   List<DataColumn> _buildColumns() {
+    final headerStyle = Theme.of(context).textTheme.labelLarge;
     return [
       DataColumn(
-        label: _buildColumnLabel('팀', _TableColumn.team),
+        label: _teamHeaderCell(headerStyle),
       ),
       DataColumn(
-        label: _buildColumnLabel('사용자', _TableColumn.user),
+        label: _userHeaderCell(headerStyle),
       ),
       DataColumn(
-        label: _buildColumnLabel('장비', _TableColumn.asset),
+        label: _assetHeaderCell(headerStyle),
       ),
       DataColumn(
-        label: _buildColumnLabel('자산번호', _TableColumn.assetCode),
+        label: _assetCodeHeaderCell(headerStyle),
       ),
       DataColumn(
-        label: _buildColumnLabel('관리자', _TableColumn.manager),
+        label: _managerHeaderCell(headerStyle),
       ),
       DataColumn(
-        label: _buildColumnLabel('위치', _TableColumn.location),
+        label: _locationHeaderCell(headerStyle),
       ),
       DataColumn(
-        label: _buildColumnLabel('인증여부', _TableColumn.verificationStatus),
+        label: _verificationHeaderCell(headerStyle),
       ),
       DataColumn(
-        label: _buildColumnLabel('바코드사진', _TableColumn.barcodePhoto),
+        label: _barcodePhotoHeaderCell(headerStyle),
       ),
     ];
   }
