@@ -214,7 +214,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
                                                   headingRowHeight: 0,
                                                   dataRowMinHeight: 20,
                                                   dataRowMaxHeight: 40,
-                                                  showCheckboxColumn: true,
+                                                  showCheckboxColumn: false,
                                                   columns: columns,
                                                   rows: rows,
 
@@ -475,7 +475,6 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
                   alignment: Alignment.centerLeft,
                   child: Checkbox(
                     value: checkboxValue,
-
                     tristate: hasRows,
                     onChanged: hasRows
                         ? (value) =>
@@ -496,11 +495,14 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
 
   void _onHeaderCheckboxChanged(List<_RowData> pageRows, bool shouldSelectAll) {
     setState(() {
+      final pageCodes = pageRows.map((r) => r.assetCode).toSet();
+      final updated = _selectedAssetCodes.toSet();
       if (shouldSelectAll) {
-        _selectedAssetCodes = pageRows.map((r) => r.assetCode).toSet();
+        updated.addAll(pageCodes);
       } else {
-        _selectedAssetCodes.clear();
+        updated.removeWhere(pageCodes.contains);
       }
+      _selectedAssetCodes = updated;
     });
   }
 
@@ -509,6 +511,9 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     final headerStyle =
         DataTableTheme.of(context).headingTextStyle ?? theme.textTheme.labelLarge;
     return [
+      const DataColumn(
+        label: SizedBox(width: _checkboxColumnWidth),
+      ),
       DataColumn(
         label: _teamHeaderCell(headerStyle),
       ),
@@ -545,6 +550,9 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
             _toggleSelection(row.assetCode, selected ?? false);
           },
           cells: [
+            DataCell(
+              _buildCheckboxCell(row.assetCode),
+            ),
             DataCell(
               _buildTableText(
                 row.teamName,
@@ -600,6 +608,27 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
       child: _buildTableText(
         assetCode,
         _TableColumn.assetCode,
+      ),
+    );
+  }
+
+  Widget _buildCheckboxCell(String assetCode) {
+    final isSelected = _selectedAssetCodes.contains(assetCode);
+    return SizedBox(
+      width: _checkboxColumnWidth,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: _checkboxHorizontalMargin,
+        ),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Checkbox(
+            value: isSelected,
+            onChanged: (value) => _toggleSelection(assetCode, value ?? false),
+            visualDensity: VisualDensity.compact,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ),
       ),
     );
   }
