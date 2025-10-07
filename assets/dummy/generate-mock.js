@@ -52,6 +52,16 @@ function resolveOrganization(team, dept, hq) {
   return team ?? dept ?? hq; // 팀 → 실 → 본부
 }
 
+/* ------------ 이름 생성 ------------ */
+// 요청하신 “공용 20%”는 자산 배정 로직에서 처리합니다.
+// 이름 생성기는 실제 직원 이름만 만듭니다.
+function koreanName() {
+  const last = ['김','이','박','최','정','조','유','윤','장','임','한','오','서','신','권','황','안','송','심','홍'];
+  const firstA = ['민','서','예','지','도','주','하','지','현','재','승','수','규','영','태','유','다','시','윤','가'];
+  const firstB = ['준','연','원','훈','진','현','영','빈','성','우','민','희','림','호','성','혁','주','라','원','용'];
+  return `${pick(last)}${pick(firstA)}${pick(firstB)}`;
+}
+
 /* ------------ dictionaries ------------ */
 const HQS = ['경영본부','생산본부','영업본부','연구개발본부','품질본부'];
 // 모두 "~실"
@@ -77,12 +87,7 @@ const MEMOS = [
   '소음 발생 관찰됨', '정상 동작', '오염으로 청소 필요', '이동 계획 있음', null
 ];
 
-function koreanName() {
-  const last = ['김','이','박','최','정','조','유','윤','장','임','한','오','서','신','권','황','안','송','심','홍'];
-  const firstA = ['민','서','예','지','도','주','하','지','현','재','승','수','규','영','태','유','다','시','윤','가'];
-  const firstB = ['준','연','원','훈','진','현','영','빈','성','우','민','희','림','호','성','혁','훈','주','라','원'];
-  return `${pick(last)}${pick(firstA)}${pick(firstB)}`;
-}
+/* ------------ 보조 생성기 ------------ */
 function employeeId(i) {
   const prefix = pick(['B','P','A']);
   return `${prefix}${pad(i + 1, 6)}`;
@@ -126,6 +131,14 @@ function osVersion(os) {
   }
 }
 
+/* ------------ assignee 선택 (공용 확률 20%) ------------ */
+function pickAssetAssignee(users, pShared = 0.20) {
+  const isShared = Math.random() < pShared;     // 🔸 공용 확률 20%
+  if (isShared) return { assigned: null, name: '공용' };
+  const user = users[randomInt(0, users.length)];
+  return { assigned: user, name: user.employee_name };
+}
+
 /* ------------ generators ------------ */
 function generateUsers(n) {
   const res = [];
@@ -136,7 +149,7 @@ function generateUsers(n) {
       employee_name: koreanName(),
       organization_hq: pick(HQS),
       organization_dept: Math.random() < 0.03 ? null : pick(DEPTS), // 3% null
-      organization_team: Math.random() < 0.30 ? null : pick(TEAMS),  // ✅ 팀 30% null
+      organization_team: Math.random() < 0.30 ? null : pick(TEAMS),  // 팀 30% null
       organization_part: Math.random() < 0.9 ? null : pick(PARTS),   // 90% null
       organization_etc: pick(POSITIONS),
       work_building: pick(BUILDINGS),
@@ -154,8 +167,8 @@ function generateAssets(n, users) {
     const status = pick(ASSET_STATUS);
     const building1 = pick(BUILDING1);
 
-    const assigned = chance(0.7) ? pick(users) : null;
-    const assigneeName = assigned ? assigned.employee_name : '공용';
+    // 🔸 20% 공용, 80% 개인
+    const { assigned, name: assigneeName } = pickAssetAssignee(users, 0.20);
 
     const building = assigned?.work_building ?? pick(BUILDINGS);
     const floor = assigned?.work_floor ?? pick(FLOORS);
@@ -197,7 +210,7 @@ function generateAssets(n, users) {
     res.push({
       id: i + 1,
       asset_uid: assetUid(),
-      name: assigneeName,
+      name: assigneeName,                   // ✅ 이제 20%만 '공용'
       assets_status: status,
       assets_types: pick(ASSET_TYPES),      // category 대신
       serial_number: serial(),
@@ -212,12 +225,12 @@ function generateAssets(n, users) {
       building1: building1,
       building: building,
       floor: floor,
-      member_name: chance(0.4) ? koreanName() : (assigned?.employee_name ?? null),
+      member_name: assigned ? assigned.employee_name : koreanName(), // 공용이면 표기용 사용자 임의 생성
       location_drawing_id: drawingId,
       location_row: locRow,
       location_col: locCol,
       location_drawing_file: drawingId ? `drawing_${drawingId}.png` : null,
-      // ★ 추가된 필드
+      // 추가 필드
       memo1,
       memo2,
       os,
@@ -229,6 +242,7 @@ function generateAssets(n, users) {
     });
   }
 
+  // asset_uid / serial_number 중복 방지
   const dedup = (key, gen) => {
     const seen = new Set();
     for (const a of res) {
@@ -242,17 +256,26 @@ function generateAssets(n, users) {
   return res;
 }
 
-function generateInspections(total, assets, users) {
+/**
+ * 🔗 이름→user_id 매핑 규칙
+ * - inspections.user_id = (asset.name이 '공용'이면 asset.member_name, 아니면 asset.name)에 해당하는 users.employee_name의 id
+ * - 매칭 실패 시 null
+ */
+function generateInspections(total, assets, users, nameToUserId) {
   const list = [];
   const uniqueTotal = Math.min(total, assets.length);
   const assetPool = shuffle(assets).slice(0, uniqueTotal);
 
   for (let i = 0; i < assetPool.length; i++) {
     const asset = assetPool[i];
-    const user = asset.user_id ? users[asset.user_id - 1] : pick(users);
+
+    // 타겟 이름 결정: 개인자산이면 name, 공용이면 member_name
+    const targetName = asset.name === '공용' ? asset.member_name : asset.name;
+    const linkedUserId = targetName ? (nameToUserId.get(targetName) ?? null) : null;
+    const user = linkedUserId ? users[linkedUserId - 1] : null;
+
     const inspector = koreanName();
     const deptConfirm = user?.organization_dept ?? pick(DEPTS);
-
     const when = randBetweenDays(150, 0);
 
     // 50%는 미검증 처리
@@ -261,19 +284,18 @@ function generateInspections(total, assets, users) {
     const base = {
       id: i + 1,
       asset_id: asset.id,
-      user_id: user?.id ?? null,
+      user_id: linkedUserId,                   // ✅ 요구사항 반영
       inspector_name: inspector,
       user_team: user?.organization_team ?? pick(TEAMS),
       asset_code: asset.asset_uid,
       asset_type: pick(ASSET_TYPES),
       asset_info: {
         model_name: asset.model_name,
-        usage: asset.user_id ? "개인" : "공용",
+        usage: linkedUserId ? "개인" : "공용", // 링크된 사용자가 있으면 개인
         serial_number: asset.serial_number
       },
       inspection_count: 1,
       inspection_date: iso(when),
-      // maintenance_company_staff 제거됨
       department_confirm: deptConfirm,
       is_verified
     };
@@ -285,7 +307,7 @@ function generateInspections(total, assets, users) {
       base.department_confirm = null;
       base.asset_info = {
         model_name: null,
-        usage: asset.user_id ? "개인" : "공용", // 용도는 유지
+        usage: linkedUserId ? "개인" : "공용",
         serial_number: null
       };
     }
@@ -300,8 +322,12 @@ function generateInspections(total, assets, users) {
   if (!fs.existsSync(OUT)) fs.mkdirSync(OUT, { recursive: true });
 
   const users = generateUsers(U);
+
+  // 🔗 users.employee_name → users.id 매핑 테이블
+  const nameToUserId = new Map(users.map(u => [u.employee_name, u.id]));
+
   const assets = generateAssets(A, users);
-  const inspections = generateInspections(I, assets, users);
+  const inspections = generateInspections(I, assets, users, nameToUserId);
 
   fs.writeFileSync(path.join(OUT, 'users.json'), JSON.stringify(users, null, 2), 'utf-8');
   fs.writeFileSync(path.join(OUT, 'assets.json'), JSON.stringify(assets, null, 2), 'utf-8');
