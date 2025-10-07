@@ -21,8 +21,8 @@ class AssetVerificationListPage extends StatefulWidget {
 class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
   static const _allLabel = '전체';
   static const Map<_TableColumn, double> _columnWidths = {
-    _TableColumn.team: 120,
-    _TableColumn.user: 140,
+    _TableColumn.team: 100,
+    _TableColumn.user: 100,
     _TableColumn.asset: 160,
     _TableColumn.assetCode: 160,
     _TableColumn.manager: 140,
@@ -31,14 +31,14 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     _TableColumn.barcodePhoto: 140,
   };
   static const Map<_TableColumn, double> _columnSpacing = {
-    _TableColumn.team: 12,
-    _TableColumn.user: 20,
-    _TableColumn.asset: 20,
-    _TableColumn.assetCode: 16,
-    _TableColumn.manager: 20,
-    _TableColumn.location: 24,
-    _TableColumn.verificationStatus: 12,
-    _TableColumn.barcodePhoto: 12,
+    _TableColumn.team: 1,
+    _TableColumn.user: 1,
+    _TableColumn.asset: 1,
+    _TableColumn.assetCode: 1,
+    _TableColumn.manager: 1,
+    _TableColumn.location: 1,
+    _TableColumn.verificationStatus: 1,
+    _TableColumn.barcodePhoto: 1,
   };
   static const double _tableMinWidth = 1160;
   final ScrollController _horizontalScrollController = ScrollController();
@@ -255,14 +255,28 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
                                           DataTable(
                                             columnSpacing: 0,
                                             horizontalMargin: 0,
-                                            checkboxHorizontalMargin: 12,
-                                            headingRowHeight: 44,
+                                            headingRowHeight: 48,
                                             dataRowMinHeight: 0,
                                             dataRowMaxHeight: 0,
-                                            showCheckboxColumn: true,
                                             columns: columns,
+                                            // ✅ 헤더 체크박스 여백을 본문과 동일하게
+                                            checkboxHorizontalMargin: 16,
+                                            showCheckboxColumn: true,
+                                            // ✅ 헤더 체크박스 표시 + 전체 선택/해제
+                                            onSelectAll: (isAllSelected) {
+                                              setState(() {
+                                                if (isAllSelected == true) {
+                                                  _selectedAssetCodes = pageRows.map((r) => r.assetCode).toSet();
+                                                } else {
+                                                  _selectedAssetCodes.clear();
+                                                }
+                                              });
+                                            },
+
+                                            // 헤더 전용이라 데이터 행은 없음 (빈 리스트 OK)
                                             rows: const [],
                                           ),
+
                                           const Divider(height: 0),
                                           Expanded(
                                             child: Scrollbar(
@@ -273,10 +287,10 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
                                                 child: DataTable(
                                                   columnSpacing: 0,
                                                   horizontalMargin: 0,
-                                                  checkboxHorizontalMargin: 12,
+                                                  checkboxHorizontalMargin: 16,
                                                   headingRowHeight: 0,
-                                                  dataRowMinHeight: 44,
-                                                  dataRowMaxHeight: 72,
+                                                  dataRowMinHeight: 20,
+                                                  dataRowMaxHeight: 40,
                                                   showCheckboxColumn: true,
                                                   columns: columns,
                                                   rows: rows,
