@@ -1,38 +1,38 @@
 [
   {
     "id": 1,
-    "employee_id": "B000001",
-    "employee_name": "홍태주",
-    "organization_hq": "영업본부",
-    "organization_dept": "인사실",
-    "organization_team": null,
+    "employee_id": "P000001",
+    "employee_name": "박서연",
+    "organization_hq": "경영본부",
+    "organization_dept": "재무실",
+    "organization_team": "자동화팀",
     "organization_part": null,
-    "organization_etc": null,
-    "work_building": "공장1",
-    "work_floor": "2층"
+    "organization_etc": "팀장",
+    "work_building": "공장2",
+    "work_floor": "5층"
   },
   {
     "id": 2,
-    "employee_id": "B000002",
-    "employee_name": "유다현",
-    "organization_hq": "연구개발본부",
-    "organization_dept": "품질관리실",
-    "organization_team": "자동화팀",
+    "employee_id": "P000002",
+    "employee_name": "황가성",
+    "organization_hq": "생산본부",
+    "organization_dept": "R&D실",
+    "organization_team": null,
     "organization_part": null,
-    "organization_etc": "실장",
-    "work_building": "본사A동",
-    "work_floor": "2층"
+    "organization_etc": "책임",
+    "work_building": "연구동",
+    "work_floor": "4층"
   },
   {
     "id": 3,
     "employee_id": "P000003",
-    "employee_name": "유수용",
-    "organization_hq": "경영본부",
-    "organization_dept": "인사실",
-    "organization_team": "회계팀",
-    "organization_part": null,
-    "organization_etc": "본부장",
-    "work_building": "본사A동",
-    "work_floor": null
+    "employee_name": "안수준",
+    "organization_hq": "연구개발본부",
+    "organization_dept": "품질관리실",
+    "organization_team": null,
+    "organization_part": "운영파트",
+    "organization_etc": "실장",
+    "work_building": "본사B동",
+    "work_floor": "1층"
   }
 ]
