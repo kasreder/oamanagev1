@@ -73,196 +73,205 @@ class _AssetsListPageState extends State<AssetsListPage> {
         return AppScaffold(
           title: '자산 목록',
           selectedIndex: 1,
-          body: Column(
-            children: [
-              _FilterSection(
-                searchController: _searchController,
-                searchField: _searchField,
-                onSearchFieldChanged: (value) {
-                  if (value == null) return;
-                  setState(() {
-                    _searchField = value;
+          body: Padding(
+            padding: const EdgeInsets.all(5),
+            child: Column(
+              children: [
+                _FilterSection(
+                  searchController: _searchController,
+                  searchField: _searchField,
+                  onSearchFieldChanged: (value) {
+                    if (value == null) return;
+                    setState(() {
+                      _searchField = value;
+                      _currentPage = 0;
+                    });
+                  },
+                  onQueryChanged: (_) => setState(() {
                     _currentPage = 0;
-                  });
-                },
-                onQueryChanged: (_) => setState(() {
-                  _currentPage = 0;
-                }),
-                provider: provider,
-                filteredCount: filteredRows.length,
-                totalCount: totalCount,
-                onFilterReset: () {
-                  setState(() {
-                    _currentPage = 0;
-                  });
-                },
-              ),
-              Expanded(
-                child: filteredRows.isEmpty
-                    ? const Center(child: Text('표시할 실사 내역이 없습니다.'))
-                    : LayoutBuilder(
-                        builder: (context, constraints) {
-                          final tableWidth = math.max(
-                            constraints.maxWidth,
-                            _tableMinWidth,
-                          );
-                          final columns = _buildColumns(context);
-                          return Scrollbar(
-                            controller: _horizontalScrollController,
-                            thumbVisibility: true,
-                            notificationPredicate: (notification) => notification.metrics.axis == Axis.horizontal,
-                            child: SingleChildScrollView(
-                              controller: _horizontalScrollController,
-                              scrollDirection: Axis.horizontal,
-                              child: SizedBox(
-                                width: tableWidth,
-                                height: constraints.maxHeight,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [
-                                    DataTable(
-                                      headingRowColor: WidgetStateProperty.resolveWith(
-                                        (states) => Theme.of(context).colorScheme.surfaceContainerHighest,
-                                      ),
-                                      columnSpacing: 0,
-                                      horizontalMargin: 0,
-                                      headingRowHeight: 48,
-                                      dataRowMinHeight: 0,
-                                      dataRowMaxHeight: 0,
-                                      columns: columns,
-                                      rows: const [],
-                                    ),
-                                    const Divider(height: 0),
-                                    Expanded(
-                                      child: Scrollbar(
-                                        controller: _verticalScrollController,
-                                        thumbVisibility: true,
-                                        child: SingleChildScrollView(
-                                          controller: _verticalScrollController,
-                                          child: DataTable(
-                                            showCheckboxColumn: false,
-                                            // ✅ 기본 체크박스 삭제
-                                            headingRowHeight: 0,
+                  }),
+                  provider: provider,
+                  filteredCount: filteredRows.length,
+                  totalCount: totalCount,
+                  onFilterReset: () {
+                    setState(() {
+                      _currentPage = 0;
+                    });
+                  },
+                ),
+                const SizedBox(height: 1),
+                Expanded(
+                  child: filteredRows.isEmpty
+                      ? const Center(child: Text('표시할 실사 내역이 없습니다.'))
+                      : Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: LayoutBuilder(
+                              builder: (context, constraints) {
+                                final tableWidth = math.max(
+                                  constraints.maxWidth,
+                                  _tableMinWidth,
+                                );
+                                final columns = _buildColumns(context);
+                                return Scrollbar(
+                                  controller: _horizontalScrollController,
+                                  thumbVisibility: true,
+                                  notificationPredicate: (notification) => notification.metrics.axis == Axis.horizontal,
+                                  child: SingleChildScrollView(
+                                    controller: _horizontalScrollController,
+                                    scrollDirection: Axis.horizontal,
+                                    child: SizedBox(
+                                      width: tableWidth,
+                                      height: constraints.maxHeight,
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                                        children: [
+                                          DataTable(
+                                            headingRowColor: WidgetStateProperty.resolveWith(
+                                              (states) => Theme.of(context).colorScheme.surfaceContainerHighest,
+                                            ),
                                             columnSpacing: 0,
-                                            // 컬럼 간 간격을 제거합니다.
                                             horizontalMargin: 0,
+                                            headingRowHeight: 48,
+                                            dataRowMinHeight: 0,
+                                            dataRowMaxHeight: 0,
                                             columns: columns,
-                                            rows: pageRows
-                                                .map(
-                                                  (row) => DataRow(
-                                                    onSelectChanged: (_) => context.go('/assets/${row.inspection.id}'),
-                                                    cells: [
-                                                      DataCell(_cellText(row.inspection.assetUid)),
-                                                      DataCell(_cellText(row.asset?.name ?? '-')),
-                                                      DataCell(_cellText(row.asset?.assets_types ?? '-')),
-                                                      DataCell(_cellText(row.asset?.model ?? '-')),
-                                                      DataCell(_cellText(row.inspection.status)),
-                                                      DataCell(_cellText(_resolveOrganization(row.asset, row.inspection))),
-                                                      DataCell(_cellText(row.asset?.location ?? '-')),
-                                                      DataCell(
-                                                        _cellText(
-                                                          provider.formatDateTime(
-                                                            row.inspection.scannedAt,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                      DataCell(
-                                                        Padding(
-                                                          padding: _cellPadding,
-                                                          child: SizedBox(
-                                                            width: _iconColumnWidth,
-                                                            child: Align(
-                                                              alignment: Alignment.centerLeft,
-                                                              child: Icon(
-                                                                row.inspection.synced ? Icons.cloud_done : Icons.cloud_off,
-                                                                size: 18,
-                                                                color: row.inspection.synced ? Colors.green : Colors.orange,
+                                            rows: const [],
+                                          ),
+                                          const Divider(height: 0),
+                                          Expanded(
+                                            child: Scrollbar(
+                                              controller: _verticalScrollController,
+                                              thumbVisibility: true,
+                                              child: SingleChildScrollView(
+                                                controller: _verticalScrollController,
+                                                child: DataTable(
+                                                  showCheckboxColumn: false,
+                                                  // ✅ 기본 체크박스 삭제
+                                                  headingRowHeight: 0,
+                                                  columnSpacing: 0,
+                                                  // 컬럼 간 간격을 제거합니다.
+                                                  horizontalMargin: 0,
+                                                  columns: columns,
+                                                  rows: pageRows
+                                                      .map(
+                                                        (row) => DataRow(
+                                                          onSelectChanged: (_) => context.go('/assets/${row.inspection.id}'),
+                                                          cells: [
+                                                            DataCell(_cellText(row.inspection.assetUid)),
+                                                            DataCell(_cellText(row.asset?.name ?? '-')),
+                                                            DataCell(_cellText(row.asset?.assets_types ?? '-')),
+                                                            DataCell(_cellText(row.asset?.model ?? '-')),
+                                                            DataCell(_cellText(row.inspection.status)),
+                                                            DataCell(_cellText(_resolveOrganization(row.asset, row.inspection))),
+                                                            DataCell(_cellText(row.asset?.location ?? '-')),
+                                                            DataCell(
+                                                              _cellText(
+                                                                provider.formatDateTime(
+                                                                  row.inspection.scannedAt,
+                                                                ),
                                                               ),
                                                             ),
-                                                          ),
+                                                            DataCell(
+                                                              Padding(
+                                                                padding: _cellPadding,
+                                                                child: SizedBox(
+                                                                  width: _iconColumnWidth,
+                                                                  child: Align(
+                                                                    alignment: Alignment.centerLeft,
+                                                                    child: Icon(
+                                                                      row.inspection.synced ? Icons.cloud_done : Icons.cloud_off,
+                                                                      size: 18,
+                                                                      color: row.inspection.synced ? Colors.green : Colors.orange,
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ),
+                                                            DataCell(
+                                                              _cellText200(
+                                                                _formattedMemo(row.inspection.memo),
+                                                                maxLines: 2,
+                                                              ),
+                                                            ),
+                                                            // DataCell(
+                                                            //   Padding(
+                                                            //     padding: _cellPadding,
+                                                            //     child: SizedBox(
+                                                            //       width: _actionColumnWidth,
+                                                            //       child: Align(
+                                                            //         alignment:
+                                                            //         Alignment.centerLeft,
+                                                            //         child: IconButton(
+                                                            //           tooltip: '삭제',
+                                                            //           icon: const Icon(
+                                                            //             Icons
+                                                            //                 .delete_outline,
+                                                            //           ),
+                                                            //           color: Theme.of(context)
+                                                            //               .colorScheme
+                                                            //               .error,
+                                                            //           onPressed: () async {
+                                                            //             final confirmed =
+                                                            //             await _confirmDelete(
+                                                            //                 context);
+                                                            //             if (!mounted ||
+                                                            //                 !confirmed) {
+                                                            //               return;
+                                                            //             }
+                                                            //             provider.remove(
+                                                            //                 row.inspection.id);
+                                                            //             if (!mounted) {
+                                                            //               return;
+                                                            //             }
+                                                            //             ScaffoldMessenger
+                                                            //                 .of(context)
+                                                            //                 .showSnackBar(
+                                                            //               SnackBar(
+                                                            //                 content: Text(
+                                                            //                   '${row.inspection.assetUid} 삭제됨',
+                                                            //                 ),
+                                                            //               ),
+                                                            //             );
+                                                            //           },
+                                                            //         ),
+                                                            //       ),
+                                                            //     ),
+                                                            //   ),
+                                                            // ),
+                                                          ],
                                                         ),
-                                                      ),
-                                                      DataCell(
-                                                        _cellText200(
-                                                          _formattedMemo(row.inspection.memo),
-                                                          maxLines: 2,
-                                                        ),
-                                                      ),
-                                                      // DataCell(
-                                                      //   Padding(
-                                                      //     padding: _cellPadding,
-                                                      //     child: SizedBox(
-                                                      //       width: _actionColumnWidth,
-                                                      //       child: Align(
-                                                      //         alignment:
-                                                      //         Alignment.centerLeft,
-                                                      //         child: IconButton(
-                                                      //           tooltip: '삭제',
-                                                      //           icon: const Icon(
-                                                      //             Icons
-                                                      //                 .delete_outline,
-                                                      //           ),
-                                                      //           color: Theme.of(context)
-                                                      //               .colorScheme
-                                                      //               .error,
-                                                      //           onPressed: () async {
-                                                      //             final confirmed =
-                                                      //             await _confirmDelete(
-                                                      //                 context);
-                                                      //             if (!mounted ||
-                                                      //                 !confirmed) {
-                                                      //               return;
-                                                      //             }
-                                                      //             provider.remove(
-                                                      //                 row.inspection.id);
-                                                      //             if (!mounted) {
-                                                      //               return;
-                                                      //             }
-                                                      //             ScaffoldMessenger
-                                                      //                 .of(context)
-                                                      //                 .showSnackBar(
-                                                      //               SnackBar(
-                                                      //                 content: Text(
-                                                      //                   '${row.inspection.assetUid} 삭제됨',
-                                                      //                 ),
-                                                      //               ),
-                                                      //             );
-                                                      //           },
-                                                      //         ),
-                                                      //       ),
-                                                      //     ),
-                                                      //   ),
-                                                      // ),
-                                                    ],
-                                                  ),
-                                                )
-                                                .toList(),
+                                                      )
+                                                      .toList(),
+                                                ),
+                                              ),
+                                            ),
                                           ),
-                                        ),
+                                        ],
                                       ),
                                     ),
-                                  ],
-                                ),
-                              ),
+                                  ),
+                                );
+                              },
                             ),
-                          );
-                        },
+                        ),
                       ),
-              ),
-              if (totalPages > 1)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 1),
-                  child: _PaginationControls(
-                    totalPages: totalPages,
-                    currentPage: currentPage,
-                    onPageSelected: (page) {
-                      setState(() {
-                        _currentPage = page;
-                      });
-                    },
-                  ),
                 ),
-            ],
+                if (totalPages > 1)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 1),
+                    child: _PaginationControls(
+                      totalPages: totalPages,
+                      currentPage: currentPage,
+                      onPageSelected: (page) {
+                        setState(() {
+                          _currentPage = page;
+                        });
+                      },
+                    ),
+                  ),
+              ],
+            ),
           ),
         );
       },
@@ -356,7 +365,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
           alignment: Alignment.centerLeft,
           child: Text(
             label,
-            style: style,
+            style: stylez,
             overflow: TextOverflow.ellipsis,
           ),
         ),
@@ -545,69 +554,71 @@ class _FilterSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: searchController,
-                  decoration: const InputDecoration(
-                    labelText: '검색어',
-                    prefixIcon: Icon(Icons.search),
-                    border: OutlineInputBorder(),
-                    isDense: true,
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: searchController,
+                    decoration: const InputDecoration(
+                      labelText: '검색어',
+                      prefixIcon: Icon(Icons.search),
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    onChanged: onQueryChanged,
                   ),
-                  onChanged: onQueryChanged,
                 ),
-              ),
-              const SizedBox(width: 12),
-              SizedBox(
-                width: 160,
-                child: DropdownButtonFormField<_AssetSearchField>(
-                  value: searchField,
-                  decoration: const InputDecoration(
-                    labelText: '검색 종류',
-                    border: OutlineInputBorder(),
-                    isDense: true,
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 160,
+                  child: DropdownButtonFormField<_AssetSearchField>(
+                    value: searchField,
+                    decoration: const InputDecoration(
+                      labelText: '검색 종류',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    items: _AssetSearchField.values
+                        .map(
+                          (field) => DropdownMenuItem<_AssetSearchField>(
+                            value: field,
+                            child: Text(field.label),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: onSearchFieldChanged,
                   ),
-                  items: _AssetSearchField.values
-                      .map(
-                        (field) => DropdownMenuItem<_AssetSearchField>(
-                          value: field,
-                          child: Text(field.label),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: onSearchFieldChanged,
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              SegmentedButton<bool>(
-                segments: const [
-                  ButtonSegment<bool>(value: false, label: Text('    전체   ')),
-                  ButtonSegment<bool>(value: true, label: Text('미동기화')),
-                ],
-                selected: <bool>{provider.onlyUnsynced},
-                onSelectionChanged: (value) {
-                  onFilterReset();
-                  provider.setOnlyUnsynced(value.first);
-                },
-              ),
-              const Spacer(),
-              Text(
-                filteredCount == totalCount ? '$filteredCount건' : '$filteredCount건 / 총 ${totalCount}건',
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment<bool>(value: false, label: Text('    전체   ')),
+                    ButtonSegment<bool>(value: true, label: Text('미동기화')),
+                  ],
+                  selected: <bool>{provider.onlyUnsynced},
+                  onSelectionChanged: (value) {
+                    onFilterReset();
+                    provider.setOnlyUnsynced(value.first);
+                  },
+                ),
+                const Spacer(),
+                Text(
+                  filteredCount == totalCount ? '$filteredCount건' : '$filteredCount건 / 총 ${totalCount}건',
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
