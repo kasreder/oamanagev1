@@ -448,9 +448,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
 
   // DataTable에서 사용할 컬럼 정의 (헤더 정보 포함)
   List<DataColumn> _buildColumns(List<_RowData> pageRows) {
-    final theme = Theme.of(context);
-    final headerStyle =
-        DataTableTheme.of(context).headingTextStyle ?? theme.textTheme.labelLarge;
+    final headerStyle = Theme.of(context).textTheme.labelLarge;
     return [
       DataColumn(
         label: _buildCheckboxHeaderCell(pageRows),
