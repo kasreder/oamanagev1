@@ -25,7 +25,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     _TableColumn.assetCode: 100,
     _TableColumn.manager: 100,
     _TableColumn.location: 180,
-    _TableColumn.verificationStatus: 160,
+    _TableColumn.verificationStatus: 100,
     _TableColumn.barcodePhoto: 100,
   };
   static const Map<_TableColumn, double> _columnSpacing = {
@@ -38,7 +38,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     _TableColumn.verificationStatus: 1,
     _TableColumn.barcodePhoto: 1,
   };
-  static const double _tableMinWidth = 1160;
+  static const double _tableMinWidth = 640;
   static const double _headerHeight = 48;
   static const double _checkboxHorizontalMargin = 16;
   static const double _checkboxColumnWidth =
@@ -205,6 +205,9 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
                                               child: SingleChildScrollView(
                                                 controller: _verticalScrollController,
                                                 child: DataTable(
+                                                  headingRowColor: WidgetStateProperty.resolveWith(
+                                                        (states) => Theme.of(context).colorScheme.surfaceContainerHighest,
+                                                  ),
                                                   columnSpacing: 0,
                                                   horizontalMargin: 0,
                                                   checkboxHorizontalMargin:
@@ -678,30 +681,6 @@ class _FilterSection extends StatelessWidget {
           children: [
             Row(
               children: [
-                SizedBox(
-                  width: 100,
-                  child: DropdownButtonFormField<_TableColumn>(
-                    value: selectedColumn,
-                    items: _TableColumn.values
-                        .map(
-                          (value) => DropdownMenuItem(
-                            value: value,
-                            alignment: Alignment.center,
-                            child: Text(value.label),
-                          ),
-                        )
-                        .toList(growable: false),
-                    onChanged: onColumnChanged,
-                    decoration: const InputDecoration(
-                      labelText: '항목',
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                    isDense: true,
-                    alignment: Alignment.center,
-                  ),
-                ),
-                const SizedBox(width: 12),
                 Expanded(
                   child: TextField(
                     controller: searchController,
@@ -712,6 +691,30 @@ class _FilterSection extends StatelessWidget {
                       labelText: '검색명',
                       border: OutlineInputBorder(),
                     ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 100,
+                  child: DropdownButtonFormField<_TableColumn>(
+                    value: selectedColumn,
+                    items: _TableColumn.values
+                        .map(
+                          (value) => DropdownMenuItem(
+                        value: value,
+                        alignment: Alignment.center,
+                        child: Text(value.label),
+                      ),
+                    )
+                        .toList(growable: false),
+                    onChanged: onColumnChanged,
+                    decoration: const InputDecoration(
+                      labelText: '항목',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    isDense: true,
+                    alignment: Alignment.center,
                   ),
                 ),
                 const SizedBox(width: 6),
