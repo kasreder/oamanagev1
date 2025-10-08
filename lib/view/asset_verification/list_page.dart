@@ -380,6 +380,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     );
   }
 
+  // 공통 헤더 셀 위젯 생성 함수 (굵은 글씨 적용)
   Widget _headerCell(
     String label,
     _TableColumn column,
@@ -398,41 +399,54 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     );
   }
 
+  // 팀 헤더 텍스트 위젯 생성
   Widget _teamHeaderCell(TextStyle? style) =>
       _headerCell('팀', _TableColumn.team, style);
 
+  // 사용자 헤더 텍스트 위젯 생성
   Widget _userHeaderCell(TextStyle? style) =>
       _headerCell('사용자', _TableColumn.user, style);
 
+  // 장비 헤더 텍스트 위젯 생성
   Widget _assetHeaderCell(TextStyle? style) =>
       _headerCell('장비', _TableColumn.asset, style);
 
+  // 자산번호 헤더 텍스트 위젯 생성
   Widget _assetCodeHeaderCell(TextStyle? style) =>
       _headerCell('자산번호', _TableColumn.assetCode, style);
 
+  // 관리자 헤더 텍스트 위젯 생성
   Widget _managerHeaderCell(TextStyle? style) =>
       _headerCell('관리자', _TableColumn.manager, style);
 
+  // 위치 헤더 텍스트 위젯 생성
   Widget _locationHeaderCell(TextStyle? style) =>
       _headerCell('위치', _TableColumn.location, style);
 
+  // 인증여부 헤더 텍스트 위젯 생성
   Widget _verificationHeaderCell(TextStyle? style) =>
       _headerCell('인증여부', _TableColumn.verificationStatus, style);
 
+  // 바코드 사진 헤더 텍스트 위젯 생성
   Widget _barcodePhotoHeaderCell(TextStyle? style) =>
       _headerCell('바코드사진', _TableColumn.barcodePhoto, style);
 
+  // 테이블 헤더 전체를 구성하는 위젯
   Widget _buildTableHeader(List<_RowData> pageRows) {
     final theme = Theme.of(context);
     final dataTableTheme = DataTableTheme.of(context);
+    // 테마에서 헤더 배경색을 가져옴
     final headerColor =
         dataTableTheme.headingRowColor?.resolve(const <MaterialState>{}) ??
             theme.colorScheme.surface;
+    // 헤더 높이를 테마 혹은 기본값으로 설정
     final headerHeight =
         dataTableTheme.headingRowHeight ?? _headerHeight;
+    // 헤더 텍스트 스타일을 테마 혹은 기본값으로 설정
     final headerStyle =
         dataTableTheme.headingTextStyle ?? theme.textTheme.labelLarge;
 
+    // 각 컬럼의 헤더 셀을 순서대로 구성
     final headerCells = <Widget>[
       _teamHeaderCell(headerStyle),
       _userHeaderCell(headerStyle),
@@ -444,12 +458,16 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
       _barcodePhotoHeaderCell(headerStyle),
     ];
 
+    // 현재 페이지에서 선택된 행 개수 계산
     final selectedOnPage = pageRows
         .where((row) => _selectedAssetCodes.contains(row.assetCode))
         .length;
     final hasRows = pageRows.isNotEmpty;
+    // 페이지 내 모든 행 선택 여부 확인
     final allSelected = hasRows && selectedOnPage == pageRows.length;
+    // 페이지 내 일부 행 선택 여부 확인
     final anySelected = selectedOnPage > 0;
+    // 체크박스 상태 (전체 선택 / 일부 선택 / 미선택) 결정
     final bool? checkboxValue = !hasRows
         ? false
         : allSelected
@@ -476,6 +494,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
                   child: Checkbox(
                     value: checkboxValue,
                     tristate: hasRows,
+                    // 헤더 체크박스가 전체 선택/해제 동작을 수행
                     onChanged: hasRows
                         ? (value) =>
                             _onHeaderCheckboxChanged(pageRows, value ?? false)
@@ -506,6 +525,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     });
   }
 
+  // DataTable에서 사용할 컬럼 정의 (헤더 정보 포함)
   List<DataColumn> _buildColumns() {
     final theme = Theme.of(context);
     final headerStyle =
