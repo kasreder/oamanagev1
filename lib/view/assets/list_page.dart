@@ -152,6 +152,8 @@ class _AssetsListPageState extends State<AssetsListPage> {
                                                   columnSpacing: 0,
                                                   // 컬럼 간 간격을 제거합니다.
                                                   horizontalMargin: 0,
+                                                  dataRowMinHeight: 0,
+                                                  dataRowMaxHeight: 40,
                                                   columns: columns,
                                                   rows: pageRows
                                                       .map(
@@ -164,7 +166,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
                                                             DataCell(_cellText(row.asset?.model ?? '-')),
                                                             DataCell(_cellText(row.inspection.status)),
                                                             DataCell(_cellText(_resolveOrganization(row.asset, row.inspection))),
-                                                            DataCell(_cellText(row.asset?.location ?? '-')),
+                                                            DataCell(_cellText200(row.asset?.location ?? '-')),
                                                             DataCell(
                                                               _cellText(
                                                                 provider.formatDateTime(
@@ -326,7 +328,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
         label: _headerCell('소속팀', headerStyle),
       ),
       DataColumn(
-        label: _headerCell('위치', headerStyle),
+        label: _headerCell200('위치', headerStyle),
       ),
       DataColumn(
         label: _headerCell('스캔일시', headerStyle),
