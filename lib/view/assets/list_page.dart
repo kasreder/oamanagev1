@@ -365,7 +365,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
           alignment: Alignment.centerLeft,
           child: Text(
             label,
-            style: stylez,
+            style: style,
             overflow: TextOverflow.ellipsis,
           ),
         ),
