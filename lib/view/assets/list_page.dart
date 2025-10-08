@@ -610,7 +610,7 @@ class _FilterSection extends StatelessWidget {
               children: [
                 SegmentedButton<bool>(
                   segments: const [
-                    ButtonSegment<bool>(value: false, label: Text('    전체   ')),
+                    ButtonSegment<bool>(value: false, label: Text('전체')),
                     ButtonSegment<bool>(value: true, label: Text('미동기화')),
                   ],
                   selected: <bool>{provider.onlyUnsynced},
