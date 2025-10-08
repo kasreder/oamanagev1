@@ -352,6 +352,12 @@ class _AssetsListPageState extends State<AssetsListPage> {
   }
 
   // 일반 텍스트 헤더 셀을 생성합니다.
+  TextStyle _resolveHeaderStyle(TextStyle? baseStyle) {
+    return baseStyle == null
+        ? const TextStyle(fontWeight: FontWeight.w600)
+        : baseStyle.copyWith(fontWeight: FontWeight.w600);
+  }
+
   Widget _headerCell(
     String label,
     TextStyle? style, {
@@ -365,7 +371,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
           alignment: Alignment.centerLeft,
           child: Text(
             label,
-            style: style,
+            style: _resolveHeaderStyle(style),
             overflow: TextOverflow.ellipsis,
           ),
         ),
@@ -388,7 +394,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
           alignment: Alignment.centerLeft,
           child: Text(
             label,
-            style: style,
+            style: _resolveHeaderStyle(style),
             overflow: TextOverflow.ellipsis,
           ),
         ),
@@ -411,7 +417,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
           alignment: Alignment.centerLeft,
           child: Text(
             label,
-            style: style,
+            style: _resolveHeaderStyle(style),
             overflow: TextOverflow.ellipsis,
           ),
         ),
