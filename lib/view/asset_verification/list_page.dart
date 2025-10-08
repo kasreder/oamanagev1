@@ -591,7 +591,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
             ),
             DataCell(
               _buildTableText(
-                row.hasPhoto ? '사진 있음' : '사진 없음',
+                row.hasPhoto ? '사진 있음' : '없음',
                 _TableColumn.barcodePhoto,
               ),
             ),
