@@ -526,8 +526,9 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
       for (final row in pageRows)
         DataRow(
           selected: _selectedAssetCodes.contains(row.assetCode),
-          onSelectChanged: (selected) {
-            _toggleSelection(row.assetCode, selected ?? false);
+          onSelectChanged: (_) {
+            final isSelected = _selectedAssetCodes.contains(row.assetCode);
+            _toggleSelection(row.assetCode, !isSelected);
           },
           cells: [
             DataCell(
@@ -581,14 +582,9 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
   }
 
   Widget _buildAssetCodeCell(BuildContext context, String assetCode) {
-    return InkWell(
-      onTap: () {
-        context.push('/asset_verification/${Uri.encodeComponent(assetCode)}');
-      },
-      child: _buildTableText(
-        assetCode,
-        _TableColumn.assetCode,
-      ),
+    return _buildCellContainer(
+      _TableColumn.assetCode,
+      child: _AssetDetailCell(assetCode: assetCode),
     );
   }
 
@@ -792,8 +788,34 @@ class _VerificationCell extends StatelessWidget {
         final assetCode = Uri.encodeComponent(inspection.assetUid);
         context.push('/asset_verification/$assetCode');
       },
-
       child: const Text('인증하기'),
+    );
+  }
+}
+
+class _AssetDetailCell extends StatelessWidget {
+  const _AssetDetailCell({required this.assetCode});
+
+  final String assetCode;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      style: TextButton.styleFrom(
+        padding: EdgeInsets.zero,
+        minimumSize: const Size(0, 0),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        alignment: Alignment.centerLeft,
+      ),
+      onPressed: () {
+        final encodedCode = Uri.encodeComponent(assetCode);
+        context.push('/assets/$encodedCode');
+      },
+      child: Text(
+        assetCode,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
     );
   }
 }
