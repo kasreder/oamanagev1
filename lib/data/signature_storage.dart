@@ -32,4 +32,16 @@ class SignatureStorage {
       employeeId: employeeId,
     );
   }
+
+  static Future<Uint8List?> loadBytes({
+    required String assetUid,
+    required String userName,
+    required String employeeId,
+  }) {
+    return storage_impl.loadBytes(
+      assetUid: assetUid,
+      userName: userName,
+      employeeId: employeeId,
+    );
+  }
 }

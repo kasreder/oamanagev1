@@ -7,6 +7,7 @@ import '../../providers/inspection_provider.dart';
 import '../common/app_scaffold.dart';
 import 'verification_utils.dart';
 import 'widgets/verification_action_section.dart';
+import 'signature_utils.dart';
 
 class AssetVerificationDetailPage extends StatefulWidget {
   const AssetVerificationDetailPage({super.key, required this.assetUid});
@@ -19,6 +20,7 @@ class AssetVerificationDetailPage extends StatefulWidget {
 
 class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPage> {
   bool _isBarcodeExpanded = false;
+  bool _isSignatureExpanded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -44,30 +46,40 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
           final manager = resolveManager(asset);
           final location = resolveLocation(asset);
           final resolvedAssetCode = inspection?.assetUid ?? widget.assetUid;
-          final isVerified = inspection?.isVerified;
-          final verificationLabel = switch (isVerified) {
-            true => '인증 완료',
-            false => '미인증',
-            null => '실사 내역 없음',
-          };
-          final verificationColor = switch (isVerified) {
-            true => Colors.green,
-            false => Colors.orange,
-            null => Colors.grey,
-          };
-
-          return FutureBuilder<String?>(
-            future: BarcodePhotoRegistry.pathFor(widget.assetUid),
+          return FutureBuilder<_DetailExtras>(
+            future: _loadDetailExtras(resolvedAssetCode, user),
             builder: (context, snapshot) {
-              final photoPath = snapshot.data;
-              final isLoadingPhoto = snapshot.connectionState == ConnectionState.waiting;
+              final extras = snapshot.data;
+              final isLoadingExtras =
+                  snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData;
+              final photoPath = extras?.photoPath;
+              final signature = extras?.signature;
 
               final photoStatus = () {
-                if (isLoadingPhoto) {
+                if (isLoadingExtras) {
                   return '불러오는 중...';
                 }
                 return photoPath != null ? '사진 있음' : '사진 없음';
               }();
+
+              final signatureStatus = () {
+                if (isLoadingExtras) {
+                  return '불러오는 중...';
+                }
+                return signature != null ? '서명 있음' : '서명 없음';
+              }();
+
+              final isVerified = !isLoadingExtras && signature != null;
+              final verificationLabel = isLoadingExtras
+                  ? '확인 중'
+                  : isVerified
+                      ? '인증 완료'
+                      : '미인증';
+              final verificationColor = isLoadingExtras
+                  ? Colors.blueGrey
+                  : isVerified
+                      ? Colors.green
+                      : Colors.orange;
 
               final detailCells = <_DetailCell>[
                 _DetailCell('팀', SelectableText(_displayValue(teamName))),
@@ -90,6 +102,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                   ),
                 ),
                 _DetailCell('바코드사진', SelectableText(photoStatus)),
+                _DetailCell('인증서명', SelectableText(signatureStatus)),
               ];
 
               return Padding(
@@ -191,7 +204,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                                         padding: const EdgeInsets.only(top: 16),
                                         child: Builder(
                                           builder: (context) {
-                                            if (isLoadingPhoto) {
+                                            if (isLoadingExtras) {
                                               return const Center(child: CircularProgressIndicator());
                                             }
                                             if (photoPath != null) {
@@ -204,6 +217,76 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                                               );
                                             }
                                             return const Text('등록된 바코드 사진이 없습니다.');
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          '인증 서명',
+                                          style: Theme.of(context).textTheme.titleMedium,
+                                        ),
+                                        IconButton(
+                                          onPressed: () {
+                                            setState(() {
+                                              _isSignatureExpanded = !_isSignatureExpanded;
+                                            });
+                                          },
+                                          icon: Icon(
+                                            _isSignatureExpanded ? Icons.expand_less : Icons.expand_more,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    AnimatedCrossFade(
+                                      crossFadeState: _isSignatureExpanded
+                                          ? CrossFadeState.showSecond
+                                          : CrossFadeState.showFirst,
+                                      duration: const Duration(milliseconds: 200),
+                                      firstChild: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Padding(
+                                          padding: const EdgeInsets.only(top: 12),
+                                          child: Text(signatureStatus),
+                                        ),
+                                      ),
+                                      secondChild: Padding(
+                                        padding: const EdgeInsets.only(top: 16),
+                                        child: Builder(
+                                          builder: (context) {
+                                            if (isLoadingExtras) {
+                                              return const Center(child: CircularProgressIndicator());
+                                            }
+                                            if (signature != null) {
+                                              return Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  ClipRRect(
+                                                    borderRadius: BorderRadius.circular(8),
+                                                    child: Image.memory(
+                                                      signature.bytes,
+                                                      fit: BoxFit.contain,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 8),
+                                                  SelectableText('저장 위치: ${signature.location}'),
+                                                ],
+                                              );
+                                            }
+                                            return const Text('등록된 서명이 없습니다.');
                                           },
                                         ),
                                       ),
@@ -232,6 +315,12 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
     );
   }
 
+  Future<_DetailExtras> _loadDetailExtras(String assetUid, UserInfo? user) async {
+    final photoPath = await BarcodePhotoRegistry.pathFor(assetUid);
+    final signature = await loadSignatureData(assetUid: assetUid, user: user);
+    return _DetailExtras(photoPath: photoPath, signature: signature);
+  }
+
   static String _displayValue(String value) {
     if (value.trim().isEmpty) {
       return '정보 없음';
@@ -245,4 +334,14 @@ class _DetailCell {
 
   final String label;
   final Widget value;
+}
+
+class _DetailExtras {
+  const _DetailExtras({
+    required this.photoPath,
+    required this.signature,
+  });
+
+  final String? photoPath;
+  final SignatureData? signature;
 }

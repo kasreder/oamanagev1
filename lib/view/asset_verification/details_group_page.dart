@@ -8,6 +8,7 @@ import '../../providers/inspection_provider.dart';
 import '../common/app_scaffold.dart';
 import 'verification_utils.dart';
 import 'widgets/verification_action_section.dart';
+import 'signature_utils.dart';
 
 class AssetVerificationDetailsGroupPage extends StatelessWidget {
   const AssetVerificationDetailsGroupPage({super.key, required this.assetUids});
@@ -154,94 +155,151 @@ class _GroupAssetCard extends StatelessWidget {
       final assetType = resolveAssetType(inspection, asset);
       final manager = resolveManager(asset);
       final location = resolveLocation(asset);
-      final verificationState = inspection?.isVerified;
-      final verificationLabel = switch (verificationState) {
-        true => '인증 완료',
-        false => '미인증',
-        null => '실사 내역 없음',
-      };
-      final verificationColor = switch (verificationState) {
-        true => Colors.green,
-        false => Colors.orange,
-        null => Colors.grey,
-      };
+      final user = resolveUser(provider, inspection, asset);
       final normalizedAssetUid = entry.assetUid.trim().toLowerCase();
       final photoPath = photoPaths[normalizedAssetUid];
 
       return _GroupAssetRowData(
         assetUid: entry.assetUid,
         teamName: teamName,
-        userName: _resolveUserName(provider, inspection, asset),
+        userName: user?.name ?? '정보 없음',
+        user: user,
         assetType: assetType,
         manager: manager,
         location: location,
-        verificationLabel: verificationLabel,
-        verificationColor: verificationColor,
         photoPath: photoPath,
       );
     }).toList(growable: false);
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                headingTextStyle: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.copyWith(fontWeight: FontWeight.w700),
-                columns: [
-                  const DataColumn(label: Text('자산번호')),
-                  const DataColumn(label: Text('팀')),
-                  const DataColumn(label: Text('사용자')),
-                  const DataColumn(label: Text('장비')),
-                  const DataColumn(label: Text('관리자')),
-                  const DataColumn(label: Text('위치')),
-                  const DataColumn(label: Text('인증상태')),
-                  const DataColumn(label: Text('바코드사진')),
-                ],
-                rows: [
-                  for (final row in rows)
-                    DataRow(
-                      cells: [
-                        DataCell(_wrapCell(SelectableText(row.assetUid))),
-                        DataCell(_wrapCell(Text(row.teamName.isNotEmpty ? row.teamName : '정보 없음'))),
-                        DataCell(_wrapCell(Text(row.userName))),
-                        DataCell(_wrapCell(Text(row.assetType.isNotEmpty ? row.assetType : '정보 없음'))),
-                        DataCell(_wrapCell(Text(row.manager.isNotEmpty ? row.manager : '정보 없음'))),
-                        DataCell(_wrapCell(Text(row.location.isNotEmpty ? row.location : '정보 없음'))),
-                        DataCell(
-                          _wrapCell(
-                            Chip(
-                              backgroundColor: row.verificationColor.withOpacity(0.15),
-                              label: Text(
-                                row.verificationLabel,
-                                style: TextStyle(
-                                  color: row.verificationColor,
-                                  fontWeight: FontWeight.w600,
-                                ),
+    return FutureBuilder<Map<String, SignatureData>>(
+      future: _loadSignatureMap(rows),
+      builder: (context, snapshot) {
+        final signatureMap = snapshot.data ?? const <String, SignatureData>{};
+        final isLoadingSignatures =
+            snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData;
+
+        final previewEntries = rows
+            .map(
+              (row) => MapEntry(
+                row,
+                signatureMap[signatureCacheKey(row.assetUid, row.user)],
+              ),
+            )
+            .where((entry) => entry.value != null)
+            .toList(growable: false);
+
+        return Card(
+          margin: const EdgeInsets.only(bottom: 16),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                    headingTextStyle: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                    columns: [
+                      const DataColumn(label: Text('자산번호')),
+                      const DataColumn(label: Text('팀')),
+                      const DataColumn(label: Text('사용자')),
+                      const DataColumn(label: Text('장비')),
+                      const DataColumn(label: Text('관리자')),
+                      const DataColumn(label: Text('위치')),
+                      const DataColumn(label: Text('인증상태')),
+                      const DataColumn(label: Text('바코드사진')),
+                    ],
+                    rows: [
+                      for (final row in rows)
+                        DataRow(
+                          cells: [
+                            DataCell(_wrapCell(SelectableText(row.assetUid))),
+                            DataCell(
+                              _wrapCell(
+                                Text(row.teamName.isNotEmpty ? row.teamName : '정보 없음'),
                               ),
                             ),
+                            DataCell(_wrapCell(Text(row.userName))),
+                            DataCell(
+                              _wrapCell(
+                                Text(row.assetType.isNotEmpty ? row.assetType : '정보 없음'),
+                              ),
+                            ),
+                            DataCell(
+                              _wrapCell(
+                                Text(row.manager.isNotEmpty ? row.manager : '정보 없음'),
+                              ),
+                            ),
+                            DataCell(
+                              _wrapCell(
+                                Text(row.location.isNotEmpty ? row.location : '정보 없음'),
+                              ),
+                            ),
+                            DataCell(
+                              _wrapCell(
+                                isLoadingSignatures
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      )
+                                    : _buildVerificationChip(
+                                        signatureMap[signatureCacheKey(row.assetUid, row.user)],
+                                      ),
+                              ),
+                            ),
+                            DataCell(
+                              _wrapCell(
+                                _buildPhotoCell(row.photoPath),
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (isLoadingSignatures)
+                  const Text('서명 정보를 불러오는 중입니다...')
+                else if (previewEntries.isEmpty)
+                  const Text(
+                    '등록된 서명이 없습니다.',
+                    style: TextStyle(color: Colors.grey),
+                  )
+                else ...[
+                  Text(
+                    '인증 서명',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final entry in previewEntries) ...[
+                        Text('${entry.key.assetUid} (${entry.key.userName})'),
+                        const SizedBox(height: 8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.memory(
+                            entry.value!.bytes,
+                            fit: BoxFit.contain,
                           ),
                         ),
-                        DataCell(
-                          _wrapCell(
-                            _buildPhotoCell(row.photoPath),
-                          ),
-                        ),
+                        const SizedBox(height: 8),
+                        SelectableText('저장 위치: ${entry.value!.location}'),
+                        const SizedBox(height: 16),
                       ],
-                    ),
+                    ],
+                  ),
                 ],
-              ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -269,13 +327,38 @@ class _GroupAssetCard extends StatelessWidget {
     );
   }
 
-  String _resolveUserName(
-    InspectionProvider provider,
-    Inspection? inspection,
-    AssetInfo? asset,
-  ) {
-    final user = resolveUser(provider, inspection, asset);
-    return user?.name ?? '정보 없음';
+  Future<Map<String, SignatureData>> _loadSignatureMap(
+    List<_GroupAssetRowData> rows,
+  ) async {
+    final futures = rows.map((row) async {
+      final signature = await loadSignatureData(
+        assetUid: row.assetUid,
+        user: row.user,
+      );
+      if (signature == null) {
+        return null;
+      }
+      return MapEntry(signatureCacheKey(row.assetUid, row.user), signature);
+    }).toList(growable: false);
+
+    final results = await Future.wait(futures);
+    return Map.fromEntries(results.whereType<MapEntry<String, SignatureData>>());
+  }
+
+  Widget _buildVerificationChip(SignatureData? signature) {
+    final isVerified = signature != null;
+    final color = isVerified ? Colors.green : Colors.orange;
+    final label = isVerified ? '인증 완료' : '미인증';
+    return Chip(
+      backgroundColor: color.withOpacity(0.15),
+      label: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
   }
 }
 
@@ -284,21 +367,19 @@ class _GroupAssetRowData {
     required this.assetUid,
     required this.teamName,
     required this.userName,
+    required this.user,
     required this.assetType,
     required this.manager,
     required this.location,
-    required this.verificationLabel,
-    required this.verificationColor,
     required this.photoPath,
   });
 
   final String assetUid;
   final String teamName;
   final String userName;
+  final UserInfo? user;
   final String assetType;
   final String manager;
   final String location;
-  final String verificationLabel;
-  final Color verificationColor;
   final String? photoPath;
 }
