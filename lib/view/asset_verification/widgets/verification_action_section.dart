@@ -25,7 +25,7 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
 
   bool _isSavingSignature = false;
   bool _isLoadingSignature = false;
-  String? _savedSignaturePath;
+  String? _savedSignatureLocation;
 
   @override
   void initState() {
@@ -53,7 +53,7 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
     final user = widget.primaryUser;
     if (assetUid == null || user == null) {
       setState(() {
-        _savedSignaturePath = null;
+        _savedSignatureLocation = null;
         _isLoadingSignature = false;
       });
       return;
@@ -64,20 +64,20 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
     });
 
     try {
-      final file = await SignatureStorage.find(
+      final storedSignature = await SignatureStorage.find(
         assetUid: assetUid,
         userName: user.name,
         employeeId: user.id,
       );
       if (!mounted) return;
       setState(() {
-        _savedSignaturePath = file?.path;
+        _savedSignatureLocation = storedSignature?.location;
         _isLoadingSignature = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _savedSignaturePath = null;
+        _savedSignatureLocation = null;
         _isLoadingSignature = false;
       });
     }
@@ -108,7 +108,7 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
     });
 
     try {
-      final file = await SignatureStorage.save(
+      final storedSignature = await SignatureStorage.save(
         data: imageBytes,
         assetUid: assetUid,
         userName: user.name,
@@ -116,10 +116,10 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
       );
       if (!mounted) return;
       setState(() {
-        _savedSignaturePath = file.path;
+        _savedSignatureLocation = storedSignature.location;
         _isSavingSignature = false;
       });
-      _showSnackBar('서명이 저장되어 인증이 완료되었습니다. (${file.path})');
+      _showSnackBar('서명이 저장되어 인증이 완료되었습니다. (${storedSignature.location})');
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -185,7 +185,7 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
             const SizedBox(height: 8),
             if (_isLoadingSignature)
               const Text('저장된 서명을 확인하는 중입니다...')
-            else if (_savedSignaturePath != null)
+            else if (_savedSignatureLocation != null)
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -201,7 +201,7 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  SelectableText('저장 위치: $_savedSignaturePath'),
+                  SelectableText('저장 위치: $_savedSignatureLocation'),
                 ],
               )
             else
