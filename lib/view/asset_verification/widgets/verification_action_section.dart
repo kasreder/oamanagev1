@@ -56,6 +56,7 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
       setState(() {
         _savedSignatureLocation = null;
         _savedSignatureDisplayLocation = null;
+
         _isLoadingSignature = false;
       });
       return;
@@ -74,8 +75,10 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
       if (!mounted) return;
       setState(() {
         _savedSignatureLocation = storedSignature?.location;
+
         _savedSignatureDisplayLocation =
             _formatLocationForDisplay(storedSignature?.location);
+
         _isLoadingSignature = false;
       });
     } catch (_) {
@@ -83,6 +86,7 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
       setState(() {
         _savedSignatureLocation = null;
         _savedSignatureDisplayLocation = null;
+
         _isLoadingSignature = false;
       });
     }
@@ -133,6 +137,7 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
             ? '서명이 저장되어 인증이 완료되었습니다.'
             : '서명이 저장되어 인증이 완료되었습니다. ($readableLocation)',
       );
+
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -230,6 +235,7 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
                     '저장 위치: '
                     '${_savedSignatureDisplayLocation ?? _savedSignatureLocation}',
                   ),
+
                 ],
               )
             else
