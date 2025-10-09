@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../../models/inspection.dart';
 import '../../providers/inspection_provider.dart';
 import '../common/app_scaffold.dart';
+import 'signature_utils.dart';
 import 'verification_utils.dart';
 
 class AssetVerificationListPage extends StatefulWidget {
@@ -48,6 +49,8 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
 
   Set<String> _barcodePhotoAssetCodes = const <String>{};
   Set<String> _selectedAssetCodes = <String>{};
+  final Map<String, bool> _signatureStatuses = <String, bool>{};
+  final Set<String> _loadingSignatureKeys = <String>{};
 
   _TableColumn _selectedSearchColumn = _TableColumn.team;
   String _searchKeyword = '';
@@ -79,6 +82,37 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     setState(() {
       _barcodePhotoAssetCodes = codes;
     });
+  }
+
+  void _ensureSignatureStatus(List<_RowData> rows) {
+    for (final row in rows) {
+      final key = signatureCacheKey(row.assetCode, row.user);
+      if (_signatureStatuses.containsKey(key) ||
+          _loadingSignatureKeys.contains(key)) {
+        continue;
+      }
+
+      final user = row.user;
+      if (user == null || user.id.trim().isEmpty || user.name.trim().isEmpty) {
+        _signatureStatuses[key] = false;
+        continue;
+      }
+
+      _loadingSignatureKeys.add(key);
+      signatureExists(assetUid: row.assetCode, user: user).then((exists) {
+        if (!mounted) return;
+        setState(() {
+          _signatureStatuses[key] = exists;
+          _loadingSignatureKeys.remove(key);
+        });
+      }).catchError((_) {
+        if (!mounted) return;
+        setState(() {
+          _signatureStatuses[key] = false;
+          _loadingSignatureKeys.remove(key);
+        });
+      });
+    }
   }
 
   void _onSearchColumnChanged(_TableColumn? value) {
@@ -128,6 +162,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     return Consumer<InspectionProvider>(
       builder: (context, provider, _) {
         final rows = _rowsFromProvider(provider);
+        _ensureSignatureStatus(rows);
         final filteredRows = _applyFilters(rows);
         final visibleAssetCodes = filteredRows.map((row) => row.assetCode).toSet();
         if (_selectedAssetCodes.difference(visibleAssetCodes).isNotEmpty) {
@@ -342,10 +377,24 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
       case _TableColumn.location:
         return row.location;
       case _TableColumn.verificationStatus:
-        return row.isVerified ? '완료' : '미인증';
+        if (_isSignatureLoading(row)) {
+          return '확인 중';
+        }
+        return _isRowVerified(row) ? '완료' : '미인증';
       case _TableColumn.barcodePhoto:
         return row.hasPhoto ? '사진 있음' : '없음';
     }
+  }
+
+  bool _isRowVerified(_RowData row) {
+    final key = signatureCacheKey(row.assetCode, row.user);
+    final status = _signatureStatuses[key];
+    return status ?? false;
+  }
+
+  bool _isSignatureLoading(_RowData row) {
+    final key = signatureCacheKey(row.assetCode, row.user);
+    return _loadingSignatureKeys.contains(key);
   }
 
   Widget _buildTableText(String text, _TableColumn column) {
@@ -362,7 +411,11 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
   Widget _buildVerificationCell(_RowData row) {
     return _buildCellContainer(
       _TableColumn.verificationStatus,
-      child: _VerificationCell(inspection: row.inspection),
+      child: _VerificationCell(
+        inspection: row.inspection,
+        isVerified: _isRowVerified(row),
+        isLoading: _isSignatureLoading(row),
+      ),
     );
   }
 
@@ -768,13 +821,26 @@ class _FilterSection extends StatelessWidget {
 }
 
 class _VerificationCell extends StatelessWidget {
-  const _VerificationCell({required this.inspection});
+  const _VerificationCell({
+    required this.inspection,
+    required this.isVerified,
+    required this.isLoading,
+  });
 
   final Inspection inspection;
+  final bool isVerified;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
-    if (inspection.isVerified) {
+    if (isLoading) {
+      return const SizedBox(
+        width: 16,
+        height: 16,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+    }
+    if (isVerified) {
       return const Text(
         '완료',
         style: TextStyle(
@@ -933,6 +999,7 @@ class _RowData {
     required this.teamName,
     required this.assetCode,
     required this.userName,
+    required this.user,
     required this.assetType,
     required this.manager,
     required this.location,
@@ -943,12 +1010,11 @@ class _RowData {
   final String teamName;
   final String assetCode;
   final String userName;
+  final UserInfo? user;
   final String assetType;
   final String manager;
   final String location;
   final bool hasPhoto;
-
-  bool get isVerified => inspection.isVerified;
 
   factory _RowData.fromInspection(
     Inspection inspection,
@@ -970,6 +1036,7 @@ class _RowData {
       teamName: teamName,
       assetCode: inspection.assetUid,
       userName: user?.name ?? '정보 없음',
+      user: user,
       assetType: assetType.isNotEmpty ? assetType : '정보 없음',
       manager: manager.isNotEmpty ? manager : '정보 없음',
       location: location.isNotEmpty ? location : '정보 없음',

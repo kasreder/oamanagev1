@@ -33,6 +33,19 @@ Future<StoredSignature?> find({
   return StoredSignature(location: 'localStorage://$key');
 }
 
+Future<Uint8List?> loadBytes({
+  required String assetUid,
+  required String userName,
+  required String employeeId,
+}) async {
+  final key = _buildStorageKey(assetUid, userName, employeeId);
+  final encoded = html.window.localStorage[key];
+  if (encoded == null) {
+    return null;
+  }
+  return base64Decode(encoded);
+}
+
 String _buildStorageKey(String assetUid, String userName, String employeeId) {
   final fileName = buildSignatureFileName(assetUid, userName, employeeId);
   return '$_storagePrefix$fileName';
