@@ -68,9 +68,26 @@ class SignaturePadState extends State<SignaturePad> {
     double pressure,
     PointerEvent event,
   ) {
+    final clampedPosition = _clampToBounds(position);
     final normalized = _normalizePressure(pressure, event.pressureMin, event.pressureMax);
-    stroke.points.add(position);
+    stroke.points.add(clampedPosition);
     stroke.widths.add(_strokeWidth(normalized));
+  }
+
+  Offset _clampToBounds(Offset position) {
+    final boundaryContext = _boundaryKey.currentContext;
+    if (boundaryContext == null) {
+      return position;
+    }
+
+    final size = boundaryContext.size;
+    if (size == null) {
+      return position;
+    }
+
+    final dx = position.dx.clamp(0.0, size.width);
+    final dy = position.dy.clamp(0.0, size.height);
+    return Offset(dx, dy);
   }
 
   double _normalizePressure(double pressure, double min, double max) {
