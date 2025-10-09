@@ -151,7 +151,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
         final selectedCount = _selectedAssetCodes.length;
 
         return AppScaffold(
-          title: '팀별 자산 인증 현황',
+          title: '자산 인증 현황',
           selectedIndex: 2,
           body: Padding(
             padding: const EdgeInsets.all(5),
