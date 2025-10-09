@@ -611,6 +611,7 @@ class _FilterSection extends StatelessWidget {
             const SizedBox(height: 12),
             Row(
               children: [
+                Text('검색 결과: '),
 
                 Text(
                   filteredCount == totalCount ? '$filteredCount건' : '$filteredCount건 / 총 ${totalCount}건',
