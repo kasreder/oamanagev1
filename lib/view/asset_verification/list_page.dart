@@ -784,6 +784,12 @@ class _VerificationCell extends StatelessWidget {
       );
     }
     return TextButton(
+      style: TextButton.styleFrom(
+        padding: EdgeInsets.zero,
+        minimumSize: const Size(0, 0),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        alignment: Alignment.centerLeft,
+      ),
       onPressed: () {
         final assetCode = Uri.encodeComponent(inspection.assetUid);
         context.push('/asset_verification/$assetCode');

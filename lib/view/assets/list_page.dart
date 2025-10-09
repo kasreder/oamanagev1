@@ -169,7 +169,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
                                                             )),
                                                             DataCell(_cellText(row.asset?.name ?? '-')),
                                                             DataCell(_cellText(row.asset?.assets_types ?? '-')),
-                                                            DataCell(_cellText(row.asset?.model ?? '-')),
+                                                            DataCell(_cellText120(row.asset?.model ?? '-')),
                                                             DataCell(_cellText(row.inspection.status)),
                                                             DataCell(_cellText(_resolveOrganization(row.asset, row.inspection))),
                                                             DataCell(_cellText200(row.asset?.location ?? '-')),
@@ -328,7 +328,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
         label: _headerCell('장비종류', headerStyle),
       ),
       DataColumn(
-        label: _headerCell('모델명', headerStyle),
+        label: _headerCel120('모델명', headerStyle),
       ),
       DataColumn(
         label: _headerCell('상태', headerStyle),
@@ -374,6 +374,27 @@ class _AssetsListPageState extends State<AssetsListPage> {
     TextStyle? style, {
     double width = _defaultColumnWidth,
   }) {
+    return Padding(
+      padding: _cellPadding,
+      child: SizedBox(
+        width: width,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            label,
+            style: _resolveHeaderStyle(style),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _headerCel120(
+      String label,
+      TextStyle? style, {
+        double width = _120ColumnWidth,
+      }) {
     return Padding(
       padding: _cellPadding,
       child: SizedBox(
@@ -478,6 +499,28 @@ class _AssetsListPageState extends State<AssetsListPage> {
     final textStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
           fontSize: 13,
         ); // 본문 글꼴 크기를 살짝 줄여 테이블을 더 촘촘하게 보여줍니다.
+    return Padding(
+      padding: _cellPadding,
+      child: SizedBox(
+        width: width,
+        child: Text(
+          value,
+          maxLines: maxLines,
+          overflow: TextOverflow.ellipsis,
+          style: textStyle,
+        ),
+      ),
+    );
+  }
+
+  Widget _cellText120(
+      String value, {
+        int maxLines = 1,
+        double width = _120ColumnWidth,
+      }) {
+    final textStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+      fontSize: 13,
+    ); // 본문 글꼴 크기를 살짝 줄여 테이블을 더 촘촘하게 보여줍니다.
     return Padding(
       padding: _cellPadding,
       child: SizedBox(
