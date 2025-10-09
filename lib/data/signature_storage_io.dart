@@ -33,6 +33,20 @@ Future<StoredSignature?> find({
   return null;
 }
 
+Future<Uint8List?> loadBytes({
+  required String assetUid,
+  required String userName,
+  required String employeeId,
+}) async {
+  final directory = await _ensureDirectory();
+  final fileName = buildSignatureFileName(assetUid, userName, employeeId);
+  final file = File('${directory.path}/$fileName.png');
+  if (await file.exists()) {
+    return file.readAsBytes();
+  }
+  return null;
+}
+
 Future<Directory> _ensureDirectory() async {
   final baseDir = await getApplicationDocumentsDirectory();
   final target = Directory('${baseDir.path}/assets/dummy/sign');
