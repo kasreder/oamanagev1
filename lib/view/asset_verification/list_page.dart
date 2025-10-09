@@ -688,16 +688,24 @@ class _FilterSection extends StatelessWidget {
                     onSubmitted: (_) => onSearch(),
                     textInputAction: TextInputAction.search,
                     decoration: const InputDecoration(
-                      labelText: '검색명',
+                      labelText: '검색어',
+                      prefixIcon: Icon(Icons.search),
                       border: OutlineInputBorder(),
+                      isDense: true,
                     ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 SizedBox(
-                  width: 100,
+                  width: 130,
                   child: DropdownButtonFormField<_TableColumn>(
                     value: selectedColumn,
+                    decoration: const InputDecoration(
+                      labelText: '구분',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                      // contentPadding: EdgeInsets.zero,
+                    ),
                     items: _TableColumn.values
                         .map(
                           (value) => DropdownMenuItem(
@@ -708,12 +716,6 @@ class _FilterSection extends StatelessWidget {
                     )
                         .toList(growable: false),
                     onChanged: onColumnChanged,
-                    decoration: const InputDecoration(
-                      labelText: '항목',
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                    isDense: true,
                     alignment: Alignment.center,
                   ),
                 ),
