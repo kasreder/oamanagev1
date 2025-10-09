@@ -1,0 +1,43 @@
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:path_provider/path_provider.dart';
+
+import 'signature_storage_result.dart';
+import 'signature_storage_shared.dart';
+
+Future<StoredSignature> save({
+  required Uint8List data,
+  required String assetUid,
+  required String userName,
+  required String employeeId,
+}) async {
+  final directory = await _ensureDirectory();
+  final fileName = buildSignatureFileName(assetUid, userName, employeeId);
+  final file = File('${directory.path}/$fileName.png');
+  await file.writeAsBytes(data, flush: true);
+  return StoredSignature(location: file.path);
+}
+
+Future<StoredSignature?> find({
+  required String assetUid,
+  required String userName,
+  required String employeeId,
+}) async {
+  final directory = await _ensureDirectory();
+  final fileName = buildSignatureFileName(assetUid, userName, employeeId);
+  final file = File('${directory.path}/$fileName.png');
+  if (await file.exists()) {
+    return StoredSignature(location: file.path);
+  }
+  return null;
+}
+
+Future<Directory> _ensureDirectory() async {
+  final baseDir = await getApplicationDocumentsDirectory();
+  final target = Directory('${baseDir.path}/assets/dummy/sign');
+  if (!await target.exists()) {
+    await target.create(recursive: true);
+  }
+  return target;
+}
