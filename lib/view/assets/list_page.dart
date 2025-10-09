@@ -37,11 +37,14 @@ class _AssetsListPageState extends State<AssetsListPage> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalScrollController = ScrollController();
   final ScrollController _verticalScrollController = ScrollController();
-  static const double _tableMinWidth = 640; // 테이블이 답답해 보이지 않도록 최소 너비를 지정합니다.
-  static const EdgeInsets _cellPadding = EdgeInsets.symmetric(horizontal: 5, vertical: 10);
-  static const double _defaultColumnWidth = 60;
+  static const double _tableMinWidth = 1200; // 테이블이 답답해 보이지 않도록 최소 너비를 지정합니다.
+  static const EdgeInsets _cellPadding = EdgeInsets.symmetric(horizontal: 1, vertical: 1);
   static const double _iconColumnWidth = 30;
-  static const double _actionColumnWidth = 104;
+  static const double _defaultColumnWidth = 60;
+  static const double _70ColumnWidth = 70;
+  static const double _80ColumnWidth = 80;
+  static const double _120ColumnWidth = 120 ;
+  static const double _200ColumnWidth = 200;
   _AssetSearchField _searchField = _AssetSearchField.name;
   int _currentPage = 0;
 
@@ -386,7 +389,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
     //메모
     String label,
     TextStyle? style, {
-    double width = 200,
+    double width = _200ColumnWidth,
   }) {
     return Padding(
       padding: _cellPadding,
@@ -488,7 +491,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
     //메모
     String value, {
     int maxLines = 1,
-    double width = 200,
+    double width = _200ColumnWidth,
   }) {
     final textStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
           fontSize: 13,
