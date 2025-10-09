@@ -591,7 +591,7 @@ class _FilterSection extends StatelessWidget {
                   child: DropdownButtonFormField<_AssetSearchField>(
                     value: searchField,
                     decoration: const InputDecoration(
-                      labelText: '검색 종류',
+                      labelText: '구분',
                       border: OutlineInputBorder(),
                       isDense: true,
                     ),
@@ -611,6 +611,11 @@ class _FilterSection extends StatelessWidget {
             const SizedBox(height: 12),
             Row(
               children: [
+
+                Text(
+                  filteredCount == totalCount ? '$filteredCount건' : '$filteredCount건 / 총 ${totalCount}건',
+                ),
+                const Spacer(),
                 SegmentedButton<bool>(
                   segments: const [
                     ButtonSegment<bool>(value: false, label: Text('전체')),
@@ -622,10 +627,7 @@ class _FilterSection extends StatelessWidget {
                     provider.setOnlyUnsynced(value.first);
                   },
                 ),
-                const Spacer(),
-                Text(
-                  filteredCount == totalCount ? '$filteredCount건' : '$filteredCount건 / 총 ${totalCount}건',
-                ),
+
               ],
             ),
           ],
