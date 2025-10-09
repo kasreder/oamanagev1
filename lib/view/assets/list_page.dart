@@ -163,7 +163,10 @@ class _AssetsListPageState extends State<AssetsListPage> {
                                                         (row) => DataRow(
                                                           onSelectChanged: (_) => context.go('/assets/${row.inspection.id}'),
                                                           cells: [
-                                                            DataCell(_cellText(row.inspection.assetUid)),
+                                                            DataCell(Padding(
+                                                              padding: const EdgeInsets.all(8.0),
+                                                              child: _cellText(row.inspection.assetUid),
+                                                            )),
                                                             DataCell(_cellText(row.asset?.name ?? '-')),
                                                             DataCell(_cellText(row.asset?.assets_types ?? '-')),
                                                             DataCell(_cellText(row.asset?.model ?? '-')),
@@ -313,7 +316,10 @@ class _AssetsListPageState extends State<AssetsListPage> {
     final headerStyle = Theme.of(context).textTheme.labelLarge; // 헤더는 기본 크기를 유지해 가독성을 확보합니다.
     return [
       DataColumn(
-        label: _headerCell('자산번호', headerStyle),
+        label: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: _headerCell('자산번호', headerStyle),
+        ),
       ),
       DataColumn(
         label: _headerCell('사용자', headerStyle),
