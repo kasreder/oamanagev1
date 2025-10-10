@@ -23,6 +23,8 @@ class AssetVerificationDetailsGroupPage extends StatefulWidget {
 
 class _AssetVerificationDetailsGroupPageState
     extends State<AssetVerificationDetailsGroupPage> {
+  bool _isActionsExpanded = true;
+
   void _handleSignaturesSaved() {
     setState(() {});
   }
@@ -114,11 +116,52 @@ class _AssetVerificationDetailsGroupPageState
                           ),
                           if (validEntries.isNotEmpty) ...[
                             const SizedBox(height: 16),
-                            VerificationActionSection(
-                              assetUids: verificationTargets,
-                              primaryAssetUid: primaryEntry?.assetUid,
-                              primaryUser: primaryUser,
-                              onSignaturesSaved: _handleSignaturesSaved,
+                            Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          '인증 작업',
+                                          style: Theme.of(context).textTheme.titleMedium,
+                                        ),
+                                        IconButton(
+                                          onPressed: () {
+                                            setState(() {
+                                              _isActionsExpanded = !_isActionsExpanded;
+                                            });
+                                          },
+                                          icon: Icon(
+                                            _isActionsExpanded
+                                                ? Icons.expand_less
+                                                : Icons.expand_more,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    AnimatedCrossFade(
+                                      crossFadeState: _isActionsExpanded
+                                          ? CrossFadeState.showSecond
+                                          : CrossFadeState.showFirst,
+                                      duration: const Duration(milliseconds: 200),
+                                      firstChild: const SizedBox.shrink(),
+                                      secondChild: Padding(
+                                        padding: const EdgeInsets.only(top: 16),
+                                        child: VerificationActionSection(
+                                          assetUids: verificationTargets,
+                                          primaryAssetUid: primaryEntry?.assetUid,
+                                          primaryUser: primaryUser,
+                                          onSignaturesSaved: _handleSignaturesSaved,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ],
                         ],
@@ -161,7 +204,7 @@ class _GroupAssetCard extends StatefulWidget {
 }
 
 class _GroupAssetCardState extends State<_GroupAssetCard> {
-  bool _isSignatureExpanded = false;
+  bool _isSignatureExpanded = true;
   bool _isBarcodeExpanded = false;
 
   @override
