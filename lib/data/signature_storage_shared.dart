@@ -1,3 +1,6 @@
+const signatureFileExtension = '.png';
+const legacySignatureFileExtensions = ['.webp'];
+
 String buildSignatureFileName(
   String assetUid,
   String userName,

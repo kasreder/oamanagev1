@@ -9,7 +9,11 @@ import 'package:image/image.dart' as img;
 import 'signature_storage_result.dart';
 import 'signature_storage_shared.dart';
 
+typedef _SignatureHandle = ({Object handle, String fileName});
+
 const _storagePrefix = 'signature_storage:';
+const _signatureExtension = signatureFileExtension;
+const _legacyLocalStorageSuffixes = ['.webp', ''];
 
 Future<StoredSignature> save({
   required Uint8List data,
@@ -24,9 +28,12 @@ Future<StoredSignature> save({
     }
     final fileName = _buildFileName(assetUid, userName, employeeId);
     final fileHandle = await _createFileHandle(directory, fileName);
-    final webpBytes = _encodeToWebp(data);
+    final pngBytes = _encodeToPng(data);
 
-    await _writeFile(fileHandle, webpBytes);
+    await _writeFile(fileHandle, pngBytes);
+    for (final legacyFileName in _legacyFileNames(fileName)) {
+      await _removeFile(directory, legacyFileName);
+    }
     _removeLegacyLocalStorageEntries(
       assetUid: assetUid,
       userName: userName,
@@ -58,17 +65,19 @@ Future<StoredSignature?> find({
       );
     }
     final fileName = _buildFileName(assetUid, userName, employeeId);
-    final fileHandle = await _getExistingOrLegacyFileHandle(
+    final signatureHandle = await _getExistingOrLegacyFileHandle(
       directory,
       fileName,
       assetUid: assetUid,
       userName: userName,
       employeeId: employeeId,
     );
-    if (fileHandle == null) {
+    if (signatureHandle == null) {
       return null;
     }
-    return StoredSignature(location: 'assets/dummy/sign/$fileName');
+    return StoredSignature(
+      location: 'assets/dummy/sign/${signatureHandle.fileName}',
+    );
   } on UnsupportedError {
     return _findInLocalStorage(
       assetUid: assetUid,
@@ -93,17 +102,17 @@ Future<Uint8List?> loadBytes({
       );
     }
     final fileName = _buildFileName(assetUid, userName, employeeId);
-    final fileHandle = await _getExistingOrLegacyFileHandle(
+    final signatureHandle = await _getExistingOrLegacyFileHandle(
       directory,
       fileName,
       assetUid: assetUid,
       userName: userName,
       employeeId: employeeId,
     );
-    if (fileHandle == null) {
+    if (signatureHandle == null) {
       return null;
     }
-    return _readFile(fileHandle);
+    return _readFile(signatureHandle.handle);
   } on UnsupportedError {
     return _loadBytesFromLocalStorage(
       assetUid: assetUid,
@@ -115,21 +124,15 @@ Future<Uint8List?> loadBytes({
 
 String _buildFileName(String assetUid, String userName, String employeeId) {
   final fileName = buildSignatureFileName(assetUid, userName, employeeId);
-  return '$fileName.webp';
+  return '$fileName$_signatureExtension';
 }
 
-Uint8List _encodeToWebp(Uint8List data) {
-
+Uint8List _encodeToPng(Uint8List data) {
   final decoded = img.decodeImage(data);
   if (decoded == null) {
     throw const FormatException('Unable to decode signature image data');
   }
-  final encoded = img.encodeWebp(
-
-    decoded,
-    quality: 100,
-    lossless: true,
-  );
+  final encoded = img.encodePng(decoded);
   return Uint8List.fromList(encoded);
 }
 
@@ -224,7 +227,7 @@ Future<Object?> _getExistingFileHandle(
   }
 }
 
-Future<Object?> _getExistingOrLegacyFileHandle(
+Future<_SignatureHandle?> _getExistingOrLegacyFileHandle(
   Object directory,
   String fileName,
   {
@@ -235,15 +238,40 @@ Future<Object?> _getExistingOrLegacyFileHandle(
 ) async {
   final existing = await _getExistingFileHandle(directory, fileName);
   if (existing != null) {
-    return existing;
+    return (handle: existing, fileName: fileName);
   }
-  return _migrateLegacyEntry(
+
+  for (final legacyFileName in _legacyFileNames(fileName)) {
+    final legacyHandle =
+        await _getExistingFileHandle(directory, legacyFileName);
+    if (legacyHandle == null) {
+      continue;
+    }
+
+    final migrated = await _migrateLegacyFile(
+      directory: directory,
+      legacyHandle: legacyHandle,
+      legacyFileName: legacyFileName,
+      targetFileName: fileName,
+    );
+    if (migrated != null) {
+      return migrated;
+    }
+    return (handle: legacyHandle, fileName: legacyFileName);
+  }
+
+  final migratedHandle = await _migrateLegacyEntry(
     directory,
     fileName,
     assetUid: assetUid,
     userName: userName,
     employeeId: employeeId,
   );
+  if (migratedHandle != null) {
+    return (handle: migratedHandle, fileName: fileName);
+  }
+
+  return null;
 }
 
 Future<void> _writeFile(Object handle, Uint8List bytes) async {
@@ -294,14 +322,7 @@ Future<Object?> _migrateLegacyEntry(
   required String employeeId,
 }
 ) async {
-  final storageBaseKey =
-      _buildStorageBaseKey(assetUid, userName, employeeId);
-  final candidates = <String>[
-    '$storageBaseKey.webp',
-    storageBaseKey,
-  ];
-
-  for (final key in candidates) {
+  for (final key in _legacyStorageKeys(assetUid, userName, employeeId)) {
     final encoded = html.window.localStorage[key];
     if (encoded == null) {
       continue;
@@ -309,9 +330,9 @@ Future<Object?> _migrateLegacyEntry(
 
     try {
       final legacyBytes = Uint8List.fromList(base64Decode(encoded));
-      final webpBytes = _encodeToWebp(legacyBytes);
+      final pngBytes = _encodeToPng(legacyBytes);
       final fileHandle = await _createFileHandle(directory, fileName);
-      await _writeFile(fileHandle, webpBytes);
+      await _writeFile(fileHandle, pngBytes);
       html.window.localStorage.remove(key);
       return fileHandle;
     } on Object {
@@ -328,11 +349,12 @@ Future<StoredSignature> _saveToLocalStorage({
   required String userName,
   required String employeeId,
 }) async {
-  final baseKey = _buildStorageBaseKey(assetUid, userName, employeeId);
-  final key = '$baseKey.webp';
-  final webpBytes = _encodeToWebp(data);
-  html.window.localStorage[key] = base64Encode(webpBytes);
-  html.window.localStorage.remove(baseKey);
+  final key = _buildStorageKey(assetUid, userName, employeeId);
+  final pngBytes = _encodeToPng(data);
+  html.window.localStorage[key] = base64Encode(pngBytes);
+  for (final legacyKey in _legacyStorageKeys(assetUid, userName, employeeId)) {
+    html.window.localStorage.remove(legacyKey);
+  }
   return StoredSignature(location: 'localStorage://$key');
 }
 
@@ -341,9 +363,7 @@ Future<StoredSignature?> _findInLocalStorage({
   required String userName,
   required String employeeId,
 }) async {
-  final baseKey = _buildStorageBaseKey(assetUid, userName, employeeId);
-  final candidates = <String>['$baseKey.webp', baseKey];
-  for (final key in candidates) {
+  for (final key in _storageKeyCandidates(assetUid, userName, employeeId)) {
     if (html.window.localStorage.containsKey(key)) {
       return StoredSignature(location: 'localStorage://$key');
     }
@@ -356,9 +376,7 @@ Future<Uint8List?> _loadBytesFromLocalStorage({
   required String userName,
   required String employeeId,
 }) async {
-  final baseKey = _buildStorageBaseKey(assetUid, userName, employeeId);
-  final candidates = <String>['$baseKey.webp', baseKey];
-  for (final key in candidates) {
+  for (final key in _storageKeyCandidates(assetUid, userName, employeeId)) {
     final encoded = html.window.localStorage[key];
     if (encoded == null) {
       continue;
@@ -378,9 +396,7 @@ void _removeLegacyLocalStorageEntries({
   required String userName,
   required String employeeId,
 }) {
-  final baseKey = _buildStorageBaseKey(assetUid, userName, employeeId);
-  final candidates = <String>['$baseKey.webp', baseKey];
-  for (final key in candidates) {
+  for (final key in _storageKeyCandidates(assetUid, userName, employeeId)) {
     html.window.localStorage.remove(key);
   }
 }
@@ -391,44 +407,74 @@ String _buildStorageBaseKey(
   String employeeId,
 ) {
   final fileName = buildSignatureFileName(assetUid, userName, employeeId);
-  return '$_storagePrefix$fileName.webp';
+  return '$_storagePrefix$fileName';
 }
 
-bool _ensureWebPEntryExists(String key) {
-  if (html.window.localStorage.containsKey(key)) {
-    return true;
-  }
-
-  final legacyKey = _buildLegacyStorageKey(key);
-  final legacyEncoded = html.window.localStorage[legacyKey];
-  if (legacyEncoded == null) {
-    return false;
-  }
-
-  final legacyBytes = Uint8List.fromList(base64Decode(legacyEncoded));
-  final webpBytes = _encodeToWebP(legacyBytes);
-  html.window.localStorage[key] = base64Encode(webpBytes);
-  html.window.localStorage.remove(legacyKey);
-  return true;
+String _buildStorageKey(
+  String assetUid,
+  String userName,
+  String employeeId,
+) {
+  return '${_buildStorageBaseKey(assetUid, userName, employeeId)}$_signatureExtension';
 }
 
-String _buildLegacyStorageKey(String key) {
-  const suffix = '.webp';
-  if (key.endsWith(suffix)) {
-    return key.substring(0, key.length - suffix.length);
+Iterable<String> _legacyStorageKeys(
+  String assetUid,
+  String userName,
+  String employeeId,
+) sync* {
+  final baseKey = _buildStorageBaseKey(assetUid, userName, employeeId);
+  for (final suffix in _legacyLocalStorageSuffixes) {
+    yield '$baseKey$suffix';
   }
-  return key;
 }
 
-Uint8List _encodeToWebP(Uint8List data) {
-  final decoded = img.decodeImage(data);
-  if (decoded == null) {
-    throw const FormatException('Unable to decode signature image data');
-  }
-  final encoded = img.encodeWebP(
-    decoded,
-    quality: 100,
-    lossless: true,
-  );
-  return Uint8List.fromList(encoded);
+Iterable<String> _storageKeyCandidates(
+  String assetUid,
+  String userName,
+  String employeeId,
+) sync* {
+  yield _buildStorageKey(assetUid, userName, employeeId);
+  yield* _legacyStorageKeys(assetUid, userName, employeeId);
 }
+
+Iterable<String> _legacyFileNames(String fileName) sync* {
+  final baseName = fileName.endsWith(_signatureExtension)
+      ? fileName.substring(0, fileName.length - _signatureExtension.length)
+      : fileName;
+  for (final extension in legacySignatureFileExtensions) {
+    yield '$baseName$extension';
+  }
+}
+
+Future<_SignatureHandle?> _migrateLegacyFile({
+  required Object directory,
+  required Object legacyHandle,
+  required String legacyFileName,
+  required String targetFileName,
+}) async {
+  try {
+    final legacyBytes = await _readFile(legacyHandle);
+    if (legacyBytes == null) {
+      return null;
+    }
+    final pngBytes = _encodeToPng(legacyBytes);
+    final targetHandle = await _createFileHandle(directory, targetFileName);
+    await _writeFile(targetHandle, pngBytes);
+    await _removeFile(directory, legacyFileName);
+    return (handle: targetHandle, fileName: targetFileName);
+  } on Object {
+    return null;
+  }
+}
+
+Future<void> _removeFile(Object directory, String fileName) async {
+  try {
+    await js_util.promiseToFuture<void>(
+      js_util.callMethod(directory, 'removeEntry', [fileName]),
+    );
+  } on Object {
+    // ignore failures when removing legacy files
+  }
+}
+
