@@ -102,6 +102,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                 return const SelectableText('서명 없음');
               }();
 
+<<
               final detailCells = <_DetailCell>[
                 _DetailCell('팀', SelectableText(_displayValue(teamName))),
                 _DetailCell('사용자', SelectableText(_displayValue(user?.name ?? '정보 없음'))),
@@ -114,6 +115,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                   Chip(
                     backgroundColor: verificationColor.withOpacity(0.15),
                     label: verificationLabel,
+
                   ),
                 ),
                 _DetailCell('바코드사진', SelectableText(photoStatus)),
