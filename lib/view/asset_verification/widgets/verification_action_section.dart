@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../data/signature_storage.dart';
 import '../../../providers/inspection_provider.dart' show UserInfo;
+import '../signature_utils.dart';
 import 'signature_pad.dart';
+import 'signature_thumbnail.dart';
 
 class VerificationActionSection extends StatefulWidget {
   const VerificationActionSection({
@@ -10,11 +12,13 @@ class VerificationActionSection extends StatefulWidget {
     required this.assetUids,
     this.primaryAssetUid,
     this.primaryUser,
+    this.onSignaturesSaved,
   });
 
   final List<String> assetUids;
   final String? primaryAssetUid;
   final UserInfo? primaryUser;
+  final VoidCallback? onSignaturesSaved;
 
   @override
   State<VerificationActionSection> createState() => _VerificationActionSectionState();
@@ -26,6 +30,7 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
   bool _isSavingSignature = false;
   bool _isLoadingSignature = false;
   String? _savedSignatureLocation;
+  SignatureData? _savedSignatureData;
 
   @override
   void initState() {
@@ -49,11 +54,12 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
   }
 
   Future<void> _loadExistingSignature() async {
-    final assetUid = widget.primaryAssetUid;
+    final assetUid = widget.primaryAssetUid?.trim();
     final user = widget.primaryUser;
-    if (assetUid == null || user == null) {
+    if (assetUid == null || assetUid.isEmpty || user == null) {
       setState(() {
         _savedSignatureLocation = null;
+        _savedSignatureData = null;
         _isLoadingSignature = false;
       });
       return;
@@ -64,20 +70,18 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
     });
 
     try {
-      final storedSignature = await SignatureStorage.find(
-        assetUid: assetUid,
-        userName: user.name,
-        employeeId: user.id,
-      );
+      final signature = await loadSignatureData(assetUid: assetUid, user: user);
       if (!mounted) return;
       setState(() {
-        _savedSignatureLocation = storedSignature?.location;
+        _savedSignatureLocation = signature?.location;
+        _savedSignatureData = signature;
         _isLoadingSignature = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _savedSignatureLocation = null;
+        _savedSignatureData = null;
         _isLoadingSignature = false;
       });
     }
@@ -91,9 +95,74 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
     }
 
     final user = widget.primaryUser;
-    final assetUid = widget.primaryAssetUid ?? (widget.assetUids.length == 1 ? widget.assetUids.first : null);
-    if (user == null || assetUid == null) {
+    final normalizedAssetUids = <String>{
+      for (final uid in widget.assetUids)
+        if (uid.trim().isNotEmpty) uid.trim(),
+    }.toList(growable: false);
+
+    if (user == null ||
+        user.id.trim().isEmpty ||
+        user.name.trim().isEmpty ||
+        normalizedAssetUids.isEmpty) {
       _showSnackBar('자산 또는 사용자 정보가 없어 서명을 저장할 수 없습니다.');
+      return;
+    }
+
+    final existingChecks = await Future.wait(
+      normalizedAssetUids.map(
+        (uid) => signatureExists(
+          assetUid: uid,
+          user: user,
+        ),
+      ),
+    );
+
+    final alreadyVerified = <String>[];
+    final pendingTargets = <String>[];
+    for (var i = 0; i < normalizedAssetUids.length; i++) {
+      final uid = normalizedAssetUids[i];
+      if (existingChecks[i]) {
+        alreadyVerified.add(uid);
+      } else {
+        pendingTargets.add(uid);
+      }
+    }
+
+    var targets = List<String>.from(normalizedAssetUids);
+    var skippedCount = 0;
+
+    if (alreadyVerified.isNotEmpty) {
+      final shouldReverify = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('재인증 확인'),
+              content: const Text('인증된 자산이 있습니다. 재인증 할까요?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('아니오'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('예'),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+
+      if (!mounted) {
+        return;
+      }
+
+      if (!shouldReverify) {
+        targets = pendingTargets;
+        skippedCount = alreadyVerified.length;
+      }
+    }
+
+    if (targets.isEmpty) {
+      _showSnackBar('인증할 자산이 없습니다. (이미 인증됨)');
       return;
     }
 
@@ -108,18 +177,48 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
     });
 
     try {
-      final storedSignature = await SignatureStorage.save(
-        data: imageBytes,
-        assetUid: assetUid,
-        userName: user.name,
-        employeeId: user.id,
-      );
-      if (!mounted) return;
+      final primaryAssetUid = widget.primaryAssetUid?.trim().toLowerCase();
+      String? primarySignatureLocation;
+
+      for (final targetUid in targets) {
+        final storedSignature = await SignatureStorage.save(
+          data: imageBytes,
+          assetUid: targetUid,
+          userName: user.name,
+          employeeId: user.id,
+        );
+
+        final normalizedTarget = targetUid.toLowerCase();
+        if (primaryAssetUid != null) {
+          if (primaryAssetUid == normalizedTarget) {
+            primarySignatureLocation = storedSignature.location;
+          }
+        } else if (primarySignatureLocation == null) {
+          primarySignatureLocation = storedSignature.location;
+        }
+      }
+
+      if (!mounted) {
+        return;
+      }
+
       setState(() {
-        _savedSignatureLocation = storedSignature.location;
         _isSavingSignature = false;
+        if (primarySignatureLocation != null) {
+          _savedSignatureLocation = primarySignatureLocation;
+        }
+        _savedSignatureData = null;
       });
-      _showSnackBar('서명이 저장되어 인증이 완료되었습니다. (${storedSignature.location})');
+
+      await _loadExistingSignature();
+      widget.onSignaturesSaved?.call();
+
+      final savedCount = targets.length;
+      if (skippedCount > 0) {
+        _showSnackBar('서명이 저장되어 인증이 완료되었습니다. (신규 인증 $savedCount건, 제외 $skippedCount건)');
+      } else {
+        _showSnackBar('서명이 저장되어 인증이 완료되었습니다. ($savedCount건)');
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -185,23 +284,18 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
             const SizedBox(height: 8),
             if (_isLoadingSignature)
               const Text('저장된 서명을 확인하는 중입니다...')
-            else if (_savedSignatureLocation != null)
+            else if (_savedSignatureData != null)
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Chip(
-                    avatar: const Icon(
-                      Icons.verified_outlined,
-                      color: Colors.white,
-                    ),
-                    backgroundColor: Colors.green,
-                    label: const Text(
-                      '인증 완료',
-                      style: TextStyle(color: Colors.white),
-                    ),
+                    backgroundColor: Colors.green.withOpacity(0.15),
+                    label: SignatureThumbnail(bytes: _savedSignatureData!.bytes),
                   ),
                   const SizedBox(height: 4),
-                  SelectableText('저장 위치: $_savedSignatureLocation'),
+                  SelectableText(
+                    '저장 위치: ${_savedSignatureLocation ?? _savedSignatureData!.location}',
+                  ),
                 ],
               )
             else
