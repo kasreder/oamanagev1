@@ -22,6 +22,11 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
   bool _isBarcodeExpanded = false;
   bool _isSignatureExpanded = false;
 
+  void _handleSignaturesSaved() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
@@ -38,9 +43,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
             );
           }
 
-          final teamName = normalizeTeamName(
-            inspection?.userTeam ?? asset?.metadata['organization_team'],
-          );
+          final teamName = resolveTeamName(inspection, asset);
           final user = resolveUser(provider, inspection, asset);
           final assetType = resolveAssetType(inspection, asset);
           final manager = resolveManager(asset);
@@ -73,7 +76,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
               final verificationLabel = isLoadingExtras
                   ? '확인 중'
                   : isVerified
-                      ? '인증 완료'
+                      ? '인증서명'
                       : '미인증';
               final verificationColor = isLoadingExtras
                   ? Colors.blueGrey
@@ -94,10 +97,15 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                     backgroundColor: verificationColor.withOpacity(0.15),
                     label: Text(
                       verificationLabel,
-                      style: TextStyle(
-                        color: verificationColor,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: verificationColor,
+                            fontWeight: FontWeight.w600,
+                          ) ??
+                          TextStyle(
+                            color: verificationColor,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
                     ),
                   ),
                 ),
@@ -304,6 +312,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                       assetUids: [resolvedAssetCode],
                       primaryAssetUid: resolvedAssetCode,
                       primaryUser: user,
+                      onSignaturesSaved: _handleSignaturesSaved,
                     ),
                   ],
                 ),
