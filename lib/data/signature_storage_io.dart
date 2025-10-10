@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
-
 import 'signature_storage_result.dart';
 import 'signature_storage_shared.dart';
 
