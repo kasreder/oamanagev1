@@ -10,15 +10,26 @@ import 'verification_utils.dart';
 import 'widgets/verification_action_section.dart';
 import 'signature_utils.dart';
 
-class AssetVerificationDetailsGroupPage extends StatelessWidget {
+class AssetVerificationDetailsGroupPage extends StatefulWidget {
   const AssetVerificationDetailsGroupPage({super.key, required this.assetUids});
 
   final List<String> assetUids;
 
   @override
+  State<AssetVerificationDetailsGroupPage> createState() =>
+      _AssetVerificationDetailsGroupPageState();
+}
+
+class _AssetVerificationDetailsGroupPageState
+    extends State<AssetVerificationDetailsGroupPage> {
+  void _handleSignaturesSaved() {
+    setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
     final uniqueAssetUids = {
-      for (final uid in assetUids)
+      for (final uid in widget.assetUids)
         if (uid.trim().isNotEmpty) uid.trim()
     }.toList();
 
@@ -106,7 +117,7 @@ class AssetVerificationDetailsGroupPage extends StatelessWidget {
                               assetUids: verificationTargets,
                               primaryAssetUid: primaryEntry?.assetUid,
                               primaryUser: primaryUser,
-
+                              onSignaturesSaved: _handleSignaturesSaved,
                             ),
                           ],
                         ],
@@ -149,9 +160,7 @@ class _GroupAssetCard extends StatelessWidget {
     final rows = entries.map((entry) {
       final inspection = entry.inspection;
       final asset = entry.asset;
-      final teamName = normalizeTeamName(
-        inspection?.userTeam ?? asset?.metadata['organization_team'],
-      );
+      final teamName = resolveTeamName(inspection, asset);
       final assetType = resolveAssetType(inspection, asset);
       final manager = resolveManager(asset);
       final location = resolveLocation(asset);
@@ -247,7 +256,11 @@ class _GroupAssetCard extends StatelessWidget {
                                         child: CircularProgressIndicator(strokeWidth: 2),
                                       )
                                     : _buildVerificationChip(
-                                        signatureMap[signatureCacheKey(row.assetUid, row.user)],
+                                        context,
+                                        signatureMap[signatureCacheKey(
+                                          row.assetUid,
+                                          row.user,
+                                        )],
                                       ),
                               ),
                             ),
@@ -345,18 +358,26 @@ class _GroupAssetCard extends StatelessWidget {
     return Map.fromEntries(results.whereType<MapEntry<String, SignatureData>>());
   }
 
-  Widget _buildVerificationChip(SignatureData? signature) {
+  Widget _buildVerificationChip(
+    BuildContext context,
+    SignatureData? signature,
+  ) {
     final isVerified = signature != null;
     final color = isVerified ? Colors.green : Colors.orange;
-    final label = isVerified ? '인증 완료' : '미인증';
+    final label = isVerified ? '인증서명' : '미인증';
     return Chip(
       backgroundColor: color.withOpacity(0.15),
       label: Text(
         label,
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w600,
-        ),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w600,
+            ) ??
+            TextStyle(
+              color: color,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
       ),
     );
   }
