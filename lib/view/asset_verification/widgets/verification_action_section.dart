@@ -26,6 +26,7 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
   bool _isSavingSignature = false;
   bool _isLoadingSignature = false;
   String? _savedSignatureLocation;
+  String? _savedSignatureDisplayLocation;
 
   @override
   void initState() {
@@ -54,6 +55,8 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
     if (assetUid == null || user == null) {
       setState(() {
         _savedSignatureLocation = null;
+        _savedSignatureDisplayLocation = null;
+
         _isLoadingSignature = false;
       });
       return;
@@ -72,12 +75,18 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
       if (!mounted) return;
       setState(() {
         _savedSignatureLocation = storedSignature?.location;
+
+        _savedSignatureDisplayLocation =
+            _formatLocationForDisplay(storedSignature?.location);
+
         _isLoadingSignature = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _savedSignatureLocation = null;
+        _savedSignatureDisplayLocation = null;
+
         _isLoadingSignature = false;
       });
     }
@@ -117,9 +126,18 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
       if (!mounted) return;
       setState(() {
         _savedSignatureLocation = storedSignature.location;
+        _savedSignatureDisplayLocation =
+            _formatLocationForDisplay(storedSignature.location);
         _isSavingSignature = false;
       });
-      _showSnackBar('서명이 저장되어 인증이 완료되었습니다. (${storedSignature.location})');
+      final readableLocation =
+          _formatLocationForDisplay(storedSignature.location);
+      _showSnackBar(
+        readableLocation == null
+            ? '서명이 저장되어 인증이 완료되었습니다.'
+            : '서명이 저장되어 인증이 완료되었습니다. ($readableLocation)',
+      );
+
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -133,6 +151,18 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
+  }
+
+  String? _formatLocationForDisplay(String? location) {
+    if (location == null) {
+      return null;
+    }
+    const localStoragePrefix = 'localStorage://';
+    if (location.startsWith(localStoragePrefix)) {
+      final storageKey = location.substring(localStoragePrefix.length);
+      return '브라우저 LocalStorage (키: $storageKey)';
+    }
+    return location;
   }
 
   @override
@@ -201,7 +231,11 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  SelectableText('저장 위치: $_savedSignatureLocation'),
+                  SelectableText(
+                    '저장 위치: '
+                    '${_savedSignatureDisplayLocation ?? _savedSignatureLocation}',
+                  ),
+
                 ],
               )
             else
