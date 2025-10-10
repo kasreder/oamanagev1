@@ -363,14 +363,14 @@ class _GroupAssetCard extends StatelessWidget {
     BuildContext context,
     SignatureData? signature,
   ) {
-    final isVerified = signature != null;
-    final color = isVerified ? Colors.green : Colors.orange;
-    final Widget label = isVerified
-        ? SignatureThumbnail(bytes: signature!.bytes)
-        : _buildChipText(context, '미인증', color);
+    if (signature != null) {
+      return SignatureThumbnail(bytes: signature.bytes);
+    }
+
+    const color = Colors.orange;
     return Chip(
       backgroundColor: color.withOpacity(0.15),
-      label: label,
+      label: _buildChipText(context, '미인증', color),
     );
   }
 
