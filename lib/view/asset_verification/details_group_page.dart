@@ -385,6 +385,7 @@ class _GroupAssetCard extends StatelessWidget {
           fontSize: 12,
         );
     return Text(text, style: textStyle);
+
   }
 }
 
