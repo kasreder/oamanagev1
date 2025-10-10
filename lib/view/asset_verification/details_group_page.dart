@@ -256,7 +256,11 @@ class _GroupAssetCard extends StatelessWidget {
                                         child: CircularProgressIndicator(strokeWidth: 2),
                                       )
                                     : _buildVerificationChip(
-                                        signatureMap[signatureCacheKey(row.assetUid, row.user)],
+                                        context,
+                                        signatureMap[signatureCacheKey(
+                                          row.assetUid,
+                                          row.user,
+                                        )],
                                       ),
                               ),
                             ),
@@ -354,7 +358,10 @@ class _GroupAssetCard extends StatelessWidget {
     return Map.fromEntries(results.whereType<MapEntry<String, SignatureData>>());
   }
 
-  Widget _buildVerificationChip(SignatureData? signature) {
+  Widget _buildVerificationChip(
+    BuildContext context,
+    SignatureData? signature,
+  ) {
     final isVerified = signature != null;
     final color = isVerified ? Colors.green : Colors.orange;
     final label = isVerified ? '인증서명' : '미인증';
