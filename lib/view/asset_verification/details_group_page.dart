@@ -357,7 +357,7 @@ class _GroupAssetCard extends StatelessWidget {
   Widget _buildVerificationChip(SignatureData? signature) {
     final isVerified = signature != null;
     final color = isVerified ? Colors.green : Colors.orange;
-    final label = isVerified ? '인증 완료' : '미인증';
+    final label = isVerified ? '인증서명' : '미인증';
     return Chip(
       backgroundColor: color.withOpacity(0.15),
       label: Text(

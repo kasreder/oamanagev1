@@ -76,7 +76,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
               final verificationLabel = isLoadingExtras
                   ? '확인 중'
                   : isVerified
-                      ? '인증 완료'
+                      ? '인증서명'
                       : '미인증';
               final verificationColor = isLoadingExtras
                   ? Colors.blueGrey
