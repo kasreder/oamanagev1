@@ -79,6 +79,25 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                 return photoPath != null ? '사진 있음' : '사진 없음';
               }();
 
+              final Widget barcodePreview = () {
+                if (isLoadingExtras) {
+                  return const SelectableText('불러오는 중...');
+                }
+                if (photoPath != null) {
+                  return SizedBox(
+                    height: 40,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: Image.asset(
+                        photoPath,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  );
+                }
+                return const SelectableText('사진 없음');
+              }();
+
               final bool isVerified = !isLoadingExtras && signature != null;
               late final Color verificationColor;
               late final Widget verificationLabel;
@@ -118,7 +137,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                 //
                 //   ),
                 // ),
-                _DetailCell('바코드사진', SelectableText(photoStatus)),
+                _DetailCell('바코드사진', barcodePreview),
 
               ];
 
