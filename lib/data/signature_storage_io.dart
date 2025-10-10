@@ -13,18 +13,19 @@ Future<StoredSignature> save({
 }) async {
   final directory = await _ensureDirectory();
   final fileName = buildSignatureFileName(assetUid, userName, employeeId);
-  final file = File('${directory.path}/$fileName.webp');
+  final file = File('${directory.path}/$fileName$signatureFileExtension');
   final decoded = img.decodeImage(data);
   if (decoded == null) {
     throw const FormatException('Unable to decode signature image data');
   }
-  final encoded = img.encodeWebp(
-
-    decoded,
-    quality: 100,
-    lossless: true,
-  );
+  final encoded = img.encodePng(decoded);
   await file.writeAsBytes(encoded, flush: true);
+  for (final legacyExtension in legacySignatureFileExtensions) {
+    final legacyFile = File('${directory.path}/$fileName$legacyExtension');
+    if (await legacyFile.exists()) {
+      await legacyFile.delete();
+    }
+  }
   return StoredSignature(location: file.path);
 }
 
@@ -35,9 +36,15 @@ Future<StoredSignature?> find({
 }) async {
   final directory = await _ensureDirectory();
   final fileName = buildSignatureFileName(assetUid, userName, employeeId);
-  final file = File('${directory.path}/$fileName.webp');
-  if (await file.exists()) {
-    return StoredSignature(location: file.path);
+  final primary = File('${directory.path}/$fileName$signatureFileExtension');
+  if (await primary.exists()) {
+    return StoredSignature(location: primary.path);
+  }
+  for (final legacyExtension in legacySignatureFileExtensions) {
+    final legacyFile = File('${directory.path}/$fileName$legacyExtension');
+    if (await legacyFile.exists()) {
+      return StoredSignature(location: legacyFile.path);
+    }
   }
   return null;
 }
@@ -49,9 +56,15 @@ Future<Uint8List?> loadBytes({
 }) async {
   final directory = await _ensureDirectory();
   final fileName = buildSignatureFileName(assetUid, userName, employeeId);
-  final file = File('${directory.path}/$fileName.webp');
-  if (await file.exists()) {
-    return file.readAsBytes();
+  final primary = File('${directory.path}/$fileName$signatureFileExtension');
+  if (await primary.exists()) {
+    return primary.readAsBytes();
+  }
+  for (final legacyExtension in legacySignatureFileExtensions) {
+    final legacyFile = File('${directory.path}/$fileName$legacyExtension');
+    if (await legacyFile.exists()) {
+      return legacyFile.readAsBytes();
+    }
   }
   return null;
 }
