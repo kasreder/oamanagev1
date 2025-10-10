@@ -1,8 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:path_provider/path_provider.dart';
-
 import 'signature_storage_result.dart';
 import 'signature_storage_shared.dart';
 
@@ -48,8 +46,7 @@ Future<Uint8List?> loadBytes({
 }
 
 Future<Directory> _ensureDirectory() async {
-  final baseDir = await getApplicationDocumentsDirectory();
-  final target = Directory('${baseDir.path}/assets/dummy/sign');
+  final target = Directory('assets/dummy/sign');
   if (!await target.exists()) {
     await target.create(recursive: true);
   }
