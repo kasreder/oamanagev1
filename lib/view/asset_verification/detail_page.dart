@@ -40,6 +40,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
         );
     return Text(text, style: textStyle);
   }
+
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
@@ -101,7 +102,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                 return const SelectableText('서명 없음');
               }();
 
-
+<<
               final detailCells = <_DetailCell>[
                 _DetailCell('팀', SelectableText(_displayValue(teamName))),
                 _DetailCell('사용자', SelectableText(_displayValue(user?.name ?? '정보 없음'))),
@@ -276,7 +277,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                                         alignment: Alignment.centerLeft,
                                         child: Padding(
                                           padding: const EdgeInsets.only(top: 12),
-                                          child: Text(signatureStatus),
+                                          child: signatureStatus,
                                         ),
                                       ),
                                       secondChild: Padding(
