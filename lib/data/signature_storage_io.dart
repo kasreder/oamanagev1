@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:image/image.dart' as img;
 import 'signature_storage_result.dart';
 import 'signature_storage_shared.dart';
 
@@ -12,8 +13,17 @@ Future<StoredSignature> save({
 }) async {
   final directory = await _ensureDirectory();
   final fileName = buildSignatureFileName(assetUid, userName, employeeId);
-  final file = File('${directory.path}/$fileName.png');
-  await file.writeAsBytes(data, flush: true);
+  final file = File('${directory.path}/$fileName.webp');
+  final decoded = img.decodeImage(data);
+  if (decoded == null) {
+    throw const FormatException('Unable to decode signature image data');
+  }
+  final encoded = img.encodeWebP(
+    decoded,
+    quality: 100,
+    lossless: true,
+  );
+  await file.writeAsBytes(encoded, flush: true);
   return StoredSignature(location: file.path);
 }
 
@@ -24,7 +34,7 @@ Future<StoredSignature?> find({
 }) async {
   final directory = await _ensureDirectory();
   final fileName = buildSignatureFileName(assetUid, userName, employeeId);
-  final file = File('${directory.path}/$fileName.png');
+  final file = File('${directory.path}/$fileName.webp');
   if (await file.exists()) {
     return StoredSignature(location: file.path);
   }
@@ -38,7 +48,7 @@ Future<Uint8List?> loadBytes({
 }) async {
   final directory = await _ensureDirectory();
   final fileName = buildSignatureFileName(assetUid, userName, employeeId);
-  final file = File('${directory.path}/$fileName.png');
+  final file = File('${directory.path}/$fileName.webp');
   if (await file.exists()) {
     return file.readAsBytes();
   }
