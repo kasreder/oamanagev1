@@ -279,7 +279,8 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
             ),
             const SizedBox(height: 8),
             SizedBox(
-              height: 100,
+              height: 200,
+              width: 400,
               child: SignaturePad(key: _signatureKey),
             ),
             const SizedBox(height: 8),
@@ -289,11 +290,6 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Chip(
-                    backgroundColor: Colors.green.withOpacity(0.15),
-                    label: SignatureThumbnail(bytes: _savedSignatureData!.bytes),
-
-                  ),
                   const SizedBox(height: 4),
                   SelectableText(
                     '저장 위치: ${_savedSignatureLocation ?? _savedSignatureData!.location}',

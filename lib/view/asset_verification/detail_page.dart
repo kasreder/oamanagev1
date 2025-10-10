@@ -102,7 +102,6 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                 return const SelectableText('서명 없음');
               }();
 
-<<
               final detailCells = <_DetailCell>[
                 _DetailCell('팀', SelectableText(_displayValue(teamName))),
                 _DetailCell('사용자', SelectableText(_displayValue(user?.name ?? '정보 없음'))),
@@ -110,16 +109,17 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                 _DetailCell('자산번호', SelectableText(resolvedAssetCode)),
                 _DetailCell('관리자', SelectableText(_displayValue(manager))),
                 _DetailCell('위치', SelectableText(_displayValue(location))),
-                _DetailCell(
-                  '인증여부',
-                  Chip(
-                    backgroundColor: verificationColor.withOpacity(0.15),
-                    label: verificationLabel,
-
-                  ),
-                ),
+                _DetailCell('인증야부', signatureStatus),
+                // _DetailCell(
+                //   '인증여부',
+                //   Chip(
+                //     backgroundColor: verificationColor.withOpacity(0.15),
+                //     label: verificationLabel,
+                //
+                //   ),
+                // ),
                 _DetailCell('바코드사진', SelectableText(photoStatus)),
-                _DetailCell('인증서명', signatureStatus),
+
               ];
 
               return Padding(
