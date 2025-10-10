@@ -97,10 +97,15 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                     backgroundColor: verificationColor.withOpacity(0.15),
                     label: Text(
                       verificationLabel,
-                      style: TextStyle(
-                        color: verificationColor,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: verificationColor,
+                            fontWeight: FontWeight.w600,
+                          ) ??
+                          TextStyle(
+                            color: verificationColor,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
                     ),
                   ),
                 ),
