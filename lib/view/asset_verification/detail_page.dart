@@ -22,6 +22,8 @@ class AssetVerificationDetailPage extends StatefulWidget {
 class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPage> {
   bool _isBarcodeExpanded = false;
   bool _isSignatureExpanded = true;
+  bool _isActionsExpanded = true;
+
 
   void _handleSignaturesSaved() {
     if (!mounted) return;
@@ -336,11 +338,52 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                       ),
                     ),
                     const SizedBox(height: 2),
-                    VerificationActionSection(
-                      assetUids: [resolvedAssetCode],
-                      primaryAssetUid: resolvedAssetCode,
-                      primaryUser: user,
-                      onSignaturesSaved: _handleSignaturesSaved,
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  '인증 작업',
+                                  style: Theme.of(context).textTheme.titleMedium,
+                                ),
+                                IconButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _isActionsExpanded = !_isActionsExpanded;
+                                    });
+                                  },
+                                  icon: Icon(
+                                    _isActionsExpanded
+                                        ? Icons.expand_less
+                                        : Icons.expand_more,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            AnimatedCrossFade(
+                              crossFadeState: _isActionsExpanded
+                                  ? CrossFadeState.showSecond
+                                  : CrossFadeState.showFirst,
+                              duration: const Duration(milliseconds: 200),
+                              firstChild: const SizedBox.shrink(),
+                              secondChild: Padding(
+                                padding: const EdgeInsets.only(top: 16),
+                                child: VerificationActionSection(
+                                  assetUids: [resolvedAssetCode],
+                                  primaryAssetUid: resolvedAssetCode,
+                                  primaryUser: user,
+                                  onSignaturesSaved: _handleSignaturesSaved,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
