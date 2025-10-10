@@ -144,8 +144,9 @@ class _GroupAssetEntry {
   final AssetInfo? asset;
 }
 
-class _GroupAssetCard extends StatelessWidget {
+class _GroupAssetCard extends StatefulWidget {
   const _GroupAssetCard({
+    super.key,
     required this.entries,
     required this.photoPaths,
     required this.isLoadingPhoto,
@@ -156,9 +157,17 @@ class _GroupAssetCard extends StatelessWidget {
   final bool isLoadingPhoto;
 
   @override
+  State<_GroupAssetCard> createState() => _GroupAssetCardState();
+}
+
+class _GroupAssetCardState extends State<_GroupAssetCard> {
+  bool _isSignatureExpanded = false;
+  bool _isBarcodeExpanded = false;
+
+  @override
   Widget build(BuildContext context) {
     final provider = Provider.of<InspectionProvider>(context, listen: false);
-    final rows = entries.map((entry) {
+    final rows = widget.entries.map((entry) {
       final inspection = entry.inspection;
       final asset = entry.asset;
       final teamName = resolveTeamName(inspection, asset);
@@ -167,7 +176,7 @@ class _GroupAssetCard extends StatelessWidget {
       final location = resolveLocation(asset);
       final user = resolveUser(provider, inspection, asset);
       final normalizedAssetUid = entry.assetUid.trim().toLowerCase();
-      final photoPath = photoPaths[normalizedAssetUid];
+      final photoPath = widget.photoPaths[normalizedAssetUid];
 
       return _GroupAssetRowData(
         assetUid: entry.assetUid,
@@ -197,15 +206,45 @@ class _GroupAssetCard extends StatelessWidget {
             )
             .where((entry) => entry.value != null)
             .toList(growable: false);
+        final barcodeEntries = rows
+            .where((row) => row.photoPath != null)
+            .map((row) => MapEntry(row.assetUid, row.photoPath!))
+            .toList(growable: false);
 
-        return Card(
-          margin: const EdgeInsets.only(bottom: 16),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SingleChildScrollView(
+        final Widget signatureSummary = () {
+          if (isLoadingSignatures) {
+            return const Text('서명 정보를 불러오는 중입니다...');
+          }
+          if (previewEntries.isEmpty) {
+            return const Text(
+              '등록된 서명이 없습니다.',
+              style: TextStyle(color: Colors.grey),
+            );
+          }
+          return Text('등록된 서명 ${previewEntries.length}건');
+        }();
+
+        final Widget barcodeSummary = () {
+          if (widget.isLoadingPhoto) {
+            return const Text('바코드 사진을 불러오는 중입니다...');
+          }
+          if (barcodeEntries.isEmpty) {
+            return const Text(
+              '등록된 바코드 사진이 없습니다.',
+              style: TextStyle(color: Colors.grey),
+            );
+          }
+          return Text('등록된 바코드 사진 ${barcodeEntries.length}건');
+        }();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Card(
+              margin: const EdgeInsets.only(bottom: 16),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: DataTable(
                     headingTextStyle: Theme.of(context)
@@ -275,43 +314,170 @@ class _GroupAssetCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
-                if (isLoadingSignatures)
-                  const Text('서명 정보를 불러오는 중입니다...')
-                else if (previewEntries.isEmpty)
-                  const Text(
-                    '등록된 서명이 없습니다.',
-                    style: TextStyle(color: Colors.grey),
-                  )
-                else ...[
-                  Text(
-                    '인증 서명',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      for (final entry in previewEntries) ...[
-                        Text('${entry.key.assetUid} (${entry.key.userName})'),
-                        const SizedBox(height: 8),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.memory(
-                            entry.value!.bytes,
-                            fit: BoxFit.contain,
+              ),
+            ),
+            Card(
+              margin: const EdgeInsets.only(bottom: 16),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '인증 서명',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        IconButton(
+                          onPressed: () {
+                            setState(() {
+                              _isSignatureExpanded = !_isSignatureExpanded;
+                            });
+                          },
+                          icon: Icon(
+                            _isSignatureExpanded
+                                ? Icons.expand_less
+                                : Icons.expand_more,
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        SelectableText('저장 위치: ${entry.value!.location}'),
-                        const SizedBox(height: 16),
                       ],
-                    ],
-                  ),
-                ],
-              ],
+                    ),
+                    AnimatedCrossFade(
+                      crossFadeState: _isSignatureExpanded
+                          ? CrossFadeState.showSecond
+                          : CrossFadeState.showFirst,
+                      duration: const Duration(milliseconds: 200),
+                      firstChild: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: signatureSummary,
+                        ),
+                      ),
+                      secondChild: Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Builder(
+                          builder: (context) {
+                            if (isLoadingSignatures) {
+                              return const Center(
+                                child: CircularProgressIndicator(),
+                              );
+                            }
+                            if (previewEntries.isEmpty) {
+                              return const Text(
+                                '등록된 서명이 없습니다.',
+                                style: TextStyle(color: Colors.grey),
+                              );
+                            }
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                for (final entry in previewEntries) ...[
+                                  Text('${entry.key.assetUid} (${entry.key.userName})'),
+                                  const SizedBox(height: 8),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.memory(
+                                      entry.value!.bytes,
+                                      fit: BoxFit.contain,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  SelectableText('저장 위치: ${entry.value!.location}'),
+                                  const SizedBox(height: 16),
+                                ],
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '추가 바코드 사진',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        IconButton(
+                          onPressed: () {
+                            setState(() {
+                              _isBarcodeExpanded = !_isBarcodeExpanded;
+                            });
+                          },
+                          icon: Icon(
+                            _isBarcodeExpanded
+                                ? Icons.expand_less
+                                : Icons.expand_more,
+                          ),
+                        ),
+                      ],
+                    ),
+                    AnimatedCrossFade(
+                      crossFadeState: _isBarcodeExpanded
+                          ? CrossFadeState.showSecond
+                          : CrossFadeState.showFirst,
+                      duration: const Duration(milliseconds: 200),
+                      firstChild: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: barcodeSummary,
+                        ),
+                      ),
+                      secondChild: Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Builder(
+                          builder: (context) {
+                            if (widget.isLoadingPhoto) {
+                              return const Center(
+                                child: CircularProgressIndicator(),
+                              );
+                            }
+                            if (barcodeEntries.isEmpty) {
+                              return const Text(
+                                '등록된 바코드 사진이 없습니다.',
+                                style: TextStyle(color: Colors.grey),
+                              );
+                            }
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                for (final entry in barcodeEntries) ...[
+                                  Text(entry.key),
+                                  const SizedBox(height: 8),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.asset(
+                                      entry.value,
+                                      fit: BoxFit.contain,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                ],
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -325,7 +491,7 @@ class _GroupAssetCard extends StatelessWidget {
   }
 
   Widget _buildPhotoCell(String? photoPath) {
-    if (isLoadingPhoto) {
+    if (widget.isLoadingPhoto) {
       return const Text('불러오는 중...');
     }
     if (photoPath == null) {
