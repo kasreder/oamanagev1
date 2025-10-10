@@ -362,10 +362,15 @@ class _GroupAssetCard extends StatelessWidget {
       backgroundColor: color.withOpacity(0.15),
       label: Text(
         label,
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w600,
-        ),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w600,
+            ) ??
+            TextStyle(
+              color: color,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
       ),
     );
   }

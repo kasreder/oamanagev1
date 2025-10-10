@@ -292,9 +292,17 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
                       color: Colors.white,
                     ),
                     backgroundColor: Colors.green,
-                    label: const Text(
-                      '인증 완료',
-                      style: TextStyle(color: Colors.white),
+                    label: Text(
+                      '인증서명',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ) ??
+                              const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
                     ),
                   ),
                   const SizedBox(height: 4),
