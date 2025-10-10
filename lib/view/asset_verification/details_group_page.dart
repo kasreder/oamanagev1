@@ -161,7 +161,7 @@ class _GroupAssetCard extends StatefulWidget {
 }
 
 class _GroupAssetCardState extends State<_GroupAssetCard> {
-  bool _isSignatureExpanded = false;
+  bool _isSignatureExpanded = true;
   bool _isBarcodeExpanded = false;
 
   @override

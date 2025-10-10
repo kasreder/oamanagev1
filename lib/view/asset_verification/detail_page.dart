@@ -21,7 +21,7 @@ class AssetVerificationDetailPage extends StatefulWidget {
 
 class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPage> {
   bool _isBarcodeExpanded = false;
-  bool _isSignatureExpanded = false;
+  bool _isSignatureExpanded = true;
 
   void _handleSignaturesSaved() {
     if (!mounted) return;
