@@ -24,6 +24,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
   bool _isSignatureExpanded = true;
   bool _isActionsExpanded = true;
 
+
   void _handleSignaturesSaved() {
     if (!mounted) return;
     setState(() {});
