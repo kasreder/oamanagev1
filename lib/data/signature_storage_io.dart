@@ -18,7 +18,8 @@ Future<StoredSignature> save({
   if (decoded == null) {
     throw const FormatException('Unable to decode signature image data');
   }
-  final encoded = img.encodeWebP(
+  final encoded = img.encodeWebp(
+
     decoded,
     quality: 100,
     lossless: true,
