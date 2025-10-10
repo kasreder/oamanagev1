@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
-
 import 'signature_storage_result.dart';
 import 'signature_storage_shared.dart';
 
@@ -20,6 +19,7 @@ Future<StoredSignature> save({
     throw const FormatException('Unable to decode signature image data');
   }
   final encoded = img.encodeWebp(
+
     decoded,
     quality: 100,
     lossless: true,
