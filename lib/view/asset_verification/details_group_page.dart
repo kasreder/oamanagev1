@@ -6,9 +6,10 @@ import 'package:provider/provider.dart';
 import '../../models/inspection.dart';
 import '../../providers/inspection_provider.dart';
 import '../common/app_scaffold.dart';
-import 'verification_utils.dart';
-import 'widgets/verification_action_section.dart';
 import 'signature_utils.dart';
+import 'verification_utils.dart';
+import 'widgets/signature_thumbnail.dart';
+import 'widgets/verification_action_section.dart';
 
 class AssetVerificationDetailsGroupPage extends StatefulWidget {
   const AssetVerificationDetailsGroupPage({super.key, required this.assetUids});
@@ -364,22 +365,27 @@ class _GroupAssetCard extends StatelessWidget {
   ) {
     final isVerified = signature != null;
     final color = isVerified ? Colors.green : Colors.orange;
-    final label = isVerified ? '인증서명' : '미인증';
+    final Widget label = isVerified
+        ? SignatureThumbnail(bytes: signature!.bytes)
+        : _buildChipText(context, '미인증', color);
     return Chip(
       backgroundColor: color.withOpacity(0.15),
-      label: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w600,
-            ) ??
-            TextStyle(
-              color: color,
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-            ),
-      ),
+      label: label,
     );
+  }
+
+  Widget _buildChipText(BuildContext context, String text, Color color) {
+    final textStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w600,
+        ) ??
+        TextStyle(
+          color: color,
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
+        );
+    return Text(text, style: textStyle);
+
   }
 }
 
