@@ -208,6 +208,7 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
           _savedSignatureLocation = primarySignatureLocation;
         }
         _savedSignatureData = null;
+
       });
 
       await _loadExistingSignature();
@@ -291,6 +292,7 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
                   Chip(
                     backgroundColor: Colors.green.withOpacity(0.15),
                     label: SignatureThumbnail(bytes: _savedSignatureData!.bytes),
+
                   ),
                   const SizedBox(height: 4),
                   SelectableText(
