@@ -6,7 +6,6 @@ import 'dart:html' as html;
 import 'dart:js_util' as js_util;
 
 import 'package:image/image.dart' as img;
-
 import 'signature_storage_result.dart';
 import 'signature_storage_shared.dart';
 
@@ -26,6 +25,7 @@ Future<StoredSignature> save({
     final fileName = _buildFileName(assetUid, userName, employeeId);
     final fileHandle = await _createFileHandle(directory, fileName);
     final webpBytes = _encodeToWebp(data);
+
     await _writeFile(fileHandle, webpBytes);
     _removeLegacyLocalStorageEntries(
       assetUid: assetUid,
@@ -119,11 +119,13 @@ String _buildFileName(String assetUid, String userName, String employeeId) {
 }
 
 Uint8List _encodeToWebp(Uint8List data) {
+
   final decoded = img.decodeImage(data);
   if (decoded == null) {
     throw const FormatException('Unable to decode signature image data');
   }
   final encoded = img.encodeWebp(
+
     decoded,
     quality: 100,
     lossless: true,
@@ -132,6 +134,7 @@ Uint8List _encodeToWebp(Uint8List data) {
 }
 
 Future<Object?> _ensureDirectory({bool optional = false}) async {
+
   final storage = html.window.navigator.storage;
   if (storage == null) {
     if (optional) {
@@ -154,6 +157,7 @@ Future<Object?> _ensureDirectory({bool optional = false}) async {
 
   if (rootHandle == null ||
       !js_util.hasProperty(rootHandle, 'getDirectoryHandle')) {
+
     if (optional) {
       return null;
     }
@@ -167,6 +171,7 @@ Future<Object?> _ensureDirectory({bool optional = false}) async {
     final create = !optional;
     try {
       current = await js_util.promiseToFuture<Object>(
+
         js_util.callMethod(
           current,
           'getDirectoryHandle',
@@ -178,6 +183,7 @@ Future<Object?> _ensureDirectory({bool optional = false}) async {
         return null;
       }
       throw UnsupportedError('Unable to open browser file system directory.');
+
     }
   }
 
@@ -385,5 +391,44 @@ String _buildStorageBaseKey(
   String employeeId,
 ) {
   final fileName = buildSignatureFileName(assetUid, userName, employeeId);
-  return '$_storagePrefix$fileName';
+  return '$_storagePrefix$fileName.webp';
+}
+
+bool _ensureWebPEntryExists(String key) {
+  if (html.window.localStorage.containsKey(key)) {
+    return true;
+  }
+
+  final legacyKey = _buildLegacyStorageKey(key);
+  final legacyEncoded = html.window.localStorage[legacyKey];
+  if (legacyEncoded == null) {
+    return false;
+  }
+
+  final legacyBytes = Uint8List.fromList(base64Decode(legacyEncoded));
+  final webpBytes = _encodeToWebP(legacyBytes);
+  html.window.localStorage[key] = base64Encode(webpBytes);
+  html.window.localStorage.remove(legacyKey);
+  return true;
+}
+
+String _buildLegacyStorageKey(String key) {
+  const suffix = '.webp';
+  if (key.endsWith(suffix)) {
+    return key.substring(0, key.length - suffix.length);
+  }
+  return key;
+}
+
+Uint8List _encodeToWebP(Uint8List data) {
+  final decoded = img.decodeImage(data);
+  if (decoded == null) {
+    throw const FormatException('Unable to decode signature image data');
+  }
+  final encoded = img.encodeWebP(
+    decoded,
+    quality: 100,
+    lossless: true,
+  );
+  return Uint8List.fromList(encoded);
 }
