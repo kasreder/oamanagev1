@@ -22,6 +22,11 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
   bool _isBarcodeExpanded = false;
   bool _isSignatureExpanded = false;
 
+  void _handleSignaturesSaved() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
@@ -38,9 +43,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
             );
           }
 
-          final teamName = normalizeTeamName(
-            inspection?.userTeam ?? asset?.metadata['organization_team'],
-          );
+          final teamName = resolveTeamName(inspection, asset);
           final user = resolveUser(provider, inspection, asset);
           final assetType = resolveAssetType(inspection, asset);
           final manager = resolveManager(asset);
@@ -304,6 +307,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                       assetUids: [resolvedAssetCode],
                       primaryAssetUid: resolvedAssetCode,
                       primaryUser: user,
+                      onSignaturesSaved: _handleSignaturesSaved,
                     ),
                   ],
                 ),
