@@ -5,9 +5,10 @@ import 'package:provider/provider.dart';
 
 import '../../providers/inspection_provider.dart';
 import '../common/app_scaffold.dart';
-import 'verification_utils.dart';
-import 'widgets/verification_action_section.dart';
 import 'signature_utils.dart';
+import 'verification_utils.dart';
+import 'widgets/signature_thumbnail.dart';
+import 'widgets/verification_action_section.dart';
 
 class AssetVerificationDetailPage extends StatefulWidget {
   const AssetVerificationDetailPage({super.key, required this.assetUid});
@@ -27,6 +28,18 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
     setState(() {});
   }
 
+  Widget _buildChipText(BuildContext context, String text, Color color) {
+    final textStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w600,
+        ) ??
+        TextStyle(
+          color: color,
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
+        );
+    return Text(text, style: textStyle);
+  }
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
@@ -65,24 +78,29 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                 return photoPath != null ? '사진 있음' : '사진 없음';
               }();
 
-              final signatureStatus = () {
+              final bool isVerified = !isLoadingExtras && signature != null;
+              late final Color verificationColor;
+              late final Widget verificationLabel;
+              if (isLoadingExtras) {
+                verificationColor = Colors.blueGrey;
+                verificationLabel = _buildChipText(context, '확인 중', verificationColor);
+              } else if (isVerified) {
+                verificationColor = Colors.green;
+                verificationLabel = SignatureThumbnail(bytes: signature!.bytes);
+              } else {
+                verificationColor = Colors.orange;
+                verificationLabel = _buildChipText(context, '미인증', verificationColor);
+              }
+              final Widget signatureStatus = () {
                 if (isLoadingExtras) {
-                  return '불러오는 중...';
+                  return const SelectableText('불러오는 중...');
                 }
-                return signature != null ? '서명 있음' : '서명 없음';
+                if (signature != null) {
+                  return SignatureThumbnail(bytes: signature.bytes);
+                }
+                return const SelectableText('서명 없음');
               }();
 
-              final isVerified = !isLoadingExtras && signature != null;
-              final verificationLabel = isLoadingExtras
-                  ? '확인 중'
-                  : isVerified
-                      ? '인증서명'
-                      : '미인증';
-              final verificationColor = isLoadingExtras
-                  ? Colors.blueGrey
-                  : isVerified
-                      ? Colors.green
-                      : Colors.orange;
 
               final detailCells = <_DetailCell>[
                 _DetailCell('팀', SelectableText(_displayValue(teamName))),
@@ -95,22 +113,12 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                   '인증여부',
                   Chip(
                     backgroundColor: verificationColor.withOpacity(0.15),
-                    label: Text(
-                      verificationLabel,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: verificationColor,
-                            fontWeight: FontWeight.w600,
-                          ) ??
-                          TextStyle(
-                            color: verificationColor,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                          ),
-                    ),
+                    label: verificationLabel,
+
                   ),
                 ),
                 _DetailCell('바코드사진', SelectableText(photoStatus)),
-                _DetailCell('인증서명', SelectableText(signatureStatus)),
+                _DetailCell('인증서명', signatureStatus),
               ];
 
               return Padding(

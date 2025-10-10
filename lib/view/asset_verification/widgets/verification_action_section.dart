@@ -4,6 +4,7 @@ import '../../../data/signature_storage.dart';
 import '../../../providers/inspection_provider.dart' show UserInfo;
 import '../signature_utils.dart';
 import 'signature_pad.dart';
+import 'signature_thumbnail.dart';
 
 class VerificationActionSection extends StatefulWidget {
   const VerificationActionSection({
@@ -29,6 +30,7 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
   bool _isSavingSignature = false;
   bool _isLoadingSignature = false;
   String? _savedSignatureLocation;
+  SignatureData? _savedSignatureData;
 
   @override
   void initState() {
@@ -57,6 +59,7 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
     if (assetUid == null || assetUid.isEmpty || user == null) {
       setState(() {
         _savedSignatureLocation = null;
+        _savedSignatureData = null;
         _isLoadingSignature = false;
       });
       return;
@@ -67,20 +70,18 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
     });
 
     try {
-      final storedSignature = await SignatureStorage.find(
-        assetUid: assetUid,
-        userName: user.name,
-        employeeId: user.id,
-      );
+      final signature = await loadSignatureData(assetUid: assetUid, user: user);
       if (!mounted) return;
       setState(() {
-        _savedSignatureLocation = storedSignature?.location;
+        _savedSignatureLocation = signature?.location;
+        _savedSignatureData = signature;
         _isLoadingSignature = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _savedSignatureLocation = null;
+        _savedSignatureData = null;
         _isLoadingSignature = false;
       });
     }
@@ -206,6 +207,8 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
         if (primarySignatureLocation != null) {
           _savedSignatureLocation = primarySignatureLocation;
         }
+        _savedSignatureData = null;
+
       });
 
       await _loadExistingSignature();
@@ -282,31 +285,19 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
             const SizedBox(height: 8),
             if (_isLoadingSignature)
               const Text('저장된 서명을 확인하는 중입니다...')
-            else if (_savedSignatureLocation != null)
+            else if (_savedSignatureData != null)
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Chip(
-                    avatar: const Icon(
-                      Icons.verified_outlined,
-                      color: Colors.white,
-                    ),
-                    backgroundColor: Colors.green,
-                    label: Text(
-                      '인증서명',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                              ) ??
-                              const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 12,
-                              ),
-                    ),
+                    backgroundColor: Colors.green.withOpacity(0.15),
+                    label: SignatureThumbnail(bytes: _savedSignatureData!.bytes),
+
                   ),
                   const SizedBox(height: 4),
-                  SelectableText('저장 위치: $_savedSignatureLocation'),
+                  SelectableText(
+                    '저장 위치: ${_savedSignatureLocation ?? _savedSignatureData!.location}',
+                  ),
                 ],
               )
             else
