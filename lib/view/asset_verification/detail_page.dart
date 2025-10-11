@@ -24,25 +24,6 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
   bool _isSignatureExpanded = true;
   bool _isActionsExpanded = true;
 
-
-  void _handleSignaturesSaved() {
-    if (!mounted) return;
-    setState(() {});
-  }
-
-  Widget _buildChipText(BuildContext context, String text, Color color) {
-    final textStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w600,
-        ) ??
-        TextStyle(
-          color: color,
-          fontWeight: FontWeight.w600,
-          fontSize: 12,
-        );
-    return Text(text, style: textStyle);
-  }
-
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
@@ -393,6 +374,24 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
         },
       ),
     );
+  }
+
+  void _handleSignaturesSaved() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  Widget _buildChipText(BuildContext context, String text, Color color) {
+    final textStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w600,
+        ) ??
+        TextStyle(
+          color: color,
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
+        );
+    return Text(text, style: textStyle);
   }
 
   Future<_DetailExtras> _loadDetailExtras(String assetUid, UserInfo? user) async {
