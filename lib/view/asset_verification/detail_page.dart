@@ -59,7 +59,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                 if (isLoadingExtras) {
                   return '불러오는 중...';
                 }
-                return photoPath != null ? '사진 있음' : '사진 없음';
+                return photoPath != null ? '사진 있음' : '등록된 사진이 사진 없습니다.';
               }();
 
               final Widget barcodePreview = () {
@@ -184,7 +184,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                             const SizedBox(height: 2),
                             Card(
                               child: Padding(
-                                padding: const EdgeInsets.all(20),
+                                padding: const EdgeInsets.symmetric(horizontal: 5),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -215,12 +215,12 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                                       firstChild: Align(
                                         alignment: Alignment.centerLeft,
                                         child: Padding(
-                                          padding: const EdgeInsets.only(top: 12),
+                                          padding: const EdgeInsets.symmetric(horizontal: 5),
                                           child: Text(photoStatus),
                                         ),
                                       ),
                                       secondChild: Padding(
-                                        padding: const EdgeInsets.only(top: 16),
+                                        padding: const EdgeInsets.symmetric(horizontal: 5),
                                         child: Builder(
                                           builder: (context) {
                                             if (isLoadingExtras) {
@@ -247,7 +247,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                             const SizedBox(height: 2),
                             Card(
                               child: Padding(
-                                padding: const EdgeInsets.all(20),
+                                padding: const EdgeInsets.symmetric(horizontal: 5),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -278,12 +278,12 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                                       firstChild: Align(
                                         alignment: Alignment.centerLeft,
                                         child: Padding(
-                                          padding: const EdgeInsets.only(top: 12),
+                                          padding: const EdgeInsets.symmetric(horizontal: 5),
                                           child: signatureStatus,
                                         ),
                                       ),
                                       secondChild: Padding(
-                                        padding: const EdgeInsets.only(top: 16),
+                                        padding: const EdgeInsets.symmetric(horizontal: 5),
                                         child: Builder(
                                           builder: (context) {
                                             if (isLoadingExtras) {
@@ -321,7 +321,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                     const SizedBox(height: 2),
                     Card(
                       child: Padding(
-                        padding: const EdgeInsets.all(20),
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -353,7 +353,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                               duration: const Duration(milliseconds: 200),
                               firstChild: const SizedBox.shrink(),
                               secondChild: Padding(
-                                padding: const EdgeInsets.only(top: 16),
+                                padding: const EdgeInsets.symmetric(horizontal: 5),
                                 child: VerificationActionSection(
                                   assetUids: [resolvedAssetCode],
                                   primaryAssetUid: resolvedAssetCode,

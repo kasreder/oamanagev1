@@ -118,7 +118,7 @@ class _AssetVerificationDetailsGroupPageState
                             const SizedBox(height: 16),
                             Card(
                               child: Padding(
-                                padding: const EdgeInsets.all(20),
+                                padding: const EdgeInsets.all(5),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -150,7 +150,7 @@ class _AssetVerificationDetailsGroupPageState
                                       duration: const Duration(milliseconds: 200),
                                       firstChild: const SizedBox.shrink(),
                                       secondChild: Padding(
-                                        padding: const EdgeInsets.only(top: 16),
+                                        padding: const EdgeInsets.symmetric(horizontal: 5),
                                         child: VerificationActionSection(
                                           assetUids: verificationTargets,
                                           primaryAssetUid: primaryEntry?.assetUid,
@@ -284,9 +284,8 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Card(
-              margin: const EdgeInsets.only(bottom: 16),
               child: Padding(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.symmetric(horizontal: 5),
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: DataTable(
@@ -360,9 +359,9 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
               ),
             ),
             Card(
-              margin: const EdgeInsets.only(bottom: 16),
+              // margin: const EdgeInsets.only(bottom: 5),
               child: Padding(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.symmetric(horizontal: 5),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -395,12 +394,12 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
                       firstChild: Align(
                         alignment: Alignment.centerLeft,
                         child: Padding(
-                          padding: const EdgeInsets.only(top: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 5),
                           child: signatureSummary,
                         ),
                       ),
                       secondChild: Padding(
-                        padding: const EdgeInsets.only(top: 16),
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
                         child: Builder(
                           builder: (context) {
                             if (isLoadingSignatures) {
@@ -443,7 +442,7 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
             ),
             Card(
               child: Padding(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.symmetric(horizontal: 5),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -476,12 +475,12 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
                       firstChild: Align(
                         alignment: Alignment.centerLeft,
                         child: Padding(
-                          padding: const EdgeInsets.only(top: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 5),
                           child: barcodeSummary,
                         ),
                       ),
                       secondChild: Padding(
-                        padding: const EdgeInsets.only(top: 16),
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
                         child: Builder(
                           builder: (context) {
                             if (widget.isLoadingPhoto) {
