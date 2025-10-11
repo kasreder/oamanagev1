@@ -17,12 +17,10 @@ class AssetVerificationDetailsGroupPage extends StatefulWidget {
   final List<String> assetUids;
 
   @override
-  State<AssetVerificationDetailsGroupPage> createState() =>
-      _AssetVerificationDetailsGroupPageState();
+  State<AssetVerificationDetailsGroupPage> createState() => _AssetVerificationDetailsGroupPageState();
 }
 
-class _AssetVerificationDetailsGroupPageState
-    extends State<AssetVerificationDetailsGroupPage> {
+class _AssetVerificationDetailsGroupPageState extends State<AssetVerificationDetailsGroupPage> {
   bool _isActionsExpanded = true;
 
   void _handleSignaturesSaved() {
@@ -53,26 +51,17 @@ class _AssetVerificationDetailsGroupPageState
                     )
                     .toList(growable: false);
 
-                final missingAssets = entries
-                    .where((entry) => entry.inspection == null && entry.asset == null)
-                    .map((entry) => entry.assetUid)
-                    .toList(growable: false);
-                final validEntries = entries
-                    .where((entry) => entry.inspection != null || entry.asset != null)
-                    .toList(growable: false);
-                final verificationTargets =
-                    validEntries.map((entry) => entry.assetUid).toList(growable: false);
+                final missingAssets = entries.where((entry) => entry.inspection == null && entry.asset == null).map((entry) => entry.assetUid).toList(growable: false);
+                final validEntries = entries.where((entry) => entry.inspection != null || entry.asset != null).toList(growable: false);
+                final verificationTargets = validEntries.map((entry) => entry.assetUid).toList(growable: false);
                 final primaryEntry = validEntries.isNotEmpty ? validEntries.first : null;
-                final primaryUser = primaryEntry == null
-                    ? null
-                    : resolveUser(provider, primaryEntry.inspection, primaryEntry.asset);
+                final primaryUser = primaryEntry == null ? null : resolveUser(provider, primaryEntry.inspection, primaryEntry.asset);
 
                 return FutureBuilder<Map<String, String>>(
                   future: BarcodePhotoRegistry.loadAllPaths(),
                   builder: (context, snapshot) {
                     final barcodePhotoPaths = snapshot.data ?? const <String, String>{};
-                    final isLoadingPhotos =
-                        snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData;
+                    final isLoadingPhotos = snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData;
 
                     return Padding(
                       padding: const EdgeInsets.all(5),
@@ -136,17 +125,13 @@ class _AssetVerificationDetailsGroupPageState
                                             });
                                           },
                                           icon: Icon(
-                                            _isActionsExpanded
-                                                ? Icons.expand_less
-                                                : Icons.expand_more,
+                                            _isActionsExpanded ? Icons.expand_less : Icons.expand_more,
                                           ),
                                         ),
                                       ],
                                     ),
                                     AnimatedCrossFade(
-                                      crossFadeState: _isActionsExpanded
-                                          ? CrossFadeState.showSecond
-                                          : CrossFadeState.showFirst,
+                                      crossFadeState: _isActionsExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
                                       duration: const Duration(milliseconds: 200),
                                       firstChild: const SizedBox.shrink(),
                                       secondChild: Padding(
@@ -237,8 +222,7 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
       future: _loadSignatureMap(rows),
       builder: (context, snapshot) {
         final signatureMap = snapshot.data ?? const <String, SignatureData>{};
-        final isLoadingSignatures =
-            snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData;
+        final isLoadingSignatures = snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData;
 
         final previewEntries = rows
             .map(
@@ -249,10 +233,7 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
             )
             .where((entry) => entry.value != null)
             .toList(growable: false);
-        final barcodeEntries = rows
-            .where((row) => row.photoPath != null)
-            .map((row) => MapEntry(row.assetUid, row.photoPath!))
-            .toList(growable: false);
+        final barcodeEntries = rows.where((row) => row.photoPath != null).map((row) => MapEntry(row.assetUid, row.photoPath!)).toList(growable: false);
 
         final Widget signatureSummary = () {
           if (isLoadingSignatures) {
@@ -289,10 +270,7 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: DataTable(
-                    headingTextStyle: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
+                    headingTextStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
                     columns: [
                       const DataColumn(label: Text('자산번호')),
                       const DataColumn(label: Text('팀')),
@@ -379,17 +357,13 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
                             });
                           },
                           icon: Icon(
-                            _isSignatureExpanded
-                                ? Icons.expand_less
-                                : Icons.expand_more,
+                            _isSignatureExpanded ? Icons.expand_less : Icons.expand_more,
                           ),
                         ),
                       ],
                     ),
                     AnimatedCrossFade(
-                      crossFadeState: _isSignatureExpanded
-                          ? CrossFadeState.showSecond
-                          : CrossFadeState.showFirst,
+                      crossFadeState: _isSignatureExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
                       duration: const Duration(milliseconds: 200),
                       firstChild: Align(
                         alignment: Alignment.centerLeft,
@@ -460,17 +434,13 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
                             });
                           },
                           icon: Icon(
-                            _isBarcodeExpanded
-                                ? Icons.expand_less
-                                : Icons.expand_more,
+                            _isBarcodeExpanded ? Icons.expand_less : Icons.expand_more,
                           ),
                         ),
                       ],
                     ),
                     AnimatedCrossFade(
-                      crossFadeState: _isBarcodeExpanded
-                          ? CrossFadeState.showSecond
-                          : CrossFadeState.showFirst,
+                      crossFadeState: _isBarcodeExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
                       duration: const Duration(milliseconds: 200),
                       firstChild: Align(
                         alignment: Alignment.centerLeft,
@@ -584,16 +554,15 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
 
   Widget _buildChipText(BuildContext context, String text, Color color) {
     final textStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w600,
-        ) ??
+              color: color,
+              fontWeight: FontWeight.w600,
+            ) ??
         TextStyle(
           color: color,
           fontWeight: FontWeight.w600,
           fontSize: 12,
         );
     return Text(text, style: textStyle);
-
   }
 }
 
