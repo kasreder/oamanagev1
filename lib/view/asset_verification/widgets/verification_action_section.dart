@@ -1,11 +1,11 @@
 // lib/view/asset_verification/widgets/verification_action_section.dart
 
 import 'package:flutter/material.dart';
+
 import '../../../data/signature_storage.dart';
 import '../../../providers/inspection_provider.dart' show UserInfo;
 import '../signature_utils.dart';
 import 'signature_pad.dart';
-import 'signature_thumbnail.dart';
 
 class VerificationActionSection extends StatefulWidget {
   const VerificationActionSection({
@@ -302,75 +302,6 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final assetCount = widget.assetUids.length;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(
-                  '사인란',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(width: 12),
-                Text(' 인증처리 할 선택 자산: $assetCount건'),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                OutlinedButton.icon(
-                  onPressed: _clearSignature,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('서명 다시하기'),
-                ),
-                const SizedBox(width: 12),
-                ElevatedButton.icon(
-                  onPressed: _isSavingSignature ? null : _saveSignature,
-                  icon: _isSavingSignature
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.save_alt),
-                  label: Text(_isSavingSignature ? '저장 중...' : '서명 저장'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 200,
-              width: 400,
-              child: SignaturePad(key: _signatureKey),
-            ),
-            const SizedBox(height: 8),
-            if (_isLoadingSignature)
-              const Text('저장된 서명을 확인하는 중입니다...')
-            else if (_savedSignatureData != null)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 4),
-                  SelectableText(
-                    '저장 위치: ${_savedSignatureLocation ?? _savedSignatureData!.location}',
-                  ),
-                ],
-              )
-            else
-              const Text('서명 저장 시 인증이 완료됩니다.'),
-          ],
-        ),
-      ),
     );
   }
 }
