@@ -46,6 +46,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
           final manager = resolveManager(asset);
           final location = resolveLocation(asset);
           final resolvedAssetCode = inspection?.assetUid ?? widget.assetUid;
+          final userNameLabel = resolveUserNameLabel(user, asset);
           return FutureBuilder<_DetailExtras>(
             future: _loadDetailExtras(resolvedAssetCode, user),
             builder: (context, snapshot) {
@@ -116,7 +117,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
 
               final detailCells = <_DetailCell>[
                 _DetailCell('팀', SelectableText(_displayValue(teamName))),
-                _DetailCell('사용자', SelectableText(_displayValue(user?.name ?? '정보 없음'))),
+                _DetailCell('사용자', SelectableText(_displayValue(userNameLabel))),
                 _DetailCell('장비', SelectableText(_displayValue(assetType))),
                 _DetailCell('자산번호', SelectableText(resolvedAssetCode)),
                 _DetailCell('관리자', SelectableText(_displayValue(manager))),
