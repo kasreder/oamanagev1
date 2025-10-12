@@ -363,7 +363,9 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
                       ],
                     ),
                     AnimatedCrossFade(
-                      crossFadeState: _isSignatureExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                      crossFadeState: _isSignatureExpanded
+                          ? CrossFadeState.showSecond
+                          : CrossFadeState.showFirst,
                       duration: const Duration(milliseconds: 200),
                       firstChild: Align(
                         alignment: Alignment.centerLeft,

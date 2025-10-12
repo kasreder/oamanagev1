@@ -111,7 +111,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                 _DetailCell('자산번호', SelectableText(resolvedAssetCode)),
                 _DetailCell('관리자', SelectableText(_displayValue(manager))),
                 _DetailCell('위치', SelectableText(_displayValue(location))),
-                _DetailCell('인증야부', signatureStatus),
+                _DetailCell('인증서명', signatureStatus),
                 // _DetailCell(
                 //   '인증여부',
                 //   Chip(
@@ -255,7 +255,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
                                         Text(
-                                          '인증 서명',
+                                          '서명 사진',
                                           style: Theme.of(context).textTheme.titleMedium,
                                         ),
                                         IconButton(
@@ -287,7 +287,8 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                                         child: Builder(
                                           builder: (context) {
                                             if (isLoadingExtras) {
-                                              return const Center(child: CircularProgressIndicator());
+                                              return const Center(
+                                                  child: CircularProgressIndicator());
                                             }
                                             if (signature != null) {
                                               return Column(
