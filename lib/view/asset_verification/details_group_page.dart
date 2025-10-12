@@ -203,13 +203,14 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
       final manager = resolveManager(asset);
       final location = resolveLocation(asset);
       final user = resolveUser(provider, inspection, asset);
+      final userNameLabel = resolveUserNameLabel(user, asset);
       final normalizedAssetUid = entry.assetUid.trim().toLowerCase();
       final photoPath = widget.photoPaths[normalizedAssetUid];
 
       return _GroupAssetRowData(
         assetUid: entry.assetUid,
         teamName: teamName,
-        userName: user?.name ?? '정보 없음',
+        userName: userNameLabel,
         user: user,
         assetType: assetType,
         manager: manager,
@@ -291,7 +292,11 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
                                 Text(row.teamName.isNotEmpty ? row.teamName : '정보 없음'),
                               ),
                             ),
-                            DataCell(_wrapCell(Text(row.userName))),
+                            DataCell(
+                              _wrapCell(
+                                Text(row.userName.isNotEmpty ? row.userName : '정보 없음'),
+                              ),
+                            ),
                             DataCell(
                               _wrapCell(
                                 Text(row.assetType.isNotEmpty ? row.assetType : '정보 없음'),
@@ -393,7 +398,9 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 for (final entry in previewEntries) ...[
-                                  Text('${entry.key.assetUid} (${entry.key.userName})'),
+                                  Text(
+                                    '${entry.key.assetUid} (${entry.key.userName.isNotEmpty ? entry.key.userName : '정보 없음'})',
+                                  ),
                                   const SizedBox(height: 8),
                                   ClipRRect(
                                     borderRadius: BorderRadius.circular(8),
