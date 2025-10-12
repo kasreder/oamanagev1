@@ -275,13 +275,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                                           ? CrossFadeState.showSecond
                                           : CrossFadeState.showFirst,
                                       duration: const Duration(milliseconds: 200),
-                                      firstChild: Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(horizontal: 5),
-                                          child: signatureStatus,
-                                        ),
-                                      ),
+                                      firstChild: const SizedBox.shrink(),
                                       secondChild: Padding(
                                         padding: const EdgeInsets.symmetric(horizontal: 5),
                                         child: Builder(
