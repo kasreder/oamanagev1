@@ -509,7 +509,11 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
       return const Text('불러오는 중...');
     }
     if (photoPath == null) {
-      return const Text('사진 없음');
+      const color = Colors.orange;
+      return Chip(
+        backgroundColor: color.withOpacity(0.15),
+        label: _buildChipText(context, '사진없음', color),
+      );
     }
     return SizedBox(
       width: 40,

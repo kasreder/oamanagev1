@@ -1,191 +1,191 @@
 [
   {
     "id": 1,
-    "asset_id": 64,
-    "user_id": 3,
-    "inspector_name": "신재훈",
-    "user_team": "자동화팀",
-    "asset_code": "A16485",
+    "asset_id": 71,
+    "user_id": 7,
+    "inspector_name": "김다훈",
+    "user_team": "회계팀",
+    "asset_code": "A08563",
     "asset_type": "태블릿",
     "asset_info": {
-      "model_name": "Omron Elite 500",
+      "model_name": "Omron Air 900",
       "usage": "개인",
-      "serial_number": "SN-655780486"
+      "serial_number": "SN-397056084"
     },
     "inspection_count": 1,
-    "inspection_date": "2025-05-21T23:26:57.526Z",
-    "department_confirm": "품질관리실",
+    "inspection_date": "2025-07-28T07:27:23.652Z",
+    "department_confirm": "재무실",
     "is_verified": true
   },
   {
     "id": 2,
-    "asset_id": 8,
-    "user_id": 3,
+    "asset_id": 77,
+    "user_id": 1,
     "inspector_name": null,
     "user_team": null,
-    "asset_code": "A05631",
-    "asset_type": "노트북",
+    "asset_code": "A11348",
+    "asset_type": "모니터",
     "asset_info": {
       "model_name": null,
       "usage": "개인",
       "serial_number": null
     },
     "inspection_count": 1,
-    "inspection_date": "2025-08-13T07:08:12.745Z",
+    "inspection_date": "2025-05-27T09:47:47.036Z",
     "department_confirm": null,
     "is_verified": false
   },
   {
     "id": 3,
-    "asset_id": 50,
-    "user_id": 1,
+    "asset_id": 8,
+    "user_id": null,
     "inspector_name": null,
     "user_team": null,
-    "asset_code": "A40973",
-    "asset_type": "노트북",
+    "asset_code": "A05570",
+    "asset_type": "데스크탑",
     "asset_info": {
       "model_name": null,
-      "usage": "개인",
+      "usage": "공용",
       "serial_number": null
     },
     "inspection_count": 1,
-    "inspection_date": "2025-08-28T09:12:38.389Z",
+    "inspection_date": "2025-09-22T17:31:16.110Z",
     "department_confirm": null,
     "is_verified": false
   },
   {
     "id": 4,
-    "asset_id": 70,
-    "user_id": 2,
+    "asset_id": 20,
+    "user_id": 9,
     "inspector_name": null,
     "user_team": null,
-    "asset_code": "A62988",
-    "asset_type": "태블릿",
+    "asset_code": "A45304",
+    "asset_type": "모니터",
     "asset_info": {
       "model_name": null,
       "usage": "개인",
       "serial_number": null
     },
     "inspection_count": 1,
-    "inspection_date": "2025-06-15T23:29:50.136Z",
+    "inspection_date": "2025-05-22T17:02:41.969Z",
     "department_confirm": null,
     "is_verified": false
   },
   {
     "id": 5,
-    "asset_id": 42,
-    "user_id": 2,
-    "inspector_name": "정가빈",
-    "user_team": "콘텐츠팀",
-    "asset_code": "A13167",
-    "asset_type": "소모품",
+    "asset_id": 6,
+    "user_id": 7,
+    "inspector_name": "박민라",
+    "user_team": "회계팀",
+    "asset_code": "A30828",
+    "asset_type": "데스크탑",
     "asset_info": {
-      "model_name": "HP Prime M2",
+      "model_name": "Dell Prime 3000",
       "usage": "개인",
-      "serial_number": "SN-710405835"
+      "serial_number": "SN-209170722"
     },
     "inspection_count": 1,
-    "inspection_date": "2025-06-11T03:46:59.648Z",
-    "department_confirm": "R&D실",
+    "inspection_date": "2025-06-08T17:39:13.471Z",
+    "department_confirm": "재무실",
     "is_verified": true
   },
   {
     "id": 6,
-    "asset_id": 26,
-    "user_id": 3,
+    "asset_id": 53,
+    "user_id": null,
     "inspector_name": null,
     "user_team": null,
-    "asset_code": "A79434",
-    "asset_type": "소모품",
+    "asset_code": "A48547",
+    "asset_type": "태블릿",
     "asset_info": {
       "model_name": null,
-      "usage": "개인",
+      "usage": "공용",
       "serial_number": null
     },
     "inspection_count": 1,
-    "inspection_date": "2025-07-27T02:39:37.041Z",
+    "inspection_date": "2025-06-04T15:18:14.442Z",
     "department_confirm": null,
     "is_verified": false
   },
   {
     "id": 7,
-    "asset_id": 7,
-    "user_id": 1,
-    "inspector_name": "신지용",
-    "user_team": "자동화팀",
-    "asset_code": "A27969",
-    "asset_type": "프린터",
+    "asset_id": 81,
+    "user_id": 6,
+    "inspector_name": null,
+    "user_team": null,
+    "asset_code": "A95833",
+    "asset_type": "데스크탑",
     "asset_info": {
-      "model_name": "Lenovo X1 3000",
+      "model_name": null,
       "usage": "개인",
-      "serial_number": "SN-929674564"
+      "serial_number": null
     },
     "inspection_count": 1,
-    "inspection_date": "2025-07-07T05:02:07.696Z",
-    "department_confirm": "재무실",
-    "is_verified": true
+    "inspection_date": "2025-08-22T19:43:45.367Z",
+    "department_confirm": null,
+    "is_verified": false
   },
   {
     "id": 8,
-    "asset_id": 74,
-    "user_id": 1,
-    "inspector_name": "심규연",
-    "user_team": "자동화팀",
-    "asset_code": "A22487",
-    "asset_type": "데스크탑",
+    "asset_id": 72,
+    "user_id": 10,
+    "inspector_name": "조하훈",
+    "user_team": "회계팀",
+    "asset_code": "A73272",
+    "asset_type": "스캐너",
     "asset_info": {
-      "model_name": "Dell DX 700",
+      "model_name": "Lenovo DX 100",
       "usage": "개인",
-      "serial_number": "SN-869404561"
+      "serial_number": "SN-806942807"
     },
     "inspection_count": 1,
-    "inspection_date": "2025-07-13T00:58:56.328Z",
+    "inspection_date": "2025-08-27T02:06:10.178Z",
     "department_confirm": "재무실",
     "is_verified": true
   },
   {
     "id": 9,
-    "asset_id": 58,
-    "user_id": 3,
-    "inspector_name": null,
-    "user_team": null,
-    "asset_code": "A13240",
-    "asset_type": "스캐너",
+    "asset_id": 46,
+    "user_id": 2,
+    "inspector_name": "안다성",
+    "user_team": "급여팀",
+    "asset_code": "A24296",
+    "asset_type": "태블릿",
     "asset_info": {
-      "model_name": null,
+      "model_name": "Siemens Edge 200",
       "usage": "개인",
-      "serial_number": null
+      "serial_number": "SN-789742361"
     },
     "inspection_count": 1,
-    "inspection_date": "2025-07-22T19:25:16.373Z",
-    "department_confirm": null,
-    "is_verified": false
-  },
-  {
-    "id": 10,
-    "asset_id": 53,
-    "user_id": null,
-    "inspector_name": "정주혁",
-    "user_team": "품질보증팀",
-    "asset_code": "A53418",
-    "asset_type": "데스크탑",
-    "asset_info": {
-      "model_name": "Apple X1 G2",
-      "usage": "공용",
-      "serial_number": "SN-559714391"
-    },
-    "inspection_count": 1,
-    "inspection_date": "2025-06-23T17:30:22.937Z",
+    "inspection_date": "2025-09-18T17:04:04.788Z",
     "department_confirm": "R&D실",
     "is_verified": true
   },
   {
+    "id": 10,
+    "asset_id": 36,
+    "user_id": null,
+    "inspector_name": "임윤희",
+    "user_team": "품질보증팀",
+    "asset_code": "A07554",
+    "asset_type": "스캐너",
+    "asset_info": {
+      "model_name": "Cisco Elite 500",
+      "usage": "공용",
+      "serial_number": "SN-288411163"
+    },
+    "inspection_count": 1,
+    "inspection_date": "2025-06-13T01:43:31.799Z",
+    "department_confirm": "생산기술실",
+    "is_verified": true
+  },
+  {
     "id": 11,
-    "asset_id": 29,
-    "user_id": 1,
+    "asset_id": 37,
+    "user_id": 9,
     "inspector_name": null,
     "user_team": null,
-    "asset_code": "A55600",
+    "asset_code": "A52407",
     "asset_type": "프린터",
     "asset_info": {
       "model_name": null,
@@ -193,269 +193,323 @@
       "serial_number": null
     },
     "inspection_count": 1,
-    "inspection_date": "2025-09-08T02:55:57.351Z",
+    "inspection_date": "2025-05-21T07:21:21.383Z",
     "department_confirm": null,
     "is_verified": false
   },
   {
     "id": 12,
-    "asset_id": 90,
-    "user_id": 2,
+    "asset_id": 57,
+    "user_id": 9,
     "inspector_name": null,
     "user_team": null,
-    "asset_code": "A73004",
-    "asset_type": "데스크탑",
+    "asset_code": "A58292",
+    "asset_type": "노트북",
     "asset_info": {
       "model_name": null,
       "usage": "개인",
       "serial_number": null
     },
     "inspection_count": 1,
-    "inspection_date": "2025-08-29T13:06:13.881Z",
+    "inspection_date": "2025-06-07T10:18:45.252Z",
     "department_confirm": null,
     "is_verified": false
   },
   {
     "id": 13,
-    "asset_id": 80,
-    "user_id": 2,
-    "inspector_name": "홍도연",
-    "user_team": "자동화팀",
-    "asset_code": "A34657",
-    "asset_type": "모니터",
+    "asset_id": 33,
+    "user_id": 1,
+    "inspector_name": "임재빈",
+    "user_team": "콘텐츠팀",
+    "asset_code": "A36194",
+    "asset_type": "데스크탑",
     "asset_info": {
-      "model_name": "Cisco Elite 200",
+      "model_name": "Apple MX G2",
       "usage": "개인",
-      "serial_number": "SN-218356471"
+      "serial_number": "SN-524033433"
     },
     "inspection_count": 1,
-    "inspection_date": "2025-06-01T23:52:58.751Z",
-    "department_confirm": "R&D실",
+    "inspection_date": "2025-07-29T15:34:17.565Z",
+    "department_confirm": "재무실",
     "is_verified": true
   },
   {
     "id": 14,
-    "asset_id": 25,
-    "user_id": 2,
-    "inspector_name": null,
-    "user_team": null,
-    "asset_code": "A05660",
+    "asset_id": 100,
+    "user_id": 10,
+    "inspector_name": "정시성",
+    "user_team": "회계팀",
+    "asset_code": "A82977",
     "asset_type": "노트북",
     "asset_info": {
-      "model_name": null,
+      "model_name": "LG DX 10e",
       "usage": "개인",
-      "serial_number": null
+      "serial_number": "SN-288305587"
     },
     "inspection_count": 1,
-    "inspection_date": "2025-09-11T15:53:10.234Z",
-    "department_confirm": null,
-    "is_verified": false
+    "inspection_date": "2025-09-09T15:24:28.743Z",
+    "department_confirm": "재무실",
+    "is_verified": true
   },
   {
     "id": 15,
-    "asset_id": 38,
-    "user_id": 1,
-    "inspector_name": null,
-    "user_team": null,
-    "asset_code": "A98213",
-    "asset_type": "데스크탑",
+    "asset_id": 11,
+    "user_id": 8,
+    "inspector_name": "이가연",
+    "user_team": "검사팀",
+    "asset_code": "A02373",
+    "asset_type": "태블릿",
     "asset_info": {
-      "model_name": null,
+      "model_name": "Lenovo Elite 700",
       "usage": "개인",
-      "serial_number": null
+      "serial_number": "SN-396512108"
     },
     "inspection_count": 1,
-    "inspection_date": "2025-08-08T08:55:46.086Z",
-    "department_confirm": null,
-    "is_verified": false
-  },
-  {
-    "id": 16,
-    "asset_id": 87,
-    "user_id": 3,
-    "inspector_name": "이주주",
-    "user_team": "플랫폼팀",
-    "asset_code": "A02885",
-    "asset_type": "데스크탑",
-    "asset_info": {
-      "model_name": "Mitsubishi UR M2",
-      "usage": "개인",
-      "serial_number": "SN-437251405"
-    },
-    "inspection_count": 1,
-    "inspection_date": "2025-09-20T12:44:52.826Z",
+    "inspection_date": "2025-06-26T20:05:25.479Z",
     "department_confirm": "품질관리실",
     "is_verified": true
   },
   {
-    "id": 17,
-    "asset_id": 99,
-    "user_id": 2,
-    "inspector_name": "한다우",
-    "user_team": "자동화팀",
-    "asset_code": "A14394",
-    "asset_type": "프린터",
+    "id": 16,
+    "asset_id": 49,
+    "user_id": null,
+    "inspector_name": null,
+    "user_team": null,
+    "asset_code": "A45377",
+    "asset_type": "태블릿",
     "asset_info": {
-      "model_name": "Cisco Edge M2",
-      "usage": "개인",
-      "serial_number": "SN-235738123"
+      "model_name": null,
+      "usage": "공용",
+      "serial_number": null
     },
     "inspection_count": 1,
-    "inspection_date": "2025-06-01T00:49:55.716Z",
+    "inspection_date": "2025-05-28T04:04:17.179Z",
+    "department_confirm": null,
+    "is_verified": false
+  },
+  {
+    "id": 17,
+    "asset_id": 94,
+    "user_id": 3,
+    "inspector_name": "이재희",
+    "user_team": "회계팀",
+    "asset_code": "A08574",
+    "asset_type": "모니터",
+    "asset_info": {
+      "model_name": "Omron Air 700",
+      "usage": "개인",
+      "serial_number": "SN-493715356"
+    },
+    "inspection_count": 1,
+    "inspection_date": "2025-06-01T05:53:04.962Z",
     "department_confirm": "R&D실",
     "is_verified": true
   },
   {
     "id": 18,
-    "asset_id": 12,
-    "user_id": 3,
-    "inspector_name": "황도훈",
-    "user_team": "검사팀",
-    "asset_code": "A20433",
-    "asset_type": "프린터",
+    "asset_id": 10,
+    "user_id": 7,
+    "inspector_name": null,
+    "user_team": null,
+    "asset_code": "A85598",
+    "asset_type": "노트북",
     "asset_info": {
-      "model_name": "Dell Air M2",
+      "model_name": null,
       "usage": "개인",
-      "serial_number": "SN-390940694"
+      "serial_number": null
     },
     "inspection_count": 1,
-    "inspection_date": "2025-06-06T21:09:49.590Z",
-    "department_confirm": "품질관리실",
-    "is_verified": true
+    "inspection_date": "2025-08-11T02:18:29.975Z",
+    "department_confirm": null,
+    "is_verified": false
   },
   {
     "id": 19,
-    "asset_id": 59,
-    "user_id": 2,
-    "inspector_name": "서주성",
-    "user_team": "품질보증팀",
-    "asset_code": "A98603",
+    "asset_id": 29,
+    "user_id": 1,
+    "inspector_name": "황윤영",
+    "user_team": "회계팀",
+    "asset_code": "A44474",
     "asset_type": "태블릿",
     "asset_info": {
-      "model_name": "Samsung UR 700",
+      "model_name": "Mitsubishi X1 700",
       "usage": "개인",
-      "serial_number": "SN-547379194"
+      "serial_number": "SN-552780273"
     },
     "inspection_count": 1,
-    "inspection_date": "2025-09-13T14:39:04.038Z",
-    "department_confirm": "R&D실",
+    "inspection_date": "2025-07-04T05:49:08.324Z",
+    "department_confirm": "재무실",
     "is_verified": true
   },
   {
     "id": 20,
-    "asset_id": 20,
-    "user_id": 2,
-    "inspector_name": "신영현",
-    "user_team": "플랫폼팀",
-    "asset_code": "A43230",
-    "asset_type": "태블릿",
+    "asset_id": 17,
+    "user_id": 3,
+    "inspector_name": "홍서주",
+    "user_team": "회계팀",
+    "asset_code": "A83007",
+    "asset_type": "노트북",
     "asset_info": {
-      "model_name": "Samsung X1 900",
+      "model_name": "Universal Robots Pro 200",
       "usage": "개인",
-      "serial_number": "SN-338404831"
+      "serial_number": "SN-501141495"
     },
     "inspection_count": 1,
-    "inspection_date": "2025-06-04T15:17:46.516Z",
+    "inspection_date": "2025-09-07T09:28:55.009Z",
     "department_confirm": "R&D실",
     "is_verified": true
   },
   {
     "id": 21,
-    "asset_id": 82,
-    "user_id": 1,
+    "asset_id": 58,
+    "user_id": 3,
+    "inspector_name": "안현민",
+    "user_team": "회계팀",
+    "asset_code": "A26118",
+    "asset_type": "스캐너",
+    "asset_info": {
+      "model_name": "LG X1 100",
+      "usage": "개인",
+      "serial_number": "SN-159878107"
+    },
+    "inspection_count": 1,
+    "inspection_date": "2025-05-21T20:46:06.285Z",
+    "department_confirm": "R&D실",
+    "is_verified": true
+  },
+  {
+    "id": 22,
+    "asset_id": 39,
+    "user_id": 4,
     "inspector_name": null,
     "user_team": null,
-    "asset_code": "A29390",
-    "asset_type": "노트북",
+    "asset_code": "A08837",
+    "asset_type": "모니터",
     "asset_info": {
       "model_name": null,
       "usage": "개인",
       "serial_number": null
     },
     "inspection_count": 1,
-    "inspection_date": "2025-08-07T15:40:48.454Z",
+    "inspection_date": "2025-07-13T09:11:52.185Z",
     "department_confirm": null,
     "is_verified": false
   },
   {
-    "id": 22,
-    "asset_id": 83,
-    "user_id": 1,
-    "inspector_name": "안지주",
-    "user_team": "자동화팀",
-    "asset_code": "A93870",
-    "asset_type": "노트북",
-    "asset_info": {
-      "model_name": "Cisco Prime 10e",
-      "usage": "개인",
-      "serial_number": "SN-438545411"
-    },
-    "inspection_count": 1,
-    "inspection_date": "2025-08-13T07:04:44.132Z",
-    "department_confirm": "재무실",
-    "is_verified": true
-  },
-  {
     "id": 23,
-    "asset_id": 45,
-    "user_id": 1,
-    "inspector_name": "이예우",
-    "user_team": "자동화팀",
-    "asset_code": "A61820",
-    "asset_type": "노트북",
+    "asset_id": 66,
+    "user_id": 4,
+    "inspector_name": "심현민",
+    "user_team": "플랫폼팀",
+    "asset_code": "A73791",
+    "asset_type": "태블릿",
     "asset_info": {
-      "model_name": "Lenovo X1 200",
+      "model_name": "Lenovo UR 700",
       "usage": "개인",
-      "serial_number": "SN-410041173"
+      "serial_number": "SN-610602720"
     },
     "inspection_count": 1,
-    "inspection_date": "2025-08-20T14:30:00.683Z",
-    "department_confirm": "재무실",
+    "inspection_date": "2025-08-07T23:25:36.479Z",
+    "department_confirm": "품질관리실",
     "is_verified": true
   },
   {
     "id": 24,
-    "asset_id": 41,
-    "user_id": null,
-    "inspector_name": "조예라",
-    "user_team": "플랫폼팀",
-    "asset_code": "A71317",
-    "asset_type": "데스크탑",
+    "asset_id": 73,
+    "user_id": 8,
+    "inspector_name": "정현훈",
+    "user_team": "검사팀",
+    "asset_code": "A61976",
+    "asset_type": "태블릿",
     "asset_info": {
-      "model_name": "Dell Prime G2",
-      "usage": "공용",
-      "serial_number": "SN-367126478"
+      "model_name": "HP UR 500",
+      "usage": "개인",
+      "serial_number": "SN-157615574"
     },
     "inspection_count": 1,
-    "inspection_date": "2025-09-28T03:55:40.685Z",
-    "department_confirm": "생산기술실",
+    "inspection_date": "2025-09-22T06:23:10.826Z",
+    "department_confirm": "품질관리실",
     "is_verified": true
   },
   {
     "id": 25,
-    "asset_id": 66,
+    "asset_id": 59,
+    "user_id": 5,
+    "inspector_name": "박지라",
+    "user_team": "회계팀",
+    "asset_code": "A24057",
+    "asset_type": "소모품",
+    "asset_info": {
+      "model_name": "Lenovo Prime M2",
+      "usage": "개인",
+      "serial_number": "SN-540352628"
+    },
+    "inspection_count": 1,
+    "inspection_date": "2025-06-09T12:36:51.289Z",
+    "department_confirm": "마케팅실",
+    "is_verified": true
+  },
+  {
+    "id": 26,
+    "asset_id": 7,
     "user_id": null,
     "inspector_name": null,
     "user_team": null,
-    "asset_code": "A82354",
-    "asset_type": "노트북",
+    "asset_code": "A21474",
+    "asset_type": "모니터",
     "asset_info": {
       "model_name": null,
       "usage": "공용",
       "serial_number": null
     },
     "inspection_count": 1,
-    "inspection_date": "2025-08-23T13:36:50.436Z",
+    "inspection_date": "2025-07-15T20:48:17.549Z",
     "department_confirm": null,
     "is_verified": false
   },
   {
-    "id": 26,
-    "asset_id": 28,
-    "user_id": 2,
+    "id": 27,
+    "asset_id": 70,
+    "user_id": 9,
+    "inspector_name": "권유성",
+    "user_team": "회계팀",
+    "asset_code": "A17920",
+    "asset_type": "프린터",
+    "asset_info": {
+      "model_name": "Samsung Ultra 10e",
+      "usage": "개인",
+      "serial_number": "SN-267238451"
+    },
+    "inspection_count": 1,
+    "inspection_date": "2025-06-09T19:58:28.732Z",
+    "department_confirm": "마케팅실",
+    "is_verified": true
+  },
+  {
+    "id": 28,
+    "asset_id": 5,
+    "user_id": 5,
     "inspector_name": null,
     "user_team": null,
-    "asset_code": "A12341",
+    "asset_code": "A55329",
+    "asset_type": "노트북",
+    "asset_info": {
+      "model_name": null,
+      "usage": "개인",
+      "serial_number": null
+    },
+    "inspection_count": 1,
+    "inspection_date": "2025-09-23T01:56:37.571Z",
+    "department_confirm": null,
+    "is_verified": false
+  },
+  {
+    "id": 29,
+    "asset_id": 97,
+    "user_id": 1,
+    "inspector_name": null,
+    "user_team": null,
+    "asset_code": "A40436",
     "asset_type": "프린터",
     "asset_info": {
       "model_name": null,
@@ -463,80 +517,26 @@
       "serial_number": null
     },
     "inspection_count": 1,
-    "inspection_date": "2025-07-13T23:03:51.875Z",
+    "inspection_date": "2025-06-18T01:31:59.109Z",
     "department_confirm": null,
     "is_verified": false
-  },
-  {
-    "id": 27,
-    "asset_id": 39,
-    "user_id": 3,
-    "inspector_name": "송시빈",
-    "user_team": "플랫폼팀",
-    "asset_code": "A56236",
-    "asset_type": "소모품",
-    "asset_info": {
-      "model_name": "Mitsubishi UR 3000",
-      "usage": "개인",
-      "serial_number": "SN-996308769"
-    },
-    "inspection_count": 1,
-    "inspection_date": "2025-07-21T01:38:30.953Z",
-    "department_confirm": "품질관리실",
-    "is_verified": true
-  },
-  {
-    "id": 28,
-    "asset_id": 10,
-    "user_id": 2,
-    "inspector_name": null,
-    "user_team": null,
-    "asset_code": "A36828",
-    "asset_type": "데스크탑",
-    "asset_info": {
-      "model_name": null,
-      "usage": "개인",
-      "serial_number": null
-    },
-    "inspection_count": 1,
-    "inspection_date": "2025-08-29T14:00:39.550Z",
-    "department_confirm": null,
-    "is_verified": false
-  },
-  {
-    "id": 29,
-    "asset_id": 75,
-    "user_id": 3,
-    "inspector_name": "장승훈",
-    "user_team": "회계팀",
-    "asset_code": "A26863",
-    "asset_type": "데스크탑",
-    "asset_info": {
-      "model_name": "LG Elite 3000",
-      "usage": "개인",
-      "serial_number": "SN-470518021"
-    },
-    "inspection_count": 1,
-    "inspection_date": "2025-08-31T01:23:01.371Z",
-    "department_confirm": "품질관리실",
-    "is_verified": true
   },
   {
     "id": 30,
-    "asset_id": 79,
-    "user_id": 1,
-    "inspector_name": "송하희",
-    "user_team": "자동화팀",
-    "asset_code": "A13623",
-    "asset_type": "데스크탑",
+    "asset_id": 78,
+    "user_id": 2,
+    "inspector_name": "송재용",
+    "user_team": "콘텐츠팀",
+    "asset_code": "A55413",
+    "asset_type": "소모품",
     "asset_info": {
-      "model_name": "Omron DX 100",
+      "model_name": "Siemens UR 10e",
       "usage": "개인",
-      "serial_number": "SN-853640361"
+      "serial_number": "SN-395048911"
     },
     "inspection_count": 1,
-    "inspection_date": "2025-07-08T11:11:52.551Z",
-    "department_confirm": "재무실",
+    "inspection_date": "2025-08-07T08:17:16.495Z",
+    "department_confirm": "R&D실",
     "is_verified": true
   }
 ]
