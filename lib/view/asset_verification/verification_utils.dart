@@ -74,6 +74,7 @@ String resolveUserNameLabel(UserInfo? user, AssetInfo? asset) {
     final trimmed = candidate?.trim();
     if (trimmed != null && trimmed.isNotEmpty) {
       return trimmed;
+
     }
   }
 
