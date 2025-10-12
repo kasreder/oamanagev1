@@ -51,29 +51,30 @@ UserInfo? resolveUser(
 }
 
 String resolveUserNameLabel(UserInfo? user, AssetInfo? asset) {
-  final resolvedUserName = user?.name;
-  if (resolvedUserName != null && resolvedUserName.trim().isNotEmpty) {
-    return resolvedUserName.trim();
+  final resolvedUserName = user?.name?.trim();
+  if (resolvedUserName != null && resolvedUserName.isNotEmpty) {
+    return resolvedUserName;
   }
 
   if (asset == null) {
     return '';
   }
 
-  final fallbackKeys = [
-    'employee_name',
-    'member_name',
-    'user_name',
-    'user',
-    'owner_name',
-    'name',
-
+  final fallbackCandidates = <String?>[
+    asset.name,
+    asset.metadata['name'],
+    asset.metadata['employee_name'],
+    asset.metadata['member_name'],
+    asset.metadata['user_name'],
+    asset.metadata['user'],
+    asset.metadata['owner_name'],
   ];
 
-  for (final key in fallbackKeys) {
-    final candidate = asset.metadata[key];
-    if (candidate != null && candidate.trim().isNotEmpty) {
-      return candidate.trim();
+  for (final candidate in fallbackCandidates) {
+    final trimmed = candidate?.trim();
+    if (trimmed != null && trimmed.isNotEmpty) {
+      return trimmed;
+
     }
   }
 
