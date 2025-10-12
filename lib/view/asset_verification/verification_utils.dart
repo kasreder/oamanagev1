@@ -35,19 +35,100 @@ UserInfo? resolveUser(
   Inspection? inspection,
   AssetInfo? asset,
 ) {
-  final candidates = <String?>[
+  final lookupCandidates = <String?>[
     inspection?.userId,
     asset?.metadata['user_id'],
     asset?.metadata['employee_id'],
   ];
-  for (final id in candidates) {
+  for (final id in lookupCandidates) {
     if (id == null) continue;
     final user = provider.userOf(id);
     if (user != null) {
       return user;
     }
   }
-  return null;
+
+  if (asset == null) {
+    return null;
+  }
+
+  final fallbackName = resolveUserNameLabel(null, asset).trim();
+  if (fallbackName.isEmpty) {
+    return null;
+  }
+
+  final fallbackIdCandidates = <String?>[
+    inspection?.userId,
+    asset.metadata['user_id'],
+    asset.metadata['employee_id'],
+    asset.metadata['id'],
+    asset.uid,
+  ];
+
+  String? fallbackId;
+  for (final candidate in fallbackIdCandidates) {
+    final normalized = candidate?.trim();
+    if (normalized != null && normalized.isNotEmpty) {
+      fallbackId = normalized;
+      break;
+    }
+  }
+
+  fallbackId ??= asset.uid.trim();
+  if (fallbackId.isEmpty) {
+    return null;
+  }
+
+  final fallbackDepartmentCandidates = <String?>[
+    asset.organization,
+    inspection?.userTeam,
+    asset.metadata['organization_team'],
+  ];
+
+  String department = '';
+  for (final candidate in fallbackDepartmentCandidates) {
+    final normalized = candidate?.trim();
+    if (normalized != null && normalized.isNotEmpty) {
+      department = normalized;
+      break;
+    }
+  }
+
+  return UserInfo(
+    id: fallbackId,
+    name: fallbackName,
+    department: department,
+  );
+}
+
+String resolveUserNameLabel(UserInfo? user, AssetInfo? asset) {
+  final resolvedUserName = user?.name?.trim();
+  if (resolvedUserName != null && resolvedUserName.isNotEmpty) {
+    return resolvedUserName;
+  }
+
+  if (asset == null) {
+    return '';
+  }
+
+  final fallbackCandidates = <String?>[
+    asset.name,
+    asset.metadata['name'],
+    asset.metadata['employee_name'],
+    asset.metadata['member_name'],
+    asset.metadata['user_name'],
+    asset.metadata['user'],
+    asset.metadata['owner_name'],
+  ];
+
+  for (final candidate in fallbackCandidates) {
+    final trimmed = candidate?.trim();
+    if (trimmed != null && trimmed.isNotEmpty) {
+      return trimmed;
+    }
+  }
+
+  return '';
 }
 
 String resolveUserNameLabel(UserInfo? user, AssetInfo? asset) {
