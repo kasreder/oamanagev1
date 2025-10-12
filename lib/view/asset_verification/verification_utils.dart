@@ -56,14 +56,23 @@ String resolveUserNameLabel(UserInfo? user, AssetInfo? asset) {
     return resolvedUserName.trim();
   }
 
-  final assetName = asset?.name;
-  if (assetName != null && assetName.trim().isNotEmpty) {
-    return assetName.trim();
+  if (asset == null) {
+    return '';
   }
 
-  final metadataName = asset?.metadata['name'];
-  if (metadataName != null && metadataName.trim().isNotEmpty) {
-    return metadataName.trim();
+  final fallbackKeys = [
+    'employee_name',
+    'member_name',
+    'user_name',
+    'user',
+    'owner_name',
+  ];
+
+  for (final key in fallbackKeys) {
+    final candidate = asset.metadata[key];
+    if (candidate != null && candidate.trim().isNotEmpty) {
+      return candidate.trim();
+    }
   }
 
   return '';
