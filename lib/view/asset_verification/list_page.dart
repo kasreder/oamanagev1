@@ -1023,6 +1023,7 @@ class _RowData {
   ) {
     final asset = provider.assetOf(inspection.assetUid);
     final user = resolveUser(provider, inspection, asset);
+    final userNameLabel = resolveUserNameLabel(user, asset);
     final assetType = resolveAssetType(inspection, asset);
     final manager = resolveManager(asset);
     final location = resolveLocation(asset);
@@ -1035,7 +1036,7 @@ class _RowData {
       inspection: inspection,
       teamName: teamName,
       assetCode: inspection.assetUid,
-      userName: user?.name ?? '정보 없음',
+      userName: userNameLabel.isNotEmpty ? userNameLabel : '정보 없음',
       user: user,
       assetType: assetType.isNotEmpty ? assetType : '정보 없음',
       manager: manager.isNotEmpty ? manager : '정보 없음',
