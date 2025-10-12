@@ -50,6 +50,25 @@ UserInfo? resolveUser(
   return null;
 }
 
+String resolveUserNameLabel(UserInfo? user, AssetInfo? asset) {
+  final resolvedUserName = user?.name;
+  if (resolvedUserName != null && resolvedUserName.trim().isNotEmpty) {
+    return resolvedUserName.trim();
+  }
+
+  final assetName = asset?.name;
+  if (assetName != null && assetName.trim().isNotEmpty) {
+    return assetName.trim();
+  }
+
+  final metadataName = asset?.metadata['name'];
+  if (metadataName != null && metadataName.trim().isNotEmpty) {
+    return metadataName.trim();
+  }
+
+  return '';
+}
+
 String resolveAssetType(Inspection? inspection, AssetInfo? asset) {
   final fromInspection = inspection?.assetType?.trim();
   if (fromInspection != null && fromInspection.isNotEmpty) {
