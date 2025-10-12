@@ -67,6 +67,7 @@ String resolveUserNameLabel(UserInfo? user, AssetInfo? asset) {
     'user',
     'owner_name',
     'name',
+
   ];
 
   for (final key in fallbackKeys) {
