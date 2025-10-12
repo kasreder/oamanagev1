@@ -21,7 +21,7 @@ class AssetVerificationDetailPage extends StatefulWidget {
 
 class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPage> {
   bool _isBarcodeExpanded = false;
-  bool _isSignatureExpanded = true;
+  bool _isSignatureExpanded = false;
   bool _isActionsExpanded = true;
 
   @override
@@ -55,12 +55,12 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
               final photoPath = extras?.photoPath;
               final signature = extras?.signature;
 
-              final photoStatus = () {
-                if (isLoadingExtras) {
-                  return '불러오는 중...';
-                }
-                return photoPath != null ? '사진 있음' : '등록된 사진이 사진 없습니다.';
-              }();
+              // final photoStatus = () {
+              //   if (isLoadingExtras) {
+              //     return '불러오는 중...';
+              //   }
+              //   return photoPath != null ? '사진 있음' : '등록된 사진이 사진 없습니다.';
+              // }();
 
               final Widget barcodePreview = () {
                 if (isLoadingExtras) {
@@ -78,22 +78,27 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                     ),
                   );
                 }
-                return const SelectableText('사진 없음');
+                // return const SelectableText('사진 없음');
+                const color = Colors.orange;
+                return Chip(
+                  backgroundColor: color.withOpacity(0.15),
+                  label: _buildChipText(context, '사진없음', color),
+                );
               }();
 
-              final bool isVerified = !isLoadingExtras && signature != null;
-              late final Color verificationColor;
-              late final Widget verificationLabel;
-              if (isLoadingExtras) {
-                verificationColor = Colors.blueGrey;
-                verificationLabel = _buildChipText(context, '확인 중', verificationColor);
-              } else if (isVerified) {
-                verificationColor = Colors.green;
-                verificationLabel = SignatureThumbnail(bytes: signature!.bytes);
-              } else {
-                verificationColor = Colors.orange;
-                verificationLabel = _buildChipText(context, '미인증', verificationColor);
-              }
+              // final bool isVerified = !isLoadingExtras && signature != null;
+              // late final Color verificationColor;
+              // late final Widget verificationLabel;
+              // if (isLoadingExtras) {
+              //   verificationColor = Colors.blueGrey;
+              //   verificationLabel = _buildChipText(context, '확인 중', verificationColor);
+              // } else if (isVerified) {
+              //   verificationColor = Colors.green;
+              //   verificationLabel = SignatureThumbnail(bytes: signature!.bytes);
+              // } else {
+              //   verificationColor = Colors.orange;
+              //   verificationLabel = _buildChipText(context, '미인증', verificationColor);
+              // }
               final Widget signatureStatus = () {
                 if (isLoadingExtras) {
                   return const SelectableText('불러오는 중...');
@@ -101,7 +106,12 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                 if (signature != null) {
                   return SignatureThumbnail(bytes: signature.bytes);
                 }
-                return const SelectableText('서명 없음');
+                // return const SelectableText('서명없음');
+                const color = Colors.orange;
+                return Chip(
+                  backgroundColor: color.withOpacity(0.15),
+                  label: _buildChipText(context, '미인증', color),
+                );
               }();
 
               final detailCells = <_DetailCell>[
@@ -212,13 +222,14 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                                           ? CrossFadeState.showSecond
                                           : CrossFadeState.showFirst,
                                       duration: const Duration(milliseconds: 200),
-                                      firstChild: Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(horizontal: 5),
-                                          child: Text(photoStatus),
-                                        ),
-                                      ),
+                                      firstChild: const SizedBox.shrink(),
+                                      // Align(
+                                      //   alignment: Alignment.centerLeft,
+                                      //   child: Padding(
+                                      //     padding: const EdgeInsets.symmetric(horizontal: 5),
+                                      //     child: Text(photoStatus),
+                                      //   ),
+                                      // ),
                                       secondChild: Padding(
                                         padding: const EdgeInsets.symmetric(horizontal: 5),
                                         child: Builder(
@@ -265,7 +276,9 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                                             });
                                           },
                                           icon: Icon(
-                                            _isSignatureExpanded ? Icons.expand_less : Icons.expand_more,
+                                            _isSignatureExpanded
+                                                ? Icons.expand_less
+                                                : Icons.expand_more,
                                           ),
                                         ),
                                       ],
