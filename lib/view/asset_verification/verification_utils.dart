@@ -35,19 +35,68 @@ UserInfo? resolveUser(
   Inspection? inspection,
   AssetInfo? asset,
 ) {
-  final candidates = <String?>[
+  final lookupCandidates = <String?>[
     inspection?.userId,
     asset?.metadata['user_id'],
     asset?.metadata['employee_id'],
   ];
-  for (final id in candidates) {
+  for (final id in lookupCandidates) {
     if (id == null) continue;
     final user = provider.userOf(id);
     if (user != null) {
       return user;
     }
   }
-  return null;
+
+  if (asset == null) {
+    return null;
+  }
+
+  final fallbackName = _firstNonEmpty(_assetLinkedUserNames(asset));
+  if (fallbackName == null) {
+    return null;
+  }
+
+  final fallbackId =
+      _firstNonEmpty(<String?>[
+            inspection?.userId,
+            asset.metadata['user_id'],
+            asset.metadata['employee_id'],
+            asset.metadata['id'],
+            asset.uid,
+          ]) ??
+          _normalizeOrNull(asset.uid);
+
+  if (fallbackId == null) {
+    return null;
+  }
+
+  final department = _firstNonEmpty(<String?>[
+        asset.organization,
+        inspection?.userTeam,
+        asset.metadata['organization_team'],
+        asset.metadata['team_name'],
+      ]) ??
+      '';
+
+  return UserInfo(
+    id: fallbackId,
+    name: fallbackName,
+    department: department,
+  );
+}
+
+String resolveUserNameLabel(UserInfo? user, AssetInfo? asset) {
+  final resolvedUserName = _normalizeOrNull(user?.name);
+  if (resolvedUserName != null) {
+    return resolvedUserName;
+  }
+
+  if (asset == null) {
+    return '';
+  }
+
+  return _firstNonEmpty(_assetLinkedUserNames(asset)) ?? '';
 }
 
 String resolveAssetType(Inspection? inspection, AssetInfo? asset) {
@@ -144,4 +193,36 @@ class BarcodePhotoRegistry {
   }
 
   static String _normalize(String input) => input.trim().toLowerCase();
+}
+
+Iterable<String?> _assetLinkedUserNames(AssetInfo asset) {
+  return <String?>[
+    asset.name,
+    asset.metadata['name'],
+    asset.metadata['employee_name'],
+    asset.metadata['member_name'],
+    asset.metadata['user_name'],
+    asset.metadata['user'],
+    asset.metadata['owner_name'],
+    asset.metadata['owner'],
+    asset.metadata['manager_name'],
+  ];
+}
+
+String? _firstNonEmpty(Iterable<String?> values) {
+  for (final value in values) {
+    final normalized = _normalizeOrNull(value);
+    if (normalized != null) {
+      return normalized;
+    }
+  }
+  return null;
+}
+
+String? _normalizeOrNull(String? value) {
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  return trimmed;
 }
