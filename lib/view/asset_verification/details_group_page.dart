@@ -1,5 +1,7 @@
 // lib/view/asset_verification/details_group_page.dart
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -193,6 +195,46 @@ class _GroupAssetCard extends StatefulWidget {
 class _GroupAssetCardState extends State<_GroupAssetCard> {
   bool _isSignatureExpanded = true;
   bool _isBarcodeExpanded = false;
+  late final ScrollController _horizontalHeaderController;
+  late final ScrollController _horizontalBodyController;
+  late final ScrollController _verticalBodyController;
+  bool _isSyncingHorizontalScroll = false;
+
+  static const double _tableMinWidth = 900;
+  static const double _rowVerticalPadding = 12;
+  static const double _cellHorizontalPadding = 8;
+
+  static const List<_TableColumnConfig> _columns = [
+    _TableColumnConfig(title: '자산번호', flex: 3),
+    _TableColumnConfig(title: '팀', flex: 2),
+    _TableColumnConfig(title: '사용자', flex: 2),
+    _TableColumnConfig(title: '장비', flex: 2),
+    _TableColumnConfig(title: '관리자', flex: 2),
+    _TableColumnConfig(title: '위치', flex: 3),
+    _TableColumnConfig(title: '인증서명', flex: 2, alignment: Alignment.center),
+    _TableColumnConfig(title: '바코드사진', flex: 2, alignment: Alignment.center),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _horizontalHeaderController = ScrollController();
+    _horizontalBodyController = ScrollController();
+    _verticalBodyController = ScrollController();
+
+    _horizontalHeaderController
+        .addListener(() => _syncHorizontalControllers(_horizontalHeaderController, _horizontalBodyController));
+    _horizontalBodyController
+        .addListener(() => _syncHorizontalControllers(_horizontalBodyController, _horizontalHeaderController));
+  }
+
+  @override
+  void dispose() {
+    _horizontalHeaderController.dispose();
+    _horizontalBodyController.dispose();
+    _verticalBodyController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -264,104 +306,40 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
           return Text('등록된 바코드 사진 ${barcodeEntries.length}건');
         }();
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 5),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    headingTextStyle: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                    columns: const [
-                      DataColumn(label: Text('자산번호')),
-                      DataColumn(label: Text('팀')),
-                      DataColumn(label: Text('사용자')),
-                      DataColumn(label: Text('장비')),
-                      DataColumn(label: Text('관리자')),
-                      DataColumn(label: Text('위치')),
-                      DataColumn(label: Text('인증서명')),
-                      DataColumn(label: Text('바코드사진')),
-                    ],
-                    rows: [
-                      for (final row in rows)
-                        DataRow(
-                          cells: <DataCell>[
-                            DataCell(_wrapCell(SelectableText(row.assetUid))),
-                            DataCell(
-                              _wrapCell(
-                                SelectableText(
-                                  row.teamName.isNotEmpty ? row.teamName : '정보 없음',
-                                ),
-                              ),
-                            ),
-                            DataCell(
-                              _wrapCell(
-                                SelectableText(
-                                  row.userName.isNotEmpty ? row.userName : '정보 없음',
-                                ),
-                              ),
-                            ),
-                            DataCell(
-                              _wrapCell(
-                                SelectableText(
-                                  row.assetType.isNotEmpty ? row.assetType : '정보 없음',
-                                ),
-                              ),
-                            ),
-                            DataCell(
-                              _wrapCell(
-                                SelectableText(
-                                  row.manager.isNotEmpty ? row.manager : '정보 없음',
-                                ),
-                              ),
-                            ),
-                            DataCell(
-                              _wrapCell(
-                                SelectableText(
-                                  row.location.isNotEmpty ? row.location : '정보 없음',
-                                ),
-                              ),
-                            ),
-                            DataCell(
-                              _wrapCell(
-                                isLoadingSignatures
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
-                                      )
-                                    : _buildVerificationChip(
-                                        context,
-                                        signatureMap[signatureCacheKey(
-                                          row.assetUid,
-                                          row.user,
-                                        )],
-                                      ),
-                              ),
-                            ),
-                            DataCell(
-                              _wrapCell(
-                                _buildPhotoCell(row.photoPath),
-                              ),
-                            ),
-                          ],
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final tableWidth = math.max(constraints.maxWidth, _tableMinWidth);
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Flexible(
+                  flex: 3,
+                  child: Card(
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(
+                      children: [
+                        _buildTableHeader(context, tableWidth),
+                        const Divider(height: 1),
+                        Expanded(
+                          child: _buildTableBody(
+                            context,
+                            rows,
+                            signatureMap,
+                            isLoadingSignatures,
+                            tableWidth,
+                          ),
                         ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: ListView(
-                padding: EdgeInsets.zero,
-                children: [
-                  Card(
+                const SizedBox(height: 12),
+                Expanded(
+                  flex: 2,
+                  child: ListView(
+                    padding: EdgeInsets.zero,
+                    children: [
+                      Card(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 5),
                       child: Column(
@@ -382,6 +360,7 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
                                 },
                                 icon: Icon(
                                   _isSignatureExpanded ? Icons.expand_less : Icons.expand_more,
+
                                 ),
                               ),
                             ],
@@ -524,15 +503,133 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
               ),
             ),
           ],
+            );
+          },
         );
       },
     );
   }
 
-  Widget _wrapCell(Widget child) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: child,
+  void _syncHorizontalControllers(ScrollController source, ScrollController target) {
+    if (_isSyncingHorizontalScroll || !source.hasClients || !target.hasClients) {
+      return;
+    }
+    _isSyncingHorizontalScroll = true;
+    final targetMax = target.position.maxScrollExtent;
+    final clampedOffset = source.offset.clamp(0, targetMax);
+    if ((target.offset - clampedOffset).abs() > 0.5) {
+      target.jumpTo(clampedOffset);
+    }
+    _isSyncingHorizontalScroll = false;
+  }
+
+  Widget _buildTableHeader(BuildContext context, double tableWidth) {
+    final headerStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700);
+    return SingleChildScrollView(
+      controller: _horizontalHeaderController,
+      scrollDirection: Axis.horizontal,
+      child: SizedBox(
+        width: tableWidth,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: _rowVerticalPadding, horizontal: _cellHorizontalPadding),
+          child: Row(
+            children: [
+              for (final column in _columns)
+                Expanded(
+                  flex: column.flex,
+                  child: Align(
+                    alignment: column.alignment,
+                    child: Text(column.title, style: headerStyle),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTableBody(
+    BuildContext context,
+    List<_GroupAssetRowData> rows,
+    Map<String, SignatureData> signatureMap,
+    bool isLoadingSignatures,
+    double tableWidth,
+  ) {
+    return Scrollbar(
+      controller: _verticalBodyController,
+      child: SingleChildScrollView(
+        controller: _horizontalBodyController,
+        scrollDirection: Axis.horizontal,
+        child: SizedBox(
+          width: tableWidth,
+          child: rows.isEmpty
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text('표시할 자산 정보가 없습니다.'),
+                  ),
+                )
+              : ListView.separated(
+                  controller: _verticalBodyController,
+                  padding: EdgeInsets.zero,
+                  shrinkWrap: true,
+                  primary: false,
+                  itemBuilder: (context, index) {
+                    final row = rows[index];
+                    final signature = signatureMap[signatureCacheKey(row.assetUid, row.user)];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: _rowVerticalPadding,
+                        horizontal: _cellHorizontalPadding,
+                      ),
+                      child: Row(
+                        children: [
+                          _buildTextCell(row.assetUid, _columns[0]),
+                          _buildTextCell(row.teamName.isNotEmpty ? row.teamName : '정보 없음', _columns[1]),
+                          _buildTextCell(row.userName.isNotEmpty ? row.userName : '정보 없음', _columns[2]),
+                          _buildTextCell(row.assetType.isNotEmpty ? row.assetType : '정보 없음', _columns[3]),
+                          _buildTextCell(row.manager.isNotEmpty ? row.manager : '정보 없음', _columns[4]),
+                          _buildTextCell(row.location.isNotEmpty ? row.location : '정보 없음', _columns[5]),
+                          Expanded(
+                            flex: _columns[6].flex,
+                            child: Align(
+                              alignment: _columns[6].alignment,
+                              child: isLoadingSignatures
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : _buildVerificationChip(context, signature),
+                            ),
+                          ),
+                          Expanded(
+                            flex: _columns[7].flex,
+                            child: Align(
+                              alignment: _columns[7].alignment,
+                              child: _buildPhotoCell(row.photoPath),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemCount: rows.length,
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextCell(String text, _TableColumnConfig column) {
+    return Expanded(
+      flex: column.flex,
+      child: Align(
+        alignment: column.alignment,
+        child: SelectableText(text),
+      ),
     );
   }
 
@@ -624,4 +721,16 @@ class _GroupAssetRowData {
   final String manager;
   final String location;
   final String? photoPath;
+}
+
+class _TableColumnConfig {
+  const _TableColumnConfig({
+    required this.title,
+    required this.flex,
+    this.alignment = Alignment.centerLeft,
+  });
+
+  final String title;
+  final int flex;
+  final Alignment alignment;
 }
