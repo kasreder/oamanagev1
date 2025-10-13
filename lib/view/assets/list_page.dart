@@ -131,8 +131,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
                                         children: [
                                           DataTable(
                                             headingRowColor: WidgetStateProperty.resolveWith(
-                                              (states) => Theme.of(context).colorScheme.surfaceContainerHighest,
-                                            ),
+                                              (states) => Theme.of(context).colorScheme.surfaceContainerHighest,),
                                             columnSpacing: 0,
                                             horizontalMargin: 0,
                                             headingRowHeight: 48,
@@ -321,37 +320,15 @@ class _AssetsListPageState extends State<AssetsListPage> {
           child: _headerCell('자산번호', headerStyle),
         ),
       ),
-      DataColumn(
-        label: _headerCell('사용자', headerStyle),
-      ),
-      DataColumn(
-        label: _headerCell('장비종류', headerStyle),
-      ),
-      DataColumn(
-        label: _headerCel120('모델명', headerStyle),
-      ),
-      DataColumn(
-        label: _headerCell('상태', headerStyle),
-      ),
-      DataColumn(
-        label: _headerCell('소속팀', headerStyle),
-      ),
-      DataColumn(
-        label: _headerCell200('위치', headerStyle),
-      ),
-      DataColumn(
-        label: _headerCell('스캔일시', headerStyle),
-      ),
-      DataColumn(
-        label: _headerCell30(
-          '인증',
-          headerStyle,
-          width: _iconColumnWidth,
-        ),
-      ),
-      DataColumn(
-        label: _headerCell200('메모', headerStyle),
-      ),
+      DataColumn(label: _headerCell('사용자', headerStyle),),
+      DataColumn(label: _headerCell('장비종류', headerStyle),),
+      DataColumn(label: _headerCel120('모델명', headerStyle),),
+      DataColumn(label: _headerCell('상태', headerStyle),),
+      DataColumn(label: _headerCell('소속팀', headerStyle),),
+      DataColumn(label: _headerCell200('위치', headerStyle),),
+      DataColumn(label: _headerCell('스캔일시', headerStyle),),
+      DataColumn(label: _headerCell30('인증', headerStyle,width: _iconColumnWidth,),),
+      DataColumn(label: _headerCell200('메모', headerStyle),),
       // DataColumn(
       //   label: _headerCell(
       //     '작업',
