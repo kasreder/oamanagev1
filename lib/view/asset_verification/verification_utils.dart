@@ -52,47 +52,32 @@ UserInfo? resolveUser(
     return null;
   }
 
-  final fallbackName = resolveUserNameLabel(null, asset).trim();
-  if (fallbackName.isEmpty) {
+  final fallbackName = _firstNonEmpty(_assetLinkedUserNames(asset));
+  if (fallbackName == null) {
     return null;
   }
 
-  final fallbackIdCandidates = <String?>[
-    inspection?.userId,
-    asset.metadata['user_id'],
-    asset.metadata['employee_id'],
-    asset.metadata['id'],
-    asset.uid,
-  ];
+  final fallbackId =
+      _firstNonEmpty(<String?>[
+            inspection?.userId,
+            asset.metadata['user_id'],
+            asset.metadata['employee_id'],
+            asset.metadata['id'],
+            asset.uid,
+          ]) ??
+          _normalizeOrNull(asset.uid);
 
-  String? fallbackId;
-  for (final candidate in fallbackIdCandidates) {
-    final normalized = candidate?.trim();
-    if (normalized != null && normalized.isNotEmpty) {
-      fallbackId = normalized;
-      break;
-    }
-  }
-
-  fallbackId ??= asset.uid.trim();
-  if (fallbackId.isEmpty) {
+  if (fallbackId == null) {
     return null;
   }
 
-  final fallbackDepartmentCandidates = <String?>[
-    asset.organization,
-    inspection?.userTeam,
-    asset.metadata['organization_team'],
-  ];
-
-  String department = '';
-  for (final candidate in fallbackDepartmentCandidates) {
-    final normalized = candidate?.trim();
-    if (normalized != null && normalized.isNotEmpty) {
-      department = normalized;
-      break;
-    }
-  }
+  final department = _firstNonEmpty(<String?>[
+        asset.organization,
+        inspection?.userTeam,
+        asset.metadata['organization_team'],
+        asset.metadata['team_name'],
+      ]) ??
+      '';
 
   return UserInfo(
     id: fallbackId,
@@ -102,8 +87,9 @@ UserInfo? resolveUser(
 }
 
 String resolveUserNameLabel(UserInfo? user, AssetInfo? asset) {
-  final resolvedUserName = user?.name?.trim();
-  if (resolvedUserName != null && resolvedUserName.isNotEmpty) {
+  final resolvedUserName = _normalizeOrNull(user?.name);
+  if (resolvedUserName != null) {
+
     return resolvedUserName;
   }
 
@@ -111,55 +97,8 @@ String resolveUserNameLabel(UserInfo? user, AssetInfo? asset) {
     return '';
   }
 
-  final fallbackCandidates = <String?>[
-    asset.name,
-    asset.metadata['name'],
-    asset.metadata['employee_name'],
-    asset.metadata['member_name'],
-    asset.metadata['user_name'],
-    asset.metadata['user'],
-    asset.metadata['owner_name'],
-  ];
+  return _firstNonEmpty(_assetLinkedUserNames(asset)) ?? '';
 
-  for (final candidate in fallbackCandidates) {
-    final trimmed = candidate?.trim();
-    if (trimmed != null && trimmed.isNotEmpty) {
-      return trimmed;
-    }
-  }
-
-  return '';
-}
-
-String resolveUserNameLabel(UserInfo? user, AssetInfo? asset) {
-  final resolvedUserName = user?.name?.trim();
-  if (resolvedUserName != null && resolvedUserName.isNotEmpty) {
-    return resolvedUserName;
-  }
-
-  if (asset == null) {
-    return '';
-  }
-
-  final fallbackCandidates = <String?>[
-    asset.name,
-    asset.metadata['name'],
-    asset.metadata['employee_name'],
-    asset.metadata['member_name'],
-    asset.metadata['user_name'],
-    asset.metadata['user'],
-    asset.metadata['owner_name'],
-  ];
-
-  for (final candidate in fallbackCandidates) {
-    final trimmed = candidate?.trim();
-    if (trimmed != null && trimmed.isNotEmpty) {
-      return trimmed;
-
-    }
-  }
-
-  return '';
 }
 
 String resolveAssetType(Inspection? inspection, AssetInfo? asset) {
@@ -256,4 +195,36 @@ class BarcodePhotoRegistry {
   }
 
   static String _normalize(String input) => input.trim().toLowerCase();
+}
+
+Iterable<String?> _assetLinkedUserNames(AssetInfo asset) {
+  return <String?>[
+    asset.name,
+    asset.metadata['name'],
+    asset.metadata['employee_name'],
+    asset.metadata['member_name'],
+    asset.metadata['user_name'],
+    asset.metadata['user'],
+    asset.metadata['owner_name'],
+    asset.metadata['owner'],
+    asset.metadata['manager_name'],
+  ];
+}
+
+String? _firstNonEmpty(Iterable<String?> values) {
+  for (final value in values) {
+    final normalized = _normalizeOrNull(value);
+    if (normalized != null) {
+      return normalized;
+    }
+  }
+  return null;
+}
+
+String? _normalizeOrNull(String? value) {
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  return trimmed;
 }
