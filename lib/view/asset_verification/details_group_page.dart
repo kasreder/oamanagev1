@@ -69,41 +69,41 @@ class _AssetVerificationDetailsGroupPageState extends State<AssetVerificationDet
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Expanded(
-                            child: SingleChildScrollView(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  if (missingAssets.isNotEmpty)
-                                    Card(
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(5),
-                                        child: Text(
-                                          '다음 자산의 정보를 찾을 수 없습니다: ${missingAssets.join(', ')}',
-                                          style: const TextStyle(color: Colors.redAccent),
-                                        ),
-                                      ),
-                                    ),
-                                  if (validEntries.isNotEmpty)
-                                    _GroupAssetCard(
-                                      entries: validEntries,
-                                      photoPaths: barcodePhotoPaths,
-                                      isLoadingPhoto: isLoadingPhotos,
-                                    )
-                                  else
-                                    Card(
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(5),
-                                        child: Text(
-                                          '표시할 자산 상세 정보가 없습니다.',
-                                          style: Theme.of(context).textTheme.bodyMedium,
-                                        ),
-                                      ),
-                                    ),
-                                ],
+                          if (missingAssets.isNotEmpty) ...[
+                            Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(5),
+                                child: Text(
+                                  '다음 자산의 정보를 찾을 수 없습니다: ${missingAssets.join(', ')}',
+                                  style: const TextStyle(color: Colors.redAccent),
+                                ),
                               ),
                             ),
-                          ),
+                            const SizedBox(height: 8),
+                          ],
+                          if (validEntries.isNotEmpty)
+                            Expanded(
+                              child: _GroupAssetCard(
+                                entries: validEntries,
+                                photoPaths: barcodePhotoPaths,
+                                isLoadingPhoto: isLoadingPhotos,
+                              ),
+                            )
+                          else
+                            Expanded(
+                              child: Card(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(5),
+                                  child: Center(
+                                    child: Text(
+                                      '표시할 자산 상세 정보가 없습니다.',
+                                      style: Theme.of(context).textTheme.bodyMedium,
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                           //하단 사인란
                           const SizedBox(height: 16),
                           if (validEntries.isNotEmpty) ...[
@@ -273,8 +273,11 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: DataTable(
-                    headingTextStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
-                    columns: [
+                    headingTextStyle: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                    columns: const [
                       DataColumn(label: Text('자산번호')),
                       DataColumn(label: Text('팀')),
                       DataColumn(label: Text('사용자')),
@@ -289,12 +292,44 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
                         DataRow(
                           cells: <DataCell>[
                             DataCell(_wrapCell(SelectableText(row.assetUid))),
-                            DataCell(_wrapCell(SelectableText(row.teamName.isNotEmpty ? row.teamName : '정보 없음'),),),
-                            DataCell(_wrapCell(SelectableText(row.userName.isNotEmpty ? row.userName : '정보 없음'),),),
-                            DataCell(_wrapCell(SelectableText(row.assetType.isNotEmpty ? row.assetType : '정보 없음'),),),
-                            DataCell(_wrapCell(SelectableText(row.manager.isNotEmpty ? row.manager : '정보 없음'),),),
-                            DataCell(_wrapCell(SelectableText(row.location.isNotEmpty ? row.location : '정보 없음'),),),
-                            DataCell(_wrapCell(isLoadingSignatures
+                            DataCell(
+                              _wrapCell(
+                                SelectableText(
+                                  row.teamName.isNotEmpty ? row.teamName : '정보 없음',
+                                ),
+                              ),
+                            ),
+                            DataCell(
+                              _wrapCell(
+                                SelectableText(
+                                  row.userName.isNotEmpty ? row.userName : '정보 없음',
+                                ),
+                              ),
+                            ),
+                            DataCell(
+                              _wrapCell(
+                                SelectableText(
+                                  row.assetType.isNotEmpty ? row.assetType : '정보 없음',
+                                ),
+                              ),
+                            ),
+                            DataCell(
+                              _wrapCell(
+                                SelectableText(
+                                  row.manager.isNotEmpty ? row.manager : '정보 없음',
+                                ),
+                              ),
+                            ),
+                            DataCell(
+                              _wrapCell(
+                                SelectableText(
+                                  row.location.isNotEmpty ? row.location : '정보 없음',
+                                ),
+                              ),
+                            ),
+                            DataCell(
+                              _wrapCell(
+                                isLoadingSignatures
                                     ? const SizedBox(
                                         width: 16,
                                         height: 16,
@@ -309,7 +344,11 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
                                       ),
                               ),
                             ),
-                            DataCell(_wrapCell(_buildPhotoCell(row.photoPath),),),
+                            DataCell(
+                              _wrapCell(
+                                _buildPhotoCell(row.photoPath),
+                              ),
+                            ),
                           ],
                         ),
                     ],
@@ -317,161 +356,171 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
                 ),
               ),
             ),
-            Card(
-              // margin: const EdgeInsets.only(bottom: 5),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 5),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '인증 서명',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        IconButton(
-                          onPressed: () {
-                            setState(() {
-                              _isSignatureExpanded = !_isSignatureExpanded;
-                            });
-                          },
-                          icon: Icon(
-                            _isSignatureExpanded ? Icons.expand_less : Icons.expand_more,
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.zero,
+                children: [
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 5),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                '인증 서명',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              IconButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _isSignatureExpanded = !_isSignatureExpanded;
+                                  });
+                                },
+                                icon: Icon(
+                                  _isSignatureExpanded ? Icons.expand_less : Icons.expand_more,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
-                    ),
-                    AnimatedCrossFade(
-                      crossFadeState: _isSignatureExpanded
-                          ? CrossFadeState.showSecond
-                          : CrossFadeState.showFirst,
-                      duration: const Duration(milliseconds: 200),
-                      firstChild: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 5),
-                          child: signatureSummary,
-                        ),
-                      ),
-                      secondChild: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 5),
-                        child: Builder(
-                          builder: (context) {
-                            if (isLoadingSignatures) {
-                              return const Center(
-                                child: CircularProgressIndicator(),
-                              );
-                            }
-                            if (previewEntries.isEmpty) {
-                              return const Text(
-                                '등록된 서명이 없습니다.',
-                                style: TextStyle(color: Colors.grey),
-                              );
-                            }
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                for (final entry in previewEntries) ...[
-                                  Text(
-                                    '${entry.key.assetUid} (${entry.key.userName.isNotEmpty ? entry.key.userName : '정보 없음'})',
-                                  ),
-                                  const SizedBox(height: 8),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: Image.memory(
-                                      entry.value!.bytes,
-                                      fit: BoxFit.contain,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  SelectableText('저장 위치: ${entry.value!.location}'),
-                                  const SizedBox(height: 16),
-                                ],
-                              ],
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 5),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '추가 바코드 사진',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        IconButton(
-                          onPressed: () {
-                            setState(() {
-                              _isBarcodeExpanded = !_isBarcodeExpanded;
-                            });
-                          },
-                          icon: Icon(
-                            _isBarcodeExpanded ? Icons.expand_less : Icons.expand_more,
+                          AnimatedCrossFade(
+                            crossFadeState: _isSignatureExpanded
+                                ? CrossFadeState.showSecond
+                                : CrossFadeState.showFirst,
+                            duration: const Duration(milliseconds: 200),
+                            firstChild: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 5),
+                                child: signatureSummary,
+                              ),
+                            ),
+                            secondChild: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 5),
+                              child: Builder(
+                                builder: (context) {
+                                  if (isLoadingSignatures) {
+                                    return const Center(
+                                      child: CircularProgressIndicator(),
+                                    );
+                                  }
+                                  if (previewEntries.isEmpty) {
+                                    return const Text(
+                                      '등록된 서명이 없습니다.',
+                                      style: TextStyle(color: Colors.grey),
+                                    );
+                                  }
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      for (final entry in previewEntries) ...[
+                                        Text(
+                                          '${entry.key.assetUid} (${entry.key.userName.isNotEmpty ? entry.key.userName : '정보 없음'})',
+                                        ),
+                                        const SizedBox(height: 8),
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: Image.memory(
+                                            entry.value!.bytes,
+                                            fit: BoxFit.contain,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        SelectableText('저장 위치: ${entry.value!.location}'),
+                                        const SizedBox(height: 16),
+                                      ],
+                                    ],
+                                  );
+                                },
+                              ),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                    AnimatedCrossFade(
-                      crossFadeState: _isBarcodeExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-                      duration: const Duration(milliseconds: 200),
-                      firstChild: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 5),
-                          child: barcodeSummary,
-                        ),
-                      ),
-                      secondChild: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 5),
-                        child: Builder(
-                          builder: (context) {
-                            if (widget.isLoadingPhoto) {
-                              return const Center(
-                                child: CircularProgressIndicator(),
-                              );
-                            }
-                            if (barcodeEntries.isEmpty) {
-                              return const Text(
-                                '등록된 바코드 사진이 없습니다.',
-                                style: TextStyle(color: Colors.grey),
-                              );
-                            }
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                for (final entry in barcodeEntries) ...[
-                                  Text(entry.key),
-                                  const SizedBox(height: 8),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: Image.asset(
-                                      entry.value,
-                                      fit: BoxFit.contain,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                ],
-                              ],
-                            );
-                          },
-                        ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 12),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 5),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                '추가 바코드 사진',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              IconButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _isBarcodeExpanded = !_isBarcodeExpanded;
+                                  });
+                                },
+                                icon: Icon(
+                                  _isBarcodeExpanded ? Icons.expand_less : Icons.expand_more,
+                                ),
+                              ),
+                            ],
+                          ),
+                          AnimatedCrossFade(
+                            crossFadeState: _isBarcodeExpanded
+                                ? CrossFadeState.showSecond
+                                : CrossFadeState.showFirst,
+                            duration: const Duration(milliseconds: 200),
+                            firstChild: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 5),
+                                child: barcodeSummary,
+                              ),
+                            ),
+                            secondChild: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 5),
+                              child: Builder(
+                                builder: (context) {
+                                  if (widget.isLoadingPhoto) {
+                                    return const Center(
+                                      child: CircularProgressIndicator(),
+                                    );
+                                  }
+                                  if (barcodeEntries.isEmpty) {
+                                    return const Text(
+                                      '등록된 바코드 사진이 없습니다.',
+                                      style: TextStyle(color: Colors.grey),
+                                    );
+                                  }
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      for (final entry in barcodeEntries) ...[
+                                        Text(entry.key),
+                                        const SizedBox(height: 8),
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: Image.asset(
+                                            entry.value,
+                                            fit: BoxFit.contain,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 16),
+                                      ],
+                                    ],
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
