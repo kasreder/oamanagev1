@@ -89,6 +89,7 @@ UserInfo? resolveUser(
 String resolveUserNameLabel(UserInfo? user, AssetInfo? asset) {
   final resolvedUserName = _normalizeOrNull(user?.name);
   if (resolvedUserName != null) {
+
     return resolvedUserName;
   }
 
@@ -97,6 +98,7 @@ String resolveUserNameLabel(UserInfo? user, AssetInfo? asset) {
   }
 
   return _firstNonEmpty(_assetLinkedUserNames(asset)) ?? '';
+
 }
 
 String resolveAssetType(Inspection? inspection, AssetInfo? asset) {
