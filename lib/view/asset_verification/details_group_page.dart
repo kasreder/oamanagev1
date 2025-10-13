@@ -516,6 +516,7 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
     _isSyncingHorizontalScroll = true;
     final targetMax = target.position.maxScrollExtent;
     final clampedOffset = source.offset.clamp(0.0, targetMax).toDouble();
+
     if ((target.offset - clampedOffset).abs() > 0.5) {
       target.jumpTo(clampedOffset);
     }
