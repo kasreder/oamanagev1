@@ -24,6 +24,11 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
   bool _isSignatureExpanded = false;
   bool _isActionsExpanded = true;
 
+  void _handleSignaturesSaved() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
@@ -47,6 +52,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
           final location = resolveLocation(asset);
           final resolvedAssetCode = inspection?.assetUid ?? widget.assetUid;
           final userNameLabel = resolveUserNameLabel(user, asset);
+
           return FutureBuilder<_DetailExtras>(
             future: _loadDetailExtras(resolvedAssetCode, user),
             builder: (context, snapshot) {
@@ -87,19 +93,6 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                 );
               }();
 
-              // final bool isVerified = !isLoadingExtras && signature != null;
-              // late final Color verificationColor;
-              // late final Widget verificationLabel;
-              // if (isLoadingExtras) {
-              //   verificationColor = Colors.blueGrey;
-              //   verificationLabel = _buildChipText(context, '확인 중', verificationColor);
-              // } else if (isVerified) {
-              //   verificationColor = Colors.green;
-              //   verificationLabel = SignatureThumbnail(bytes: signature!.bytes);
-              // } else {
-              //   verificationColor = Colors.orange;
-              //   verificationLabel = _buildChipText(context, '미인증', verificationColor);
-              // }
               final Widget signatureStatus = () {
                 if (isLoadingExtras) {
                   return const SelectableText('불러오는 중...');
@@ -123,6 +116,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                 _DetailCell('관리자', SelectableText(_displayValue(manager))),
                 _DetailCell('위치', SelectableText(_displayValue(location))),
                 _DetailCell('인증서명', signatureStatus),
+                _DetailCell('바코드사진', barcodePreview),
                 // _DetailCell(
                 //   '인증여부',
                 //   Chip(
@@ -131,8 +125,6 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                 //
                 //   ),
                 // ),
-                _DetailCell('바코드사진', barcodePreview),
-
               ];
 
               return Padding(
@@ -327,6 +319,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                         ),
                       ),
                     ),
+                    //하단 사인란
                     const SizedBox(height: 2),
                     Card(
                       child: Padding(
@@ -383,11 +376,6 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
         },
       ),
     );
-  }
-
-  void _handleSignaturesSaved() {
-    if (!mounted) return;
-    setState(() {});
   }
 
   Widget _buildChipText(BuildContext context, String text, Color color) {

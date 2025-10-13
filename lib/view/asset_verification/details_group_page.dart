@@ -24,6 +24,7 @@ class _AssetVerificationDetailsGroupPageState extends State<AssetVerificationDet
   bool _isActionsExpanded = true;
 
   void _handleSignaturesSaved() {
+    if (!mounted) return;
     setState(() {});
   }
 
@@ -103,8 +104,9 @@ class _AssetVerificationDetailsGroupPageState extends State<AssetVerificationDet
                               ),
                             ),
                           ),
+                          //하단 사인란
+                          const SizedBox(height: 16),
                           if (validEntries.isNotEmpty) ...[
-                            const SizedBox(height: 16),
                             Card(
                               child: Padding(
                                 padding: const EdgeInsets.all(5),
@@ -273,48 +275,26 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
                   child: DataTable(
                     headingTextStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
                     columns: [
-                      const DataColumn(label: Text('자산번호')),
-                      const DataColumn(label: Text('팀')),
-                      const DataColumn(label: Text('사용자')),
-                      const DataColumn(label: Text('장비')),
-                      const DataColumn(label: Text('관리자')),
-                      const DataColumn(label: Text('위치')),
-                      const DataColumn(label: Text('인증상태')),
-                      const DataColumn(label: Text('바코드사진')),
+                      DataColumn(label: Text('자산번호')),
+                      DataColumn(label: Text('팀')),
+                      DataColumn(label: Text('사용자')),
+                      DataColumn(label: Text('장비')),
+                      DataColumn(label: Text('관리자')),
+                      DataColumn(label: Text('위치')),
+                      DataColumn(label: Text('인증서명')),
+                      DataColumn(label: Text('바코드사진')),
                     ],
                     rows: [
                       for (final row in rows)
                         DataRow(
-                          cells: [
+                          cells: <DataCell>[
                             DataCell(_wrapCell(SelectableText(row.assetUid))),
-                            DataCell(
-                              _wrapCell(
-                                Text(row.teamName.isNotEmpty ? row.teamName : '정보 없음'),
-                              ),
-                            ),
-                            DataCell(
-                              _wrapCell(
-                                Text(row.userName.isNotEmpty ? row.userName : '정보 없음'),
-                              ),
-                            ),
-                            DataCell(
-                              _wrapCell(
-                                Text(row.assetType.isNotEmpty ? row.assetType : '정보 없음'),
-                              ),
-                            ),
-                            DataCell(
-                              _wrapCell(
-                                Text(row.manager.isNotEmpty ? row.manager : '정보 없음'),
-                              ),
-                            ),
-                            DataCell(
-                              _wrapCell(
-                                Text(row.location.isNotEmpty ? row.location : '정보 없음'),
-                              ),
-                            ),
-                            DataCell(
-                              _wrapCell(
-                                isLoadingSignatures
+                            DataCell(_wrapCell(SelectableText(row.teamName.isNotEmpty ? row.teamName : '정보 없음'),),),
+                            DataCell(_wrapCell(SelectableText(row.userName.isNotEmpty ? row.userName : '정보 없음'),),),
+                            DataCell(_wrapCell(SelectableText(row.assetType.isNotEmpty ? row.assetType : '정보 없음'),),),
+                            DataCell(_wrapCell(SelectableText(row.manager.isNotEmpty ? row.manager : '정보 없음'),),),
+                            DataCell(_wrapCell(SelectableText(row.location.isNotEmpty ? row.location : '정보 없음'),),),
+                            DataCell(_wrapCell(isLoadingSignatures
                                     ? const SizedBox(
                                         width: 16,
                                         height: 16,
@@ -329,11 +309,7 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
                                       ),
                               ),
                             ),
-                            DataCell(
-                              _wrapCell(
-                                _buildPhotoCell(row.photoPath),
-                              ),
-                            ),
+                            DataCell(_wrapCell(_buildPhotoCell(row.photoPath),),),
                           ],
                         ),
                     ],
