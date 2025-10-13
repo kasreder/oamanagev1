@@ -360,6 +360,7 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
                                 },
                                 icon: Icon(
                                   _isSignatureExpanded ? Icons.expand_less : Icons.expand_more,
+
                                 ),
                               ),
                             ],
