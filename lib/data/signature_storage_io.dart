@@ -21,10 +21,14 @@ Future<StoredSignature> save({
   }
   final encoded = img.encodePng(decoded);
   await file.writeAsBytes(encoded, flush: true);
-  for (final legacyExtension in legacySignatureFileExtensions) {
-    final legacyFile = File('${directory.path}/$fileName$legacyExtension');
-    if (await legacyFile.exists()) {
-      await legacyFile.delete();
+  for (final candidate in buildSignatureFileNameCandidates(assetUid, userName, employeeId)) {
+    final isCurrent = candidate == fileName;
+    final extensions = <String>[if (!isCurrent) signatureFileExtension, ...legacySignatureFileExtensions];
+    for (final extension in extensions) {
+      final legacyFile = File('${directory.path}/$candidate$extension');
+      if (await legacyFile.exists()) {
+        await legacyFile.delete();
+      }
     }
   }
   return StoredSignature(location: file.path);
@@ -36,15 +40,16 @@ Future<StoredSignature?> find({
   required String employeeId,
 }) async {
   final directory = await _ensureDirectory();
-  final fileName = buildSignatureFileName(assetUid, userName, employeeId);
-  final primary = File('${directory.path}/$fileName$signatureFileExtension');
-  if (await primary.exists()) {
-    return StoredSignature(location: primary.path);
-  }
-  for (final legacyExtension in legacySignatureFileExtensions) {
-    final legacyFile = File('${directory.path}/$fileName$legacyExtension');
-    if (await legacyFile.exists()) {
-      return StoredSignature(location: legacyFile.path);
+  for (final candidate in buildSignatureFileNameCandidates(assetUid, userName, employeeId)) {
+    final primary = File('${directory.path}/$candidate$signatureFileExtension');
+    if (await primary.exists()) {
+      return StoredSignature(location: primary.path);
+    }
+    for (final legacyExtension in legacySignatureFileExtensions) {
+      final legacyFile = File('${directory.path}/$candidate$legacyExtension');
+      if (await legacyFile.exists()) {
+        return StoredSignature(location: legacyFile.path);
+      }
     }
   }
   return null;
@@ -56,15 +61,16 @@ Future<Uint8List?> loadBytes({
   required String employeeId,
 }) async {
   final directory = await _ensureDirectory();
-  final fileName = buildSignatureFileName(assetUid, userName, employeeId);
-  final primary = File('${directory.path}/$fileName$signatureFileExtension');
-  if (await primary.exists()) {
-    return primary.readAsBytes();
-  }
-  for (final legacyExtension in legacySignatureFileExtensions) {
-    final legacyFile = File('${directory.path}/$fileName$legacyExtension');
-    if (await legacyFile.exists()) {
-      return legacyFile.readAsBytes();
+  for (final candidate in buildSignatureFileNameCandidates(assetUid, userName, employeeId)) {
+    final primary = File('${directory.path}/$candidate$signatureFileExtension');
+    if (await primary.exists()) {
+      return primary.readAsBytes();
+    }
+    for (final legacyExtension in legacySignatureFileExtensions) {
+      final legacyFile = File('${directory.path}/$candidate$legacyExtension');
+      if (await legacyFile.exists()) {
+        return legacyFile.readAsBytes();
+      }
     }
   }
   return null;

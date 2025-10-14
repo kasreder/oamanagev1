@@ -14,12 +14,14 @@ class VerificationActionSection extends StatefulWidget {
     this.primaryAssetUid,
     this.primaryUser,
     this.onSignaturesSaved,
+    this.assetUsers = const {},
   });
 
   final List<String> assetUids;
   final String? primaryAssetUid;
   final UserInfo? primaryUser;
   final VoidCallback? onSignaturesSaved;
+  final Map<String, UserInfo?> assetUsers;
 
   @override
   State<VerificationActionSection> createState() => _VerificationActionSectionState();
@@ -164,41 +166,75 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
       return;
     }
 
-    final user = widget.primaryUser;
-    final normalizedAssetUids = <String>{
-      for (final uid in widget.assetUids)
-        if (uid.trim().isNotEmpty) uid.trim(),
-    }.toList(growable: false);
+    final resolvedTargets = _resolveTargets();
 
-    if (user == null ||
-        user.id.trim().isEmpty ||
-        user.name.trim().isEmpty ||
-        normalizedAssetUids.isEmpty) {
+    if (resolvedTargets.isEmpty) {
       _showSnackBar('자산 또는 사용자 정보가 없어 서명을 저장할 수 없습니다.');
       return;
     }
 
+    final hasInvalidUser = resolvedTargets.any(
+      (target) =>
+          target.user == null ||
+          target.user!.id.trim().isEmpty ||
+          target.user!.name.trim().isEmpty,
+    );
+
+    if (hasInvalidUser) {
+      _showSnackBar('자산 또는 사용자 정보가 없어 서명을 저장할 수 없습니다.');
+      return;
+    }
+
+    if (_hasMultipleUsers(resolvedTargets)) {
+      final confirmed = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('사용자 확인 필요'),
+              content: const Text('사용자가 여러명입니다. 실사용자와 인증자 확인후 진행해주세요'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('취소'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('확인했습니다'),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+
+      if (!mounted) {
+        return;
+      }
+
+      if (!confirmed) {
+        return;
+      }
+    }
+
     final existingChecks = await Future.wait(
-      normalizedAssetUids.map(
-        (uid) => signatureExists(
-          assetUid: uid,
-          user: user,
+      resolvedTargets.map(
+        (target) => signatureExists(
+          assetUid: target.assetUid,
+          user: target.user,
         ),
       ),
     );
 
-    final alreadyVerified = <String>[];
-    final pendingTargets = <String>[];
-    for (var i = 0; i < normalizedAssetUids.length; i++) {
-      final uid = normalizedAssetUids[i];
+    final alreadyVerified = <_AssetSignatureTarget>[];
+    final pendingTargets = <_AssetSignatureTarget>[];
+    for (var i = 0; i < resolvedTargets.length; i++) {
+      final target = resolvedTargets[i];
       if (existingChecks[i]) {
-        alreadyVerified.add(uid);
+        alreadyVerified.add(target);
       } else {
-        pendingTargets.add(uid);
+        pendingTargets.add(target);
       }
     }
 
-    var targets = List<String>.from(normalizedAssetUids);
+    var targets = List<_AssetSignatureTarget>.from(resolvedTargets);
     var skippedCount = 0;
 
     if (alreadyVerified.isNotEmpty) {
@@ -250,15 +286,16 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
       final primaryAssetUid = widget.primaryAssetUid?.trim().toLowerCase();
       String? primarySignatureLocation;
 
-      for (final targetUid in targets) {
+      for (final target in targets) {
+        final targetUser = target.user!;
         final storedSignature = await SignatureStorage.save(
           data: imageBytes,
-          assetUid: targetUid,
-          userName: user.name,
-          employeeId: user.id,
+          assetUid: target.assetUid,
+          userName: targetUser.name,
+          employeeId: targetUser.id,
         );
 
-        final normalizedTarget = targetUid.toLowerCase();
+        final normalizedTarget = target.assetUid.toLowerCase();
         if (primaryAssetUid != null) {
           if (primaryAssetUid == normalizedTarget) {
             primarySignatureLocation = storedSignature.location;
@@ -278,7 +315,6 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
           _savedSignatureLocation = primarySignatureLocation;
         }
         _savedSignatureData = null;
-
       });
 
       await _loadExistingSignature();
@@ -299,9 +335,87 @@ class _VerificationActionSectionState extends State<VerificationActionSection> {
     }
   }
 
+  List<_AssetSignatureTarget> _resolveTargets() {
+    final seen = <String>{};
+    final targets = <_AssetSignatureTarget>[];
+    for (final rawUid in widget.assetUids) {
+      final normalizedUid = rawUid.trim();
+      if (normalizedUid.isEmpty) {
+        continue;
+      }
+      final user = _resolveUserForAsset(normalizedUid);
+      final targetKey = '${normalizedUid.toLowerCase()}::${_userKey(user)}';
+      if (seen.add(targetKey)) {
+        targets.add(
+          _AssetSignatureTarget(
+            assetUid: normalizedUid,
+            user: user,
+          ),
+        );
+      }
+    }
+    return targets;
+  }
+
+  UserInfo? _userForAsset(String assetUid) {
+    final normalized = assetUid.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    final candidates = <UserInfo?>[
+      widget.assetUsers[normalized],
+      widget.assetUsers[normalized.toLowerCase()],
+      widget.assetUsers[normalized.toUpperCase()],
+      widget.assetUsers[assetUid],
+    ];
+
+    for (final candidate in candidates) {
+      if (candidate != null) {
+        return candidate;
+      }
+    }
+
+    return null;
+  }
+
+  UserInfo? _resolveUserForAsset(String assetUid) {
+    return _userForAsset(assetUid) ?? widget.primaryUser;
+  }
+
+  bool _hasMultipleUsers(List<_AssetSignatureTarget> targets) {
+    final userKeys = <String>{};
+    for (final target in targets) {
+      userKeys.add(_userKey(target.user));
+    }
+    return userKeys.length > 1;
+  }
+
+  String _userKey(UserInfo? user) {
+    if (user == null) {
+      return '__unknown__';
+    }
+    final normalizedId = user.id.trim().toLowerCase();
+    final normalizedName = user.name.trim();
+    if (normalizedId.isEmpty && normalizedName.isEmpty) {
+      return '__unknown__';
+    }
+    return '$normalizedId::$normalizedName';
+  }
+
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
   }
+}
+
+class _AssetSignatureTarget {
+  const _AssetSignatureTarget({
+    required this.assetUid,
+    required this.user,
+  });
+
+  final String assetUid;
+  final UserInfo? user;
 }
