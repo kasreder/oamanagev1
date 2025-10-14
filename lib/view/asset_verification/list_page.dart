@@ -40,7 +40,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     _TableColumn.barcodePhoto: 1,
   };
   static const double _tableMinWidth = 1200;
-  static const double _headerHeight = 48;
+  static const double _headerHeight = 40;
   static const double _checkboxHorizontalMargin = 16;
   static const double _checkboxColumnWidth =
       _checkboxHorizontalMargin * 2 + Checkbox.width;
