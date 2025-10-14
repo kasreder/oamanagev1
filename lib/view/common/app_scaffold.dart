@@ -31,7 +31,7 @@ class AppScaffold extends StatelessWidget {
       route: '/assets',
     ),
     _NavigationDestination(
-      label: '미검증 자산',
+      label: '자산인증',
       icon: Icons.inventory_outlined,
       selectedIcon: Icons.inventory,
       route: '/asset_verification_list',
