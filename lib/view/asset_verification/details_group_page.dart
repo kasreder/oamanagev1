@@ -226,14 +226,14 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
   static const double _cellHorizontalPadding = 15;
 
   static const List<_TableColumnConfig> _columns = [
-    _TableColumnConfig(title: '자산번호', flex: 1),
-    _TableColumnConfig(title: '팀', flex: 2),
-    _TableColumnConfig(title: '사용자', flex: 1),
-    _TableColumnConfig(title: '장비', flex: 2),
-    _TableColumnConfig(title: '관리자', flex: 2),
-    _TableColumnConfig(title: '위치', flex: 4),
-    _TableColumnConfig(title: '인증서명', flex: 3, alignment: Alignment.center),
-    _TableColumnConfig(title: '바코드사진', flex: 3, alignment: Alignment.center),
+    _TableColumnConfig(title: '자산번호', width: 120), // px
+    _TableColumnConfig(title: '팀', width: 160), // px
+    _TableColumnConfig(title: '사용자', width: 120), // px
+    _TableColumnConfig(title: '장비', width: 160), // px
+    _TableColumnConfig(title: '관리자', width: 160), // px
+    _TableColumnConfig(title: '위치', width: 320), // px
+    _TableColumnConfig(title: '인증서명', width: 220, alignment: Alignment.center), // px
+    _TableColumnConfig(title: '바코드사진', width: 220, alignment: Alignment.center), // px
   ];
 
   @override
@@ -330,7 +330,8 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
 
         return LayoutBuilder(
           builder: (context, constraints) {
-            final tableWidth = math.max(constraints.maxWidth, _tableMinWidth);
+            final configuredWidth = _columns.fold<double>(0, (sum, column) => sum + column.width);
+            final tableWidth = math.max(constraints.maxWidth, math.max(_tableMinWidth, configuredWidth));
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -573,8 +574,8 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
           child: Row(
             children: [
               for (final column in _columns)
-                Expanded(
-                  flex: column.flex,
+                SizedBox(
+                  width: column.width,
                   child: Container(
                     alignment: column.alignment,
                     color: Theme.of(context).colorScheme.surfaceContainerHighest, // ✅ 배경색 적용
@@ -635,8 +636,8 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
                             _buildTextCell(row.assetType.isNotEmpty ? row.assetType : '정보 없음', _columns[3]),
                             _buildTextCell(row.manager.isNotEmpty ? row.manager : '정보 없음', _columns[4]),
                             _buildTextCell(row.location.isNotEmpty ? row.location : '정보 없음', _columns[5]),
-                            Expanded(
-                              flex: _columns[6].flex,
+                            SizedBox(
+                              width: _columns[6].width,
                               child: Align(
                                 alignment: _columns[6].alignment,
                                 child: isLoadingSignatures
@@ -648,8 +649,8 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
                                     : _buildVerificationChip(context, signature),
                               ),
                             ),
-                            Expanded(
-                              flex: _columns[7].flex,
+                            SizedBox(
+                              width: _columns[7].width,
                               child: Align(
                                 alignment: _columns[7].alignment,
                                 child: _buildPhotoCell(row.photoPath),
@@ -669,8 +670,8 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
   }
 
   Widget _buildTextCell(String text, _TableColumnConfig column) {
-    return Expanded(
-      flex: column.flex,
+    return SizedBox(
+      width: column.width,
       child: Align(
         alignment: column.alignment,
         child: SelectableText(text),
@@ -771,11 +772,11 @@ class _GroupAssetRowData {
 class _TableColumnConfig {
   const _TableColumnConfig({
     required this.title,
-    required this.flex,
+    required this.width,
     this.alignment = Alignment.centerLeft,
   });
 
   final String title;
-  final int flex;
+  final double width;
   final Alignment alignment;
 }
