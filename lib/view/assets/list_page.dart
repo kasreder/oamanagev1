@@ -15,11 +15,13 @@ class AssetsListPage extends StatefulWidget {
   State<AssetsListPage> createState() => _AssetsListPageState();
 }
 
-enum _AssetSearchField { name, assets_types, modelName, organizationTeam }
+enum _AssetSearchField { assetUid, name, assets_types, modelName, organizationTeam }
 
 extension on _AssetSearchField {
   String get label {
     switch (this) {
+      case _AssetSearchField.assetUid:
+        return '자산번호';
       case _AssetSearchField.name:
         return '사용자';
       case _AssetSearchField.assets_types:
@@ -452,6 +454,9 @@ class _AssetsListPageState extends State<AssetsListPage> {
   // 선택된 검색 필드에 맞춰 검색어 일치 여부를 판단합니다.
   bool _matchesQuery(Inspection inspection, AssetInfo? asset, String query) {
     switch (_searchField) {
+      case _AssetSearchField.assetUid:
+        final target = inspection.assetUid;
+        return target.toLowerCase().contains(query);
       case _AssetSearchField.name:
         final target = asset?.name ?? '';
         return target.toLowerCase().contains(query);
