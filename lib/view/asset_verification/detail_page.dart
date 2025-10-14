@@ -155,6 +155,8 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                                             .textTheme
                                             .bodyMedium
                                             ?.copyWith(fontWeight: FontWeight.w700),
+                                        headingRowColor: WidgetStateProperty.resolveWith(
+                                              (states) => Theme.of(context).colorScheme.surfaceContainerHighest,),
                                         columns: [
                                           for (final cell in detailCells)
                                             DataColumn(label: Text(cell.label)),

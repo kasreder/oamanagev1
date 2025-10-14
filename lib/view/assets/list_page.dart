@@ -135,7 +135,7 @@ class _AssetsListPageState extends State<AssetsListPage> {
                                               (states) => Theme.of(context).colorScheme.surfaceContainerHighest,),
                                             columnSpacing: 0,
                                             horizontalMargin: 0,
-                                            headingRowHeight: 48,
+                                            headingRowHeight: 40,
                                             dataRowMinHeight: 0,
                                             dataRowMaxHeight: 0,
                                             columns: columns,
