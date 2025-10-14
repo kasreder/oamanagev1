@@ -151,6 +151,7 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                                     SingleChildScrollView(
                                       scrollDirection: Axis.horizontal,
                                       child: DataTable(
+                                        headingRowHeight: 40,
                                         headingTextStyle: Theme.of(context)
                                             .textTheme
                                             .bodyMedium
