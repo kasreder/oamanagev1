@@ -1,7 +1,35 @@
 const signatureFileExtension = '.png';
 const legacySignatureFileExtensions = ['.webp'];
+const _verificationSuffix = '인증확인';
 
 String buildSignatureFileName(
+  String assetUid,
+  String userName,
+  String employeeId,
+) {
+  final baseName = _buildBaseName(assetUid, userName, employeeId);
+  final suffix = _sanitize(_verificationSuffix);
+  return '${baseName}_$suffix';
+}
+
+Iterable<String> buildSignatureFileNameCandidates(
+  String assetUid,
+  String userName,
+  String employeeId,
+) sync* {
+  yield buildSignatureFileName(assetUid, userName, employeeId);
+  yield* buildLegacySignatureFileNames(assetUid, userName, employeeId);
+}
+
+Iterable<String> buildLegacySignatureFileNames(
+  String assetUid,
+  String userName,
+  String employeeId,
+) sync* {
+  yield _buildBaseName(assetUid, userName, employeeId);
+}
+
+String _buildBaseName(
   String assetUid,
   String userName,
   String employeeId,
