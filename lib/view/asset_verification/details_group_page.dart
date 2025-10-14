@@ -45,20 +45,38 @@ class _AssetVerificationDetailsGroupPageState extends State<AssetVerificationDet
           : Consumer<InspectionProvider>(
               builder: (context, provider, _) {
                 final entries = uniqueAssetUids
-                    .map(
-                      (uid) => _GroupAssetEntry(
+                    .map((uid) {
+                      final inspection = provider.latestByAssetUid(uid);
+                      final asset = provider.assetOf(uid);
+                      final user = resolveUser(provider, inspection, asset);
+                      return _GroupAssetEntry(
                         assetUid: uid,
-                        inspection: provider.latestByAssetUid(uid),
-                        asset: provider.assetOf(uid),
-                      ),
-                    )
+                        inspection: inspection,
+                        asset: asset,
+                        user: user,
+                      );
+                    })
                     .toList(growable: false);
 
                 final missingAssets = entries.where((entry) => entry.inspection == null && entry.asset == null).map((entry) => entry.assetUid).toList(growable: false);
                 final validEntries = entries.where((entry) => entry.inspection != null || entry.asset != null).toList(growable: false);
-                final verificationTargets = validEntries.map((entry) => entry.assetUid).toList(growable: false);
+                final verificationTargets = validEntries
+                    .map((entry) => entry.assetUid.trim())
+                    .where((uid) => uid.isNotEmpty)
+                    .toList(growable: false);
                 final primaryEntry = validEntries.isNotEmpty ? validEntries.first : null;
-                final primaryUser = primaryEntry == null ? null : resolveUser(provider, primaryEntry.inspection, primaryEntry.asset);
+                final primaryUser = primaryEntry?.user;
+                final normalizedPrimaryAssetUid = () {
+                  final raw = primaryEntry?.assetUid.trim();
+                  if (raw == null || raw.isEmpty) {
+                    return null;
+                  }
+                  return raw;
+                }();
+                final assetUsers = <String, UserInfo?>{
+                  for (final entry in validEntries)
+                    if (entry.assetUid.trim().isNotEmpty) entry.assetUid.trim(): entry.user,
+                };
 
                 return FutureBuilder<Map<String, String>>(
                   future: BarcodePhotoRegistry.loadAllPaths(),
@@ -142,8 +160,9 @@ class _AssetVerificationDetailsGroupPageState extends State<AssetVerificationDet
                                         padding: const EdgeInsets.symmetric(horizontal: 5),
                                         child: VerificationActionSection(
                                           assetUids: verificationTargets,
-                                          primaryAssetUid: primaryEntry?.assetUid,
+                                          primaryAssetUid: normalizedPrimaryAssetUid,
                                           primaryUser: primaryUser,
+                                          assetUsers: assetUsers,
                                           onSignaturesSaved: _handleSignaturesSaved,
                                         ),
                                       ),
@@ -169,11 +188,13 @@ class _GroupAssetEntry {
     required this.assetUid,
     required this.inspection,
     required this.asset,
+    required this.user,
   });
 
   final String assetUid;
   final Inspection? inspection;
   final AssetInfo? asset;
+  final UserInfo? user;
 }
 
 class _GroupAssetCard extends StatefulWidget {
@@ -236,7 +257,6 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<InspectionProvider>(context, listen: false);
     final rows = widget.entries.map((entry) {
       final inspection = entry.inspection;
       final asset = entry.asset;
@@ -244,7 +264,7 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
       final assetType = resolveAssetType(inspection, asset);
       final manager = resolveManager(asset);
       final location = resolveLocation(asset);
-      final user = resolveUser(provider, inspection, asset);
+      final user = entry.user;
       final userNameLabel = resolveUserNameLabel(user, asset);
       final normalizedAssetUid = entry.assetUid.trim().toLowerCase();
       final photoPath = widget.photoPaths[normalizedAssetUid];

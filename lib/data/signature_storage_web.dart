@@ -26,12 +26,18 @@ Future<StoredSignature> save({
     if (directory == null) {
       throw UnsupportedError('Unable to access browser file system directory.');
     }
-    final fileName = _buildFileName(assetUid, userName, employeeId);
+    final baseFileName = _buildBaseFileName(assetUid, userName, employeeId);
+    final fileName = '$baseFileName$_signatureExtension';
     final fileHandle = await _createFileHandle(directory, fileName);
     final pngBytes = _encodeToPng(data);
 
     await _writeFile(fileHandle, pngBytes);
-    for (final legacyFileName in _legacyFileNames(fileName)) {
+    for (final legacyFileName in _legacyFileNames(
+      assetUid: assetUid,
+      userName: userName,
+      employeeId: employeeId,
+      currentBaseName: baseFileName,
+    )) {
       await _removeFile(directory, legacyFileName);
     }
     _removeLegacyLocalStorageEntries(
@@ -122,9 +128,12 @@ Future<Uint8List?> loadBytes({
   }
 }
 
+String _buildBaseFileName(String assetUid, String userName, String employeeId) {
+  return buildSignatureFileName(assetUid, userName, employeeId);
+}
+
 String _buildFileName(String assetUid, String userName, String employeeId) {
-  final fileName = buildSignatureFileName(assetUid, userName, employeeId);
-  return '$fileName$_signatureExtension';
+  return '${_buildBaseFileName(assetUid, userName, employeeId)}$_signatureExtension';
 }
 
 Uint8List _encodeToPng(Uint8List data) {
@@ -241,7 +250,16 @@ Future<_SignatureHandle?> _getExistingOrLegacyFileHandle(
     return (handle: existing, fileName: fileName);
   }
 
-  for (final legacyFileName in _legacyFileNames(fileName)) {
+  final currentBaseName = fileName.endsWith(_signatureExtension)
+      ? fileName.substring(0, fileName.length - _signatureExtension.length)
+      : fileName;
+
+  for (final legacyFileName in _legacyFileNames(
+    assetUid: assetUid,
+    userName: userName,
+    employeeId: employeeId,
+    currentBaseName: currentBaseName,
+  )) {
     final legacyHandle =
         await _getExistingFileHandle(directory, legacyFileName);
     if (legacyHandle == null) {
@@ -353,6 +371,9 @@ Future<StoredSignature> _saveToLocalStorage({
   final pngBytes = _encodeToPng(data);
   html.window.localStorage[key] = base64Encode(pngBytes);
   for (final legacyKey in _legacyStorageKeys(assetUid, userName, employeeId)) {
+    if (legacyKey == key) {
+      continue;
+    }
     html.window.localStorage.remove(legacyKey);
   }
   return StoredSignature(location: 'localStorage://$key');
@@ -401,13 +422,18 @@ void _removeLegacyLocalStorageEntries({
   }
 }
 
-String _buildStorageBaseKey(
+Iterable<String> _storageKeyCandidates(
   String assetUid,
   String userName,
   String employeeId,
-) {
-  final fileName = buildSignatureFileName(assetUid, userName, employeeId);
-  return '$_storagePrefix$fileName';
+) sync* {
+  for (final baseName in buildSignatureFileNameCandidates(assetUid, userName, employeeId)) {
+    final baseKey = '$_storagePrefix$baseName';
+    yield '$baseKey$_signatureExtension';
+    for (final suffix in _legacyLocalStorageSuffixes) {
+      yield '$baseKey$suffix';
+    }
+  }
 }
 
 String _buildStorageKey(
@@ -415,7 +441,8 @@ String _buildStorageKey(
   String userName,
   String employeeId,
 ) {
-  return '${_buildStorageBaseKey(assetUid, userName, employeeId)}$_signatureExtension';
+  final baseName = _buildBaseFileName(assetUid, userName, employeeId);
+  return '$_storagePrefix$baseName$_signatureExtension';
 }
 
 Iterable<String> _legacyStorageKeys(
@@ -423,27 +450,29 @@ Iterable<String> _legacyStorageKeys(
   String userName,
   String employeeId,
 ) sync* {
-  final baseKey = _buildStorageBaseKey(assetUid, userName, employeeId);
-  for (final suffix in _legacyLocalStorageSuffixes) {
-    yield '$baseKey$suffix';
+  for (final baseName in buildSignatureFileNameCandidates(assetUid, userName, employeeId)) {
+    final baseKey = '$_storagePrefix$baseName';
+    yield '$baseKey$_signatureExtension';
+    for (final suffix in _legacyLocalStorageSuffixes) {
+      yield '$baseKey$suffix';
+    }
   }
 }
 
-Iterable<String> _storageKeyCandidates(
-  String assetUid,
-  String userName,
-  String employeeId,
-) sync* {
-  yield _buildStorageKey(assetUid, userName, employeeId);
-  yield* _legacyStorageKeys(assetUid, userName, employeeId);
-}
-
-Iterable<String> _legacyFileNames(String fileName) sync* {
-  final baseName = fileName.endsWith(_signatureExtension)
-      ? fileName.substring(0, fileName.length - _signatureExtension.length)
-      : fileName;
-  for (final extension in legacySignatureFileExtensions) {
-    yield '$baseName$extension';
+Iterable<String> _legacyFileNames({
+  required String assetUid,
+  required String userName,
+  required String employeeId,
+  required String currentBaseName,
+}) sync* {
+  for (final baseName in buildSignatureFileNameCandidates(assetUid, userName, employeeId)) {
+    final isCurrent = baseName == currentBaseName;
+    if (!isCurrent) {
+      yield '$baseName$_signatureExtension';
+    }
+    for (final extension in legacySignatureFileExtensions) {
+      yield '$baseName$extension';
+    }
   }
 }
 

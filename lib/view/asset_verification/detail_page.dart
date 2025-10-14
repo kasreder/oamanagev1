@@ -360,6 +360,10 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                                   assetUids: [resolvedAssetCode],
                                   primaryAssetUid: resolvedAssetCode,
                                   primaryUser: user,
+                                  assetUsers: {
+                                    if (resolvedAssetCode.trim().isNotEmpty)
+                                      resolvedAssetCode.trim(): user,
+                                  },
                                   onSignaturesSaved: _handleSignaturesSaved,
                                 ),
                               ),
