@@ -221,19 +221,19 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
   late final ScrollController _verticalBodyController;
   bool _isSyncingHorizontalScroll = false;
 
-  static const double _tableMinWidth = 900;
+  static const double _tableMinWidth = 1200;
   static const double _rowVerticalPadding = 5;
-  static const double _cellHorizontalPadding = 5;
+  static const double _cellHorizontalPadding = 15;
 
   static const List<_TableColumnConfig> _columns = [
-    _TableColumnConfig(title: '자산번호', flex: 3),
+    _TableColumnConfig(title: '자산번호', flex: 1),
     _TableColumnConfig(title: '팀', flex: 2),
-    _TableColumnConfig(title: '사용자', flex: 2),
+    _TableColumnConfig(title: '사용자', flex: 1),
     _TableColumnConfig(title: '장비', flex: 2),
     _TableColumnConfig(title: '관리자', flex: 2),
-    _TableColumnConfig(title: '위치', flex: 3),
-    _TableColumnConfig(title: '인증서명', flex: 2, alignment: Alignment.center),
-    _TableColumnConfig(title: '바코드사진', flex: 2, alignment: Alignment.center),
+    _TableColumnConfig(title: '위치', flex: 4),
+    _TableColumnConfig(title: '인증서명', flex: 3, alignment: Alignment.center),
+    _TableColumnConfig(title: '바코드사진', flex: 3, alignment: Alignment.center),
   ];
 
   @override
