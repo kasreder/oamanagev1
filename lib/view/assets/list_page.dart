@@ -41,7 +41,6 @@ class _AssetsListPageState extends State<AssetsListPage> {
   final ScrollController _verticalScrollController = ScrollController();
   static const double _tableMinWidth = 1200; // 테이블이 답답해 보이지 않도록 최소 너비를 지정합니다.
   static const EdgeInsets _cellPadding = EdgeInsets.symmetric(horizontal: 1, vertical: 1);
-  static const double _iconColumnWidth = 30;
   static const double _defaultColumnWidth = 60;
   static const double _70ColumnWidth = 70;
   static const double _80ColumnWidth = 80;
@@ -175,29 +174,6 @@ class _AssetsListPageState extends State<AssetsListPage> {
                                                             DataCell(_cellText(_resolveOrganization(row.asset, row.inspection))),
                                                             DataCell(_cellText200(row.asset?.location ?? '-')),
                                                             DataCell(
-                                                              _cellText(
-                                                                provider.formatDateTime(
-                                                                  row.inspection.scannedAt,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                            DataCell(
-                                                              Padding(
-                                                                padding: _cellPadding,
-                                                                child: SizedBox(
-                                                                  width: _iconColumnWidth,
-                                                                  child: Align(
-                                                                    alignment: Alignment.centerLeft,
-                                                                    child: Icon(
-                                                                      row.inspection.synced ? Icons.cloud_done : Icons.cloud_off,
-                                                                      size: 18,
-                                                                      color: row.inspection.synced ? Colors.green : Colors.orange,
-                                                                    ),
-                                                                  ),
-                                                                ),
-                                                              ),
-                                                            ),
-                                                            DataCell(
                                                               _cellText200(
                                                                 _formattedMemo(row.inspection.memo),
                                                                 maxLines: 2,
@@ -328,8 +304,6 @@ class _AssetsListPageState extends State<AssetsListPage> {
       DataColumn(label: _headerCell('상태', headerStyle),),
       DataColumn(label: _headerCell('소속팀', headerStyle),),
       DataColumn(label: _headerCell200('위치', headerStyle),),
-      DataColumn(label: _headerCell('스캔일시', headerStyle),),
-      DataColumn(label: _headerCell30('인증', headerStyle,width: _iconColumnWidth,),),
       DataColumn(label: _headerCell200('메모', headerStyle),),
       // DataColumn(
       //   label: _headerCell(
@@ -396,29 +370,6 @@ class _AssetsListPageState extends State<AssetsListPage> {
     String label,
     TextStyle? style, {
     double width = _200ColumnWidth,
-  }) {
-    return Padding(
-      padding: _cellPadding,
-      child: SizedBox(
-        width: width,
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            label,
-            style: _resolveHeaderStyle(style),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ),
-    );
-  }
-
-  // 인증 아이콘 컬럼용 좁은 헤더 셀입니다.
-  Widget _headerCell30(
-    //아이콘
-    String label,
-    TextStyle? style, {
-    double width = 30,
   }) {
     return Padding(
       padding: _cellPadding,
