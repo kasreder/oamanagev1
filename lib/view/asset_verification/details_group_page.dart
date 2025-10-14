@@ -221,19 +221,19 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
   late final ScrollController _verticalBodyController;
   bool _isSyncingHorizontalScroll = false;
 
-  static const double _tableMinWidth = 1200;
+  static const double _tableMinWidth = 900;
   static const double _rowVerticalPadding = 5;
   static const double _cellHorizontalPadding = 15;
 
   static const List<_TableColumnConfig> _columns = [
-    _TableColumnConfig(title: '자산번호', width: 120), // px
-    _TableColumnConfig(title: '팀', width: 160), // px
-    _TableColumnConfig(title: '사용자', width: 120), // px
-    _TableColumnConfig(title: '장비', width: 160), // px
-    _TableColumnConfig(title: '관리자', width: 160), // px
-    _TableColumnConfig(title: '위치', width: 320), // px
-    _TableColumnConfig(title: '인증서명', width: 220, alignment: Alignment.center), // px
-    _TableColumnConfig(title: '바코드사진', width: 220, alignment: Alignment.center), // px
+    _TableColumnConfig(title: '자산번호', width: 100, alignment: Alignment.center), // px
+    _TableColumnConfig(title: '팀', width: 100, alignment: Alignment.center), // px
+    _TableColumnConfig(title: '사용자', width: 100, alignment: Alignment.center), // px
+    _TableColumnConfig(title: '장비', width: 160, alignment: Alignment.center), // px
+    _TableColumnConfig(title: '관리자', width: 100, alignment: Alignment.center), // px
+    _TableColumnConfig(title: '위치', width: 180, alignment: Alignment.center), // px
+    _TableColumnConfig(title: '인증서명', width: 100, alignment: Alignment.center), // px
+    _TableColumnConfig(title: '바코드사진', width: 100, alignment: Alignment.center), // px
   ];
 
   @override
@@ -576,6 +576,7 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
               for (final column in _columns)
                 SizedBox(
                   width: column.width,
+                  height: 40,
                   child: Container(
                     alignment: column.alignment,
                     color: Theme.of(context).colorScheme.surfaceContainerHighest, // ✅ 배경색 적용
