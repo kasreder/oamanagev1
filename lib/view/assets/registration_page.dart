@@ -6,7 +6,9 @@ import '../../providers/inspection_provider.dart';
 import '../common/app_scaffold.dart';
 
 class AssetRegistrationPage extends StatefulWidget {
-  const AssetRegistrationPage({super.key});
+  const AssetRegistrationPage({super.key, this.initialUid});
+
+  final String? initialUid;
 
   @override
   State<AssetRegistrationPage> createState() => _AssetRegistrationPageState();
@@ -25,6 +27,15 @@ class _AssetRegistrationPageState extends State<AssetRegistrationPage> {
   final List<_MetadataField> _metadataFields = [];
   String _selectedStatus = '사용';
   final List<String> _statusOptions = const ['사용', '수리중', '폐기', '분실', '기타'];
+
+  @override
+  void initState() {
+    super.initState();
+    final initialUid = widget.initialUid;
+    if (initialUid != null && initialUid.isNotEmpty) {
+      _uidController.text = initialUid;
+    }
+  }
 
   @override
   void dispose() {
