@@ -477,7 +477,8 @@ class _ScanPageState extends State<ScanPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('새 자산 등록을 진행해주세요. ($uid)')),
     );
-    context.go('/assets/register');
+    final encoded = Uri.encodeComponent(uid);
+    context.go('/assets/register?uid=$encoded');
   }
 }
 
