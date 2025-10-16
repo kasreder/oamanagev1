@@ -34,7 +34,10 @@ class AppRouter {
       ),
       GoRoute(
         path: '/assets/register',
-        builder: (context, state) => const AssetRegistrationPage(),
+        builder: (context, state) {
+          final initialUid = state.uri.queryParameters['uid'];
+          return AssetRegistrationPage(initialUid: initialUid);
+        },
       ),
       GoRoute(
         path: '/assets/:id',
