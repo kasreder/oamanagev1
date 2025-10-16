@@ -1,6 +1,8 @@
 // lib/view/scan/scan_page.dart
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:collection/collection.dart';
@@ -8,6 +10,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image/image.dart' as img;
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
@@ -31,7 +34,8 @@ class ScanPage extends StatefulWidget {
 
 class _ScanPageState extends State<ScanPage> {
   // MobileScanner 컨트롤러: 카메라 제어와 스캔 결과 수신에 사용된다.
-  final MobileScannerController _controller = MobileScannerController();
+  final MobileScannerController _controller =
+      MobileScannerController(returnImage: true);
   // 비프음 재생을 위한 오디오 플레이어 (저지연 모드 사용)
   late final AudioPlayer _beepPlayer;
   // 토치(플래시) 상태를 즉시 반영하기 위한 ValueNotifier
@@ -94,14 +98,19 @@ class _ScanPageState extends State<ScanPage> {
       final isRegistered = provider.assetExists(assetUid);
       final existingIndex =
           _scannedBarcodes.indexWhere((item) => item.uid == assetUid);
+      final imageBytes = _extractImageBytes(capture);
 
       if (existingIndex != -1) {
         // 이미 목록에 있는 경우 맨 위로 올리고 진동/단일 비프음 재생
         unawaited(_playBeep());
         _triggerVibration();
         setState(() {
-          final updated =
-              _ScannedBarcode(uid: assetUid, isRegistered: isRegistered);
+          final existing = _scannedBarcodes[existingIndex];
+          final updated = _ScannedBarcode(
+            uid: assetUid,
+            isRegistered: isRegistered,
+            imageBytes: imageBytes ?? existing.imageBytes,
+          );
           _scannedBarcodes
             ..removeAt(existingIndex)
             ..insert(0, updated);
@@ -112,7 +121,11 @@ class _ScanPageState extends State<ScanPage> {
         setState(() {
           _scannedBarcodes.insert(
             0,
-            _ScannedBarcode(uid: assetUid, isRegistered: isRegistered),
+            _ScannedBarcode(
+              uid: assetUid,
+              isRegistered: isRegistered,
+              imageBytes: imageBytes,
+            ),
           );
           if (_scannedBarcodes.length > 5) {
             _scannedBarcodes.removeRange(5, _scannedBarcodes.length);
@@ -362,8 +375,8 @@ class _ScanPageState extends State<ScanPage> {
                                         barcode: visible[i].uid,
                                         isRegistered: visible[i].isRegistered,
                                         onAction: visible[i].isRegistered
-                                            ? () => _verifyAsset(visible[i].uid)
-                                            : () => _registerAsset(visible[i].uid),
+                                            ? () => _verifyAsset(visible[i])
+                                            : () => _registerAsset(visible[i]),
                                         onDelete: () => _removeBarcode(visible[i].uid),
                                       ),
                                       if (i != visible.length - 1) const SizedBox(height: 2),
@@ -448,7 +461,30 @@ class _ScanPageState extends State<ScanPage> {
     HapticFeedback.mediumImpact();
   }
 
-  void _verifyAsset(String uid) {
+  Uint8List? _extractImageBytes(BarcodeCapture capture) {
+    final image = capture.image;
+    if (image == null) {
+      return null;
+    }
+    if (image is Uint8List) {
+      if (image.isEmpty) {
+        return null;
+      }
+      return Uint8List.fromList(image);
+    }
+    try {
+      final dynamic dynamicImage = image;
+      final bytes = dynamicImage.bytes;
+      if (bytes is Uint8List && bytes.isNotEmpty) {
+        return Uint8List.fromList(bytes);
+      }
+    } catch (_) {
+      // ignore: avoid_catches_without_on_clauses
+    }
+    return null;
+  }
+
+  Future<void> _verifyAsset(_ScannedBarcode barcode) async {
     // 자산 검수(검증) 내역을 즉시 생성하여 저장한다.
     //   1. InspectionProvider에서 자산 정보를 조회한다.
     //   2. 현재 시간을 기록하여 고유한 검수 ID를 만든다.
@@ -456,28 +492,69 @@ class _ScanPageState extends State<ScanPage> {
     //   4. 생성된 Inspection을 저장하고 사용자에게 스낵바로 알린다.
     final provider = context.read<InspectionProvider>();
     final now = DateTime.now();
-    final asset = provider.assetOf(uid);
+    final asset = provider.assetOf(barcode.uid);
     final inspection = Inspection(
-      id: 'ins_${uid}_${now.microsecondsSinceEpoch}',
-      assetUid: uid,
+      id: 'ins_${barcode.uid}_${now.microsecondsSinceEpoch}',
+      assetUid: barcode.uid,
       status: asset?.status.isNotEmpty == true ? asset!.status : '사용',
       memo: 'QR 인증',
       scannedAt: now,
       synced: false,
     );
     provider.addOrUpdate(inspection);
+    final savedPath = await _saveScannedImage(barcode);
+    final buffer =
+        StringBuffer('인증 내역이 저장되었습니다. (${inspection.assetUid})');
+    if (savedPath != null) {
+      buffer.writeln();
+      buffer.write('바코드 이미지가 저장되었습니다. ($savedPath)');
+    } else if (barcode.imageBytes != null) {
+      buffer.writeln();
+      buffer.write('바코드 이미지 저장에 실패했습니다.');
+    }
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('인증 내역이 저장되었습니다. (${inspection.assetUid})')),
+      SnackBar(content: Text(buffer.toString())),
     );
   }
 
-  void _registerAsset(String uid) {
+  Future<String?> _saveScannedImage(_ScannedBarcode barcode) async {
+    final bytes = barcode.imageBytes;
+    if (bytes == null || bytes.isEmpty) {
+      return null;
+    }
+    try {
+      final decoded = img.decodeImage(bytes);
+      if (decoded == null) {
+        return null;
+      }
+      final directory = Directory('assets/dummy/images');
+      if (!await directory.exists()) {
+        await directory.create(recursive: true);
+      }
+      List<int> encoded;
+      String extension = 'webp';
+      try {
+        encoded = img.encodeWebP(decoded, quality: 80);
+      } catch (_) {
+        encoded = img.encodePng(decoded);
+        extension = 'png';
+      }
+      final file = File('${directory.path}/${barcode.uid}.$extension');
+      await file.writeAsBytes(encoded, flush: true);
+      return file.path;
+    } catch (error) {
+      debugPrint('바코드 이미지 저장 실패: $error');
+      return null;
+    }
+  }
+
+  void _registerAsset(_ScannedBarcode barcode) {
     // 등록되지 않은 자산이라면 사용자에게 등록을 유도한다.
     // 이후 자산 등록 화면으로 즉시 라우팅하여 흐름을 이어갈 수 있도록 한다.
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('새 자산 등록을 진행해주세요. ($uid)')),
+      SnackBar(content: Text('새 자산 등록을 진행해주세요. (${barcode.uid})')),
     );
-    final encoded = Uri.encodeComponent(uid);
+    final encoded = Uri.encodeComponent(barcode.uid);
     context.go('/assets/register?uid=$encoded');
   }
 }
@@ -485,10 +562,15 @@ class _ScanPageState extends State<ScanPage> {
 /// 스캔된 바코드와 해당 자산의 등록 여부를 묶어 관리하는 단순 데이터 클래스.
 /// 최근 5개까지만 보관하여 사용자에게 직관적인 히스토리를 제공한다.
 class _ScannedBarcode {
-  const _ScannedBarcode({required this.uid, required this.isRegistered});
+  const _ScannedBarcode({
+    required this.uid,
+    required this.isRegistered,
+    this.imageBytes,
+  });
 
   final String uid;
   final bool isRegistered;
+  final Uint8List? imageBytes;
 }
 
 /// 최근 스캔된 바코드 한 항목을 표현하는 위젯.

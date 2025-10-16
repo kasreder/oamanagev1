@@ -419,6 +419,23 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     );
   }
 
+  Widget _buildBarcodePhotoCell(BuildContext context, _RowData row) {
+    return _buildCellContainer(
+      _TableColumn.barcodePhoto,
+      child: row.hasPhoto
+          ? const Text('사진 있음')
+          : FilledButton.icon(
+              onPressed: () => context.go('/scan'),
+              icon: const Icon(Icons.photo_camera, size: 18),
+              label: const Text('없음'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+    );
+  }
+
   Widget _buildCellContainer(
     _TableColumn column, {
     required Widget child,
@@ -624,10 +641,7 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
               _buildVerificationCell(row),
             ),
             DataCell(
-              _buildTableText(
-                row.hasPhoto ? '사진 있음' : '없음',
-                _TableColumn.barcodePhoto,
-              ),
+              _buildBarcodePhotoCell(context, row),
             ),
           ],
         ),
