@@ -534,7 +534,8 @@ class _ScanPageState extends State<ScanPage> {
       List<int> encoded;
       String extension = 'webp';
       try {
-        encoded = img.encodeWebP(decoded, quality: 80);
+        encoded = img.encodePng(decoded);
+        extension = 'png';
       } catch (_) {
         encoded = img.encodePng(decoded);
         extension = 'png';
