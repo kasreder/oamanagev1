@@ -4,7 +4,9 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 
+import '../../models/asset_info.dart';
 import '../../models/inspection.dart';
+import '../../models/user_info.dart';
 import '../../providers/inspection_provider.dart';
 
 String normalizeTeamName(String? team) {
