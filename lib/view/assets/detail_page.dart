@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/asset_info.dart';
 import '../../models/inspection.dart';
 import '../../providers/inspection_provider.dart';
 import '../common/app_scaffold.dart';
@@ -200,7 +201,7 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
     return status;
   }
 
-  void _save(InspectionProvider provider) {
+  Future<void> _save(InspectionProvider provider) async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -227,7 +228,7 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
       scannedAt: now,
       synced: false,
     );
-    provider.addOrUpdate(inspection);
+    await provider.addOrUpdate(inspection);
     final asset = provider.assetOf(assetUid);
     if (asset != null) {
       final updatedMetadata = Map<String, String>.from(asset.metadata);
@@ -247,7 +248,7 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
       updateMetadata('memo', _assetMemoController);
       updateMetadata('memo2', _assetMemo2Controller);
 
-      provider.upsertAssetInfo(
+      await provider.upsertAssetInfo(
         AssetInfo(
           uid: asset.uid,
           name: _assetNameController.text.trim(),
@@ -263,13 +264,15 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
         ),
       );
     }
-    setState(() {
-      _inspection = inspection;
-      _isEditing = false;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('저장되었습니다.')),
-    );
+    if (mounted) {
+      setState(() {
+        _inspection = inspection;
+        _isEditing = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('저장되었습니다.')),
+      );
+    }
   }
 
   void _cancelEditing(InspectionProvider provider) {
@@ -309,7 +312,7 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
     }
   }
 
-  void _delete(InspectionProvider provider) async {
+  Future<void> _delete(InspectionProvider provider) async {
     final inspection = _inspection;
     if (inspection == null) {
       return;
@@ -333,7 +336,7 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
         ) ??
         false;
     if (!confirmed) return;
-    provider.remove(inspection.id);
+    await provider.remove(inspection.id);
     if (!mounted) return;
     context.go('/assets');
   }
@@ -715,7 +718,7 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
                           Row(
                             children: [
                               FilledButton(
-                                onPressed: () => _save(provider),
+                              onPressed: () async => _save(provider),
                                 child: const Text('저장'),
                               ),
                               const SizedBox(width: 12),
@@ -726,7 +729,9 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
                               const Spacer(),
                               TextButton.icon(
                                 onPressed:
-                                    _inspection == null ? null : () => _delete(provider),
+                                    _inspection == null
+                                        ? null
+                                        : () async => _delete(provider),
                                 icon: const Icon(Icons.delete),
                                 label: const Text('삭제'),
                                 style: TextButton.styleFrom(
@@ -757,7 +762,9 @@ class _AssetsDetailPageState extends State<AssetsDetailPage> {
                         const Spacer(),
                         TextButton.icon(
                           onPressed:
-                              _inspection == null ? null : () => _delete(provider),
+                              _inspection == null
+                                  ? null
+                                  : () async => _delete(provider),
                           icon: const Icon(Icons.delete),
                           label: const Text('삭제'),
                           style: TextButton.styleFrom(
