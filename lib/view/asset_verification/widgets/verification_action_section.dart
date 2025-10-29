@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../data/signature_storage.dart';
-import '../../../providers/inspection_provider.dart' show UserInfo;
+import '../../../models/user_info.dart';
 import '../signature_utils.dart';
 import 'signature_pad.dart';
 
