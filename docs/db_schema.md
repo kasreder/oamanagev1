@@ -109,6 +109,29 @@ Users (1) ────< AssetAssignments >──── (1) Assets
    - 네트워크 가능 시 배치 업로드 API 호출 → 성공 시 `synced=true`, `storage_location`을 서버 URL로 교체.
    - 충돌 처리: `updated_at` 비교 후 최신 데이터 우선, 필요 시 사용자 확인.
 
+## 더미 데이터 제거 후 실 DB 구축 절차
+1. **스키마 생성**: 위 정의를 기준으로 `CREATE TABLE` 스크립트를 작성하고, 필수 인덱스 및 FK 제약을 적용한다. PostgreSQL 예시:
+   ```sql
+   CREATE TABLE users (
+     id BIGSERIAL PRIMARY KEY,
+     employee_id VARCHAR(32) UNIQUE NOT NULL,
+     name VARCHAR(64) NOT NULL,
+     department_hq VARCHAR(64),
+     department_dept VARCHAR(64),
+     department_team VARCHAR(64),
+     department_part VARCHAR(64),
+     contact_email VARCHAR(128),
+     contact_phone VARCHAR(32),
+     created_at TIMESTAMP DEFAULT now(),
+     updated_at TIMESTAMP DEFAULT now()
+   );
+   ```
+   나머지 테이블도 동일한 컬럼/제약으로 생성한다.
+2. **데이터 이관**: 기존 `assets/dummy/mock/*.json`을 이용해 CSV 또는 `COPY` 스크립트를 생성하고, 각각의 테이블로 적재한다. 이때 `legacy_id` 등 더미 전용 필드는 저장하지 않거나 별도 보관 테이블에 기록한다.
+3. **앱 연결 갱신**: Flutter 레이어에서는 더미 JSON을 참조하던 `InspectionRepository`를 REST 클라이언트로 교체하고, 초기 로딩 시 서버에서 데이터를 수신한다. 오프라인 캐시는 `sqflite`/`drift` 등 로컬 DB로 구성한다.
+4. **QA 및 검증**: 마이그레이션 후 `/assets`와 `/inspections` API를 호출해 총 건수, 샘플 데이터가 기대와 일치하는지 확인하고, `synced=false` 항목이 없는지 검사한다.
+5. **더미 경로 정리**: 프로덕션 빌드에서 `assets/dummy/mock` 번들을 제외하고, 테스트 환경에서는 fixture 형태로 유지한다.
+
 ## 데이터 검증 규칙
 - 자산 UID, 사용자 ID는 대소문자/공백을 정규화하여 저장 (trim, lower-case).
 - 서명 저장 시 PNG로 강제 변환하여 파일 크기와 호환성을 확보.
