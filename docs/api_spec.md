@@ -163,6 +163,11 @@
 ### GET /health
 - **설명**: 헬스 체크. `{ "status": "ok", "time": "..." }`
 
+## 실 DB 전환 시 연동 흐름
+- **초기 동기화**: 앱이 기동하면 `/auth/token`으로 인증 후 `/assets`, `/inspections`, `/references/users`를 호출하여 실제 DB에 저장된 데이터를 모두 내려받는다. 이때 API는 `updatedAt` 기준 증분 싱크를 지원해야 한다.
+- **쓰기 경로**: `/assets`, `/inspections`, `/verifications` 계열 엔드포인트는 각각 `assets`, `inspections`, `signatures` 테이블에 직접 반영되며, 트랜잭션으로 감사 로그 테이블(예: `audit_logs`)에 기록한다.
+- **오프라인 큐 처리**: 앱이 오프라인에서 생성한 요청은 네트워크 복구 시 순차적으로 API를 호출하여 처리하고, 서버는 `synced` 필드를 true로 업데이트하는 PATCH 응답을 반환한다.
+- **테스트/스테이징**: 더미 JSON 제거 이후 QA 환경은 스테이징 DB를 사용하고, 초기화는 `/admin/seed` 같은 관리용 엔드포인트로 수행한다. 프로덕션에서는 해당 엔드포인트를 비활성화한다.
 ## 오류 응답 규약
 - HTTP 400: `{"error": "INVALID_INPUT", "message": "..."}`
 - HTTP 401: `{"error": "UNAUTHORIZED"}`
