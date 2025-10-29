@@ -29,6 +29,7 @@ AI에게 작업을 지시할 때 아래 템플릿을 사용한다.
 - **상태 관리**: `InspectionProvider`를 재사용하고 필요 시 메서드 추가. 다른 상태관리 패턴을 도입하지 않는다.
 - **데이터 접근**: 더미 JSON → `InspectionRepository` 확장을 우선 고려. 로컬 상태 변경은 Provider API(`addOrUpdate`, `upsertAssetInfo`, `setOnlyUnsynced`) 사용.
 - **실 DB 전환 지침**: 더미 데이터가 제거된 이후에는 `InspectionRepository`를 실제 API/DB 클라이언트 구현으로 교체하고, 네트워크 지연을 고려한 optimistic update 및 재시도 큐를 작성한다. 로컬 캐시는 `sqflite`/`drift` 등으로 구성하고, 테스트 시에는 스테이징 DB 또는 mock 서버를 사용한다.
+
 - **UI 작성 규칙**
   - AppScaffold를 최상단에 배치.
   - Material 3 컴포넌트 사용(FilledButton, NavigationBar 등).

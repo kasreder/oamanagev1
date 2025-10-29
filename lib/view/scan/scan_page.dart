@@ -375,7 +375,7 @@ class _ScanPageState extends State<ScanPage> {
                                         barcode: visible[i].uid,
                                         isRegistered: visible[i].isRegistered,
                                         onAction: visible[i].isRegistered
-                                            ? () => _verifyAsset(visible[i])
+                                            ? () async => _verifyAsset(visible[i])
                                             : () => _registerAsset(visible[i]),
                                         onDelete: () => _removeBarcode(visible[i].uid),
                                       ),
@@ -501,7 +501,7 @@ class _ScanPageState extends State<ScanPage> {
       scannedAt: now,
       synced: false,
     );
-    provider.addOrUpdate(inspection);
+    await provider.addOrUpdate(inspection);
     final savedPath = await _saveScannedImage(barcode);
     final buffer =
         StringBuffer('인증 내역이 저장되었습니다. (${inspection.assetUid})');
@@ -534,7 +534,8 @@ class _ScanPageState extends State<ScanPage> {
       List<int> encoded;
       String extension = 'webp';
       try {
-        encoded = img.encodeWebP(decoded, quality: 80);
+        encoded = img.encodePng(decoded);
+        extension = 'png';
       } catch (_) {
         encoded = img.encodePng(decoded);
         extension = 'png';
