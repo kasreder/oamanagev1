@@ -1,9 +1,6 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
-import 'package:http_parser/http_parser.dart';
-
 import '../models/asset_info.dart';
 import '../models/inspection.dart';
 import '../models/user_info.dart';
@@ -187,65 +184,6 @@ class ApiClient {
     return items;
   }
 
-  Future<Map<String, dynamic>?> fetchVerificationDetail(String assetUid) async {
-    await ensureAuthenticated();
-    final response = await _httpClient.get(
-      _buildUri('/verifications/$assetUid'),
-      headers: _headers(includeJson: false),
-    );
-    if (response.statusCode == 404) {
-      return null;
-    }
-    _ensureSuccess(response);
-    return jsonDecode(response.body) as Map<String, dynamic>;
-  }
-
-  Future<Map<String, dynamic>> uploadSignature({
-    required String assetUid,
-    required Uint8List bytes,
-    String? fileName,
-    String? userId,
-    String? userName,
-  }) async {
-    await ensureAuthenticated();
-    final uri = _buildUri('/verifications/$assetUid/signatures');
-    final request = http.MultipartRequest('POST', uri);
-    request.headers.addAll(_headers(includeJson: false));
-    final resolvedFileName = fileName ?? 'signature-${DateTime.now().millisecondsSinceEpoch}.png';
-    request.files.add(
-      http.MultipartFile.fromBytes(
-        'file',
-        bytes,
-        filename: resolvedFileName,
-        contentType: MediaType('image', 'png'),
-      ),
-    );
-    if (userId != null) {
-      request.fields['userId'] = userId;
-    }
-    if (userName != null) {
-      request.fields['userName'] = userName;
-    }
-    final streamed = await _httpClient.send(request);
-    final response = await http.Response.fromStream(streamed);
-    if (response.statusCode != 201) {
-      throw ApiException('Failed to upload signature (${response.statusCode})');
-    }
-    return jsonDecode(response.body) as Map<String, dynamic>;
-  }
-
-  Future<Uint8List?> downloadSignature(String assetUid) async {
-    await ensureAuthenticated();
-    final response = await _httpClient.get(
-      _buildUri('/verifications/$assetUid/signatures'),
-      headers: _headers(includeJson: false),
-    );
-    if (response.statusCode == 404) {
-      return null;
-    }
-    _ensureSuccess(response);
-    return response.bodyBytes;
-  }
 
   void close() {
     _httpClient.close();
