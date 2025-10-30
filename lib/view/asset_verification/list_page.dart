@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/inspection.dart';
+import '../../models/user_info.dart';
 import '../../providers/inspection_provider.dart';
 import '../common/app_scaffold.dart';
 import 'signature_utils.dart';

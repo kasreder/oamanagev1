@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/asset_info.dart';
 import '../../providers/inspection_provider.dart';
 import '../common/app_scaffold.dart';
 
@@ -106,7 +107,7 @@ class _AssetRegistrationPageState extends State<AssetRegistrationPage> {
     final exists = provider.assetExists(uid);
 
     Future<void> save() async {
-      provider.upsertAssetInfo(
+      await provider.upsertAssetInfo(
         AssetInfo(
           uid: uid,
           name: _nameController.text.trim(),
@@ -457,7 +458,7 @@ class _AssetRegistrationPageState extends State<AssetRegistrationPage> {
                     Row(
                       children: [
                         FilledButton.icon(
-                          onPressed: () => _submit(provider),
+                        onPressed: () async => _submit(provider),
                           icon: const Icon(Icons.save),
                           label: const Text('저장'),
                         ),

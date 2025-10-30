@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import '../../data/signature_storage.dart';
-import '../../providers/inspection_provider.dart';
+import '../../models/user_info.dart';
 
 class SignatureData {
   const SignatureData({required this.location, required this.bytes});
