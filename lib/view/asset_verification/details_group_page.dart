@@ -193,9 +193,11 @@ class _GroupAssetCard extends StatefulWidget {
   const _GroupAssetCard({
     super.key,
     required this.entries,
+    this.isLoadingPhoto = false,
   });
 
   final List<_GroupAssetEntry> entries;
+  final bool isLoadingPhoto;
 
   bool get isLoadingPhoto => null;
 
