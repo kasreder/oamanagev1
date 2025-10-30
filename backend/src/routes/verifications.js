@@ -45,6 +45,7 @@ verificationsRouter.get('/:assetUid', (req, res) => {
 });
 
 verificationsRouter.post('/:assetUid/signatures', upload.single('file'), async (req, res) => {
+  
   const { assetUid } = req.params;
   try {
     const uploadMeta = req.signatureUpload;
@@ -52,6 +53,7 @@ verificationsRouter.post('/:assetUid/signatures', upload.single('file'), async (
       return res.status(400).json({ error: 'INVALID_INPUT', message: 'file is required' });
     }
     const metadata = dataStore.recordSignature(assetUid, {
+
       signatureId: uploadMeta.signatureId,
       fileName: uploadMeta.fileName,
       storedAt: new Date(),
@@ -86,5 +88,6 @@ verificationsRouter.post('/batch', async (req, res) => {
     return res.json({ applied, signatureId });
   } catch (error) {
     return res.status(404).json({ error: 'NOT_FOUND', message: error.message });
+
   }
 });

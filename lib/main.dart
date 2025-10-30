@@ -6,6 +6,7 @@ import 'data/api_client.dart';
 import 'data/inspection_repository.dart';
 import 'data/mock_data_loader.dart';
 import 'providers/inspection_provider.dart';
+import 'data/signature_storage.dart';
 import 'router/app_router.dart';
 
 /// 주요 기능:
@@ -21,6 +22,7 @@ Future<void> main() async {
   const mockDataLoader = MockDataLoader();
   final inspectionRepository = InspectionRepository(apiClient, mockDataLoader);
   final inspectionProvider = InspectionProvider(inspectionRepository, apiClient, mockDataLoader);
+
   await inspectionProvider.initialize();
   final router = AppRouter(inspectionProvider).router;
 

@@ -1,7 +1,6 @@
 // lib/view/asset_verification/verification_utils.dart
 
 import 'dart:convert';
-
 import 'package:flutter/services.dart';
 
 import '../../models/asset_info.dart';
@@ -135,68 +134,6 @@ String resolveLocation(AssetInfo? asset) {
     return joined;
   }
   return asset.location.trim();
-}
-
-class BarcodePhotoRegistry {
-  static Map<String, String>? _cachedPaths;
-
-  static Future<Set<String>> loadCodes() async {
-    final paths = await _loadPaths();
-    return paths.keys.toSet();
-  }
-
-  static Future<String?> pathFor(String assetCode) async {
-    final paths = await _loadPaths();
-    final normalized = _normalize(assetCode);
-    if (normalized.isEmpty) {
-      return null;
-    }
-    return paths[normalized];
-  }
-
-  static Future<Map<String, String>> loadAllPaths() async {
-    final paths = await _loadPaths();
-    return Map.unmodifiable(paths);
-  }
-
-  static Future<bool> hasPhoto(String assetCode) async {
-    final paths = await _loadPaths();
-    final normalized = _normalize(assetCode);
-    if (normalized.isEmpty) {
-      return false;
-    }
-    return paths.containsKey(normalized);
-  }
-
-  static Future<Map<String, String>> _loadPaths() async {
-    if (_cachedPaths != null) {
-      return _cachedPaths!;
-    }
-
-    final manifestContent = await rootBundle.loadString('AssetManifest.json');
-    final Map<String, dynamic> manifestMap = json.decode(manifestContent) as Map<String, dynamic>;
-
-    final paths = <String, String>{};
-
-    for (final key in manifestMap.keys) {
-      if (!key.startsWith('assets/dummy/images/')) {
-        continue;
-      }
-      final fileName = key.split('/').last;
-      final dotIndex = fileName.lastIndexOf('.');
-      final baseName = dotIndex == -1 ? fileName : fileName.substring(0, dotIndex);
-      final normalized = _normalize(baseName);
-      if (normalized.isEmpty) {
-        continue;
-      }
-      paths[normalized] = key;
-    }
-
-    _cachedPaths = paths;
-    return _cachedPaths!;
-  }
-
-  static String _normalize(String input) => input.trim().toLowerCase();
 }
 
 Iterable<String?> _assetLinkedUserNames(AssetInfo asset) {

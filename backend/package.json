@@ -2,6 +2,7 @@
   "name": "oa-asset-manager-backend",
   "version": "0.1.0",
   "description": "Mock backend for OA Asset Manager built from docs specifications.",
+
   "type": "module",
   "scripts": {
     "start": "node src/index.js",

@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-
 import '../models/asset_info.dart';
 import '../models/inspection.dart';
 import '../models/user_info.dart';
@@ -184,6 +183,7 @@ class ApiClient {
         .toList();
     return items;
   }
+
 
   void close() {
     _httpClient.close();
