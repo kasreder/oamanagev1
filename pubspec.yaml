@@ -75,12 +75,7 @@ flutter:
   # the material Icons class.
   uses-material-design: true
   assets:
-    - assets/dummy/mock/users.json
-    - assets/dummy/mock/assets.json
-    - assets/dummy/mock/asset_inspections.json
     - assets/sounds/Beep1.mp3
-    - assets/dummy/images/
-    - assets/dummy/sign/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

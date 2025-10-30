@@ -14,6 +14,7 @@ import 'package:image/image.dart' as img;
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
+import 'package:path_provider/path_provider.dart' as path_provider;
 
 import '../../models/inspection.dart';
 import '../../providers/inspection_provider.dart';
@@ -527,7 +528,8 @@ class _ScanPageState extends State<ScanPage> {
       if (decoded == null) {
         return null;
       }
-      final directory = Directory('assets/dummy/images');
+      final supportDirectory = await path_provider.getApplicationSupportDirectory();
+      final directory = Directory('${supportDirectory.path}/barcode_captures');
       if (!await directory.exists()) {
         await directory.create(recursive: true);
       }
@@ -540,7 +542,9 @@ class _ScanPageState extends State<ScanPage> {
         encoded = img.encodePng(decoded);
         extension = 'png';
       }
-      final file = File('${directory.path}/${barcode.uid}.$extension');
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final sanitizedUid = barcode.uid.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+      final file = File('${directory.path}/$sanitizedUid-$timestamp.$extension');
       await file.writeAsBytes(encoded, flush: true);
       return file.path;
     } catch (error) {

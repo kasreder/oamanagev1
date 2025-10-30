@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'data/api_client.dart';
 import 'data/inspection_repository.dart';
 import 'providers/inspection_provider.dart';
+import 'data/signature_storage.dart';
 import 'router/app_router.dart';
 
 /// 주요 기능:
@@ -19,6 +20,7 @@ Future<void> main() async {
   final apiClient = ApiClient(baseUrl: backendBaseUrl);
   final inspectionRepository = InspectionRepository(apiClient);
   final inspectionProvider = InspectionProvider(inspectionRepository, apiClient);
+  SignatureStorage.configure(apiClient);
   await inspectionProvider.initialize();
   final router = AppRouter(inspectionProvider).router;
 

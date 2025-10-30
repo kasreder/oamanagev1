@@ -80,104 +80,94 @@ class _AssetVerificationDetailsGroupPageState extends State<AssetVerificationDet
                     if (entry.assetUid.trim().isNotEmpty) entry.assetUid.trim(): entry.user,
                 };
 
-                return FutureBuilder<Map<String, String>>(
-                  future: BarcodePhotoRegistry.loadAllPaths(),
-                  builder: (context, snapshot) {
-                    final barcodePhotoPaths = snapshot.data ?? const <String, String>{};
-                    final isLoadingPhotos = snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData;
-
-                    return Padding(
-                      padding: const EdgeInsets.all(5),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (missingAssets.isNotEmpty) ...[
-                            Card(
-                              child: Padding(
-                                padding: const EdgeInsets.all(5),
+                return Padding(
+                  padding: const EdgeInsets.all(5),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (missingAssets.isNotEmpty) ...[
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(5),
+                            child: Text(
+                              '다음 자산의 정보를 찾을 수 없습니다: ${missingAssets.join(', ')}',
+                              style: const TextStyle(color: Colors.redAccent),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                      if (validEntries.isNotEmpty)
+                        Expanded(
+                          child: _GroupAssetCard(
+                            entries: validEntries,
+                          ),
+                        )
+                      else
+                        Expanded(
+                          child: Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(5),
+                              child: Center(
                                 child: Text(
-                                  '다음 자산의 정보를 찾을 수 없습니다: ${missingAssets.join(', ')}',
-                                  style: const TextStyle(color: Colors.redAccent),
+                                  '표시할 자산 상세 정보가 없습니다.',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                  textAlign: TextAlign.center,
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 8),
-                          ],
-                          if (validEntries.isNotEmpty)
-                            Expanded(
-                              child: _GroupAssetCard(
-                                entries: validEntries,
-                                photoPaths: barcodePhotoPaths,
-                                isLoadingPhoto: isLoadingPhotos,
-                              ),
-                            )
-                          else
-                            Expanded(
-                              child: Card(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(5),
-                                  child: Center(
-                                    child: Text(
-                                      '표시할 자산 상세 정보가 없습니다.',
-                                      style: Theme.of(context).textTheme.bodyMedium,
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          //하단 사인란
-                          const SizedBox(height: 5),
-                          if (validEntries.isNotEmpty) ...[
-                            Card(
-                              child: Padding(
-                                padding: const EdgeInsets.all(5),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                          ),
+                        ),
+                      //하단 사인란
+                      const SizedBox(height: 5),
+                      if (validEntries.isNotEmpty) ...[
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(5),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          '인증 작업',
-                                          style: Theme.of(context).textTheme.titleMedium,
-                                        ),
-                                        IconButton(
-                                          onPressed: () {
-                                            setState(() {
-                                              _isActionsExpanded = !_isActionsExpanded;
-                                            });
-                                          },
-                                          icon: Icon(
-                                            _isActionsExpanded ? Icons.expand_less : Icons.expand_more,
-                                          ),
-                                        ),
-                                      ],
+                                    Text(
+                                      '인증 작업',
+                                      style: Theme.of(context).textTheme.titleMedium,
                                     ),
-                                    AnimatedCrossFade(
-                                      crossFadeState: _isActionsExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
-                                      duration: const Duration(milliseconds: 200),
-                                      firstChild: const SizedBox.shrink(),
-                                      secondChild: Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 5),
-                                        child: VerificationActionSection(
-                                          assetUids: verificationTargets,
-                                          primaryAssetUid: normalizedPrimaryAssetUid,
-                                          primaryUser: primaryUser,
-                                          assetUsers: assetUsers,
-                                          onSignaturesSaved: _handleSignaturesSaved,
-                                        ),
+                                    IconButton(
+                                      onPressed: () {
+                                        setState(() {
+                                          _isActionsExpanded = !_isActionsExpanded;
+                                        });
+                                      },
+                                      icon: Icon(
+                                        _isActionsExpanded ? Icons.expand_less : Icons.expand_more,
                                       ),
                                     ),
                                   ],
                                 ),
-                              ),
+                                AnimatedCrossFade(
+                                  crossFadeState: _isActionsExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                                  duration: const Duration(milliseconds: 200),
+                                  firstChild: const SizedBox.shrink(),
+                                  secondChild: Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5),
+                                    child: VerificationActionSection(
+                                      assetUids: verificationTargets,
+                                      primaryAssetUid: normalizedPrimaryAssetUid,
+                                      primaryUser: primaryUser,
+                                      assetUsers: assetUsers,
+                                      onSignaturesSaved: _handleSignaturesSaved,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ],
-                      ),
-                    );
-                  },
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 );
               },
             ),
@@ -203,13 +193,9 @@ class _GroupAssetCard extends StatefulWidget {
   const _GroupAssetCard({
     super.key,
     required this.entries,
-    required this.photoPaths,
-    required this.isLoadingPhoto,
   });
 
   final List<_GroupAssetEntry> entries;
-  final Map<String, String> photoPaths;
-  final bool isLoadingPhoto;
 
   @override
   State<_GroupAssetCard> createState() => _GroupAssetCardState();
@@ -268,8 +254,7 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
       final location = resolveLocation(asset);
       final user = entry.user;
       final userNameLabel = resolveUserNameLabel(user, asset);
-      final normalizedAssetUid = entry.assetUid.trim().toLowerCase();
-      final photoPath = widget.photoPaths[normalizedAssetUid];
+      final photoUrl = _resolvePhotoUrl(entry);
 
       return _GroupAssetRowData(
         assetUid: entry.assetUid,
@@ -279,7 +264,7 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
         assetType: assetType,
         manager: manager,
         location: location,
-        photoPath: photoPath,
+        photoUrl: photoUrl,
       );
     }).toList(growable: false);
 
@@ -298,7 +283,10 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
             )
             .where((entry) => entry.value != null)
             .toList(growable: false);
-        final barcodeEntries = rows.where((row) => row.photoPath != null).map((row) => MapEntry(row.assetUid, row.photoPath!)).toList(growable: false);
+        final barcodeEntries = rows
+            .where((row) => row.photoUrl != null)
+            .map((row) => MapEntry(row.assetUid, row.photoUrl!))
+            .toList(growable: false);
 
         final Widget signatureSummary = () {
           if (isLoadingSignatures) {
@@ -316,17 +304,15 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
         }();
 
         final Widget barcodeSummary = () {
-          if (widget.isLoadingPhoto) {
-            return const Text('바코드 사진을 불러오는 중입니다...');
-          }
           if (barcodeEntries.isEmpty) {
             return const Text(
               ' (0건)',
               style: TextStyle(color: Colors.grey),
             );
           }
-          return Text(' (${barcodeEntries.length}건)',
-            style: TextStyle(color: Colors.grey),
+          return Text(
+            ' (${barcodeEntries.length}건)',
+            style: const TextStyle(color: Colors.grey),
           );
         }();
 
@@ -522,9 +508,13 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
                                             const SizedBox(height: 8),
                                             ClipRRect(
                                               borderRadius: BorderRadius.circular(8),
-                                              child: Image.asset(
+                                              child: Image.network(
                                                 entry.value,
                                                 fit: BoxFit.contain,
+                                                errorBuilder: (_, __, ___) => const Icon(
+                                                  Icons.broken_image,
+                                                  size: 48,
+                                                ),
                                               ),
                                             ),
                                             const SizedBox(height: 16),
@@ -548,6 +538,30 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
         );
       },
     );
+  }
+
+  String? _resolvePhotoUrl(_GroupAssetEntry entry) {
+    final candidates = <String?>[
+      entry.inspection?.barcodePhotoUrl,
+      entry.asset?.barcodePhotoUrl,
+      entry.asset?.metadata['barcode_photo_url'] as String?,
+      entry.asset?.metadata['barcode_photo'] as String?,
+    ];
+    for (final candidate in candidates) {
+      final normalized = _normalizePhoto(candidate);
+      if (normalized != null) {
+        return normalized;
+      }
+    }
+    return null;
+  }
+
+  String? _normalizePhoto(String? value) {
+    if (value == null) {
+      return null;
+    }
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
   }
 
   void _syncHorizontalControllers(ScrollController source, ScrollController target) {
@@ -656,7 +670,7 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
                               width: _columns[7].width,
                               child: Align(
                                 alignment: _columns[7].alignment,
-                                child: _buildPhotoCell(row.photoPath),
+                                child: _buildPhotoCell(row.photoUrl),
                               ),
                             ),
                           ],
@@ -682,11 +696,8 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
     );
   }
 
-  Widget _buildPhotoCell(String? photoPath) {
-    if (widget.isLoadingPhoto) {
-      return const Text('불러오는 중...');
-    }
-    if (photoPath == null) {
+  Widget _buildPhotoCell(String? photoUrl) {
+    if (photoUrl == null) {
       const color = Colors.orange;
       return Chip(
         backgroundColor: color.withOpacity(0.15),
@@ -696,9 +707,10 @@ class _GroupAssetCardState extends State<_GroupAssetCard> {
     return SizedBox(
       width: 40,
       height: 20,
-      child: Image.asset(
-        photoPath,
+      child: Image.network(
+        photoUrl,
         fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 18),
       ),
     );
   }
@@ -759,7 +771,7 @@ class _GroupAssetRowData {
     required this.assetType,
     required this.manager,
     required this.location,
-    required this.photoPath,
+    required this.photoUrl,
   });
 
   final String assetUid;
@@ -769,7 +781,7 @@ class _GroupAssetRowData {
   final String assetType;
   final String manager;
   final String location;
-  final String? photoPath;
+  final String? photoUrl;
 }
 
 class _TableColumnConfig {
