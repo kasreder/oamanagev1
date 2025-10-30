@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'data/api_client.dart';
 import 'data/inspection_repository.dart';
+import 'data/mock_data_loader.dart';
 import 'providers/inspection_provider.dart';
 import 'data/signature_storage.dart';
 import 'router/app_router.dart';
@@ -18,9 +19,10 @@ Future<void> main() async {
     defaultValue: 'http://localhost:3000',
   );
   final apiClient = ApiClient(baseUrl: backendBaseUrl);
-  final inspectionRepository = InspectionRepository(apiClient);
-  final inspectionProvider = InspectionProvider(inspectionRepository, apiClient);
-  SignatureStorage.configure(apiClient);
+  const mockDataLoader = MockDataLoader();
+  final inspectionRepository = InspectionRepository(apiClient, mockDataLoader);
+  final inspectionProvider = InspectionProvider(inspectionRepository, apiClient, mockDataLoader);
+
   await inspectionProvider.initialize();
   final router = AppRouter(inspectionProvider).router;
 

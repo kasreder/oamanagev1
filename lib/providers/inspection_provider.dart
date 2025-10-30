@@ -3,16 +3,18 @@ import 'package:intl/intl.dart';
 
 import '../data/api_client.dart';
 import '../data/inspection_repository.dart';
+import '../data/mock_data_loader.dart';
 import '../models/asset_info.dart';
 import '../models/inspection.dart';
 import '../models/user_info.dart';
 
 /// Provider responsible for bridging the UI with repositories and the backend API.
 class InspectionProvider extends ChangeNotifier {
-  InspectionProvider(this._repository, this._apiClient);
+  InspectionProvider(this._repository, this._apiClient, this._mockDataLoader);
 
   final InspectionRepository _repository;
   final ApiClient _apiClient;
+  final MockDataLoader _mockDataLoader;
 
   final Map<String, AssetInfo> _assetMap = {};
   final Map<String, UserInfo> _userMap = {};
@@ -20,9 +22,11 @@ class InspectionProvider extends ChangeNotifier {
   List<Inspection> _items = [];
   bool _onlyUnsynced = false;
   bool _initialized = false;
+  bool _backendAvailable = false;
 
   bool get isInitialized => _initialized;
   bool get onlyUnsynced => _onlyUnsynced;
+  bool get backendAvailable => _backendAvailable;
 
   List<Inspection> get items {
     if (_onlyUnsynced) {
@@ -55,12 +59,60 @@ class InspectionProvider extends ChangeNotifier {
   UserInfo? userOf(String id) => _userMap[id];
 
   Future<void> initialize() async {
-    await _apiClient.ensureAuthenticated();
-    final assetsFuture = _apiClient.fetchAssets();
-    final usersFuture = _apiClient.fetchUsers();
+    List<AssetInfo> assets = const [];
+    List<UserInfo> users = const [];
+    bool usingMock = false;
+    try {
+      await _apiClient.ensureAuthenticated();
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Authentication failed, switching to mock data: $error');
+      }
+      await _repository.loadMockData();
+      assets = await _mockDataLoader.loadAssets();
+      users = await _mockDataLoader.loadUsers();
+      usingMock = true;
+      _finalizeInitialization(assets, users, usingMock);
+      return;
+    }
+
     await _repository.synchronize();
-    final assets = await assetsFuture;
-    final users = await usersFuture;
+    usingMock = _repository.usingMockData;
+
+    bool assetsFromBackend = false;
+    bool usersFromBackend = false;
+
+    if (!usingMock) {
+      try {
+        assets = await _apiClient.fetchAssets();
+        assetsFromBackend = true;
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint('Asset fetch failed, using mock data: $error');
+        }
+        assets = await _mockDataLoader.loadAssets();
+      }
+
+      try {
+        users = await _apiClient.fetchUsers();
+        usersFromBackend = true;
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint('User fetch failed, using mock data: $error');
+        }
+        users = await _mockDataLoader.loadUsers();
+      }
+    } else {
+      assets = await _mockDataLoader.loadAssets();
+      users = await _mockDataLoader.loadUsers();
+    }
+
+    usingMock = usingMock || !assetsFromBackend || !usersFromBackend;
+    _finalizeInitialization(assets, users, usingMock);
+  }
+
+  void _finalizeInitialization(List<AssetInfo> assets, List<UserInfo> users, bool usingMock) {
+
     _assetMap
       ..clear()
       ..addEntries(assets.map((asset) => MapEntry(asset.uid, asset)));
@@ -77,6 +129,7 @@ class InspectionProvider extends ChangeNotifier {
       }
     }
     _items = _repository.getAll();
+    _backendAvailable = !usingMock;
     _initialized = true;
     notifyListeners();
   }
@@ -113,7 +166,9 @@ class InspectionProvider extends ChangeNotifier {
   }
 
   Future<void> upsertAssetInfo(AssetInfo asset) async {
-    await _apiClient.upsertAsset(asset);
+    if (_backendAvailable) {
+      await _apiClient.upsertAsset(asset);
+    }
     _assetMap[asset.uid] = asset;
     notifyListeners();
   }
