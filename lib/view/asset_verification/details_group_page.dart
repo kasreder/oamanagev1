@@ -197,6 +197,8 @@ class _GroupAssetCard extends StatefulWidget {
 
   final List<_GroupAssetEntry> entries;
 
+  bool get isLoadingPhoto => null;
+
   @override
   State<_GroupAssetCard> createState() => _GroupAssetCardState();
 }
