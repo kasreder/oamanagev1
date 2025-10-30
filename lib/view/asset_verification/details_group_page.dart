@@ -197,17 +197,14 @@ class _GroupAssetCard extends StatefulWidget {
   });
 
   final List<_GroupAssetEntry> entries;
-  final bool isLoadingPhoto;
-
-  bool get isLoadingPhoto => null;
 
   /// Returns whether barcode photos are currently being loaded.
   ///
-  /// The previous implementation returned `null`, which is not allowed for
-  /// non-nullable `bool` return types in sound null safety. Until real loading
-  /// state wiring is introduced, default to `false` so the widget compiles and
-  /// renders its contents without throwing.
-  bool get isLoadingPhoto => false;
+  /// The property is currently unused by the widget tree, but keeping it as a
+  /// constructor argument allows future implementations to provide the actual
+  /// loading state without touching call sites. For now, default to `false` so
+  /// the widget compiles and renders its contents without throwing.
+  final bool isLoadingPhoto;
 
   @override
   State<_GroupAssetCard> createState() => _GroupAssetCardState();
