@@ -1,7 +1,7 @@
 {
   "name": "oa-asset-manager-backend",
   "version": "0.1.0",
-  "description": "Mock backend for OA Asset Manager built from docs specifications.",
+  "description": "Production-ready backend for OA Asset Manager built from docs specifications.",
   "type": "module",
   "scripts": {
     "start": "node src/index.js",
@@ -11,6 +11,7 @@
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "multer": "^1.4.5-lts.1",
+    "pg": "^8.11.5",
     "uuid": "^9.0.1"
   }
 }

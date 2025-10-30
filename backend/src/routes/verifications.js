@@ -29,29 +29,37 @@ const upload = multer({
 
 export const verificationsRouter = Router();
 
-verificationsRouter.get('/', (req, res) => {
-  const { team, assetUid, page, pageSize } = req.query;
-  const result = dataStore.listVerifications({ team, assetUid, page, pageSize });
-  return res.json(result);
-});
-
-verificationsRouter.get('/:assetUid', (req, res) => {
-  const { assetUid } = req.params;
-  const detail = dataStore.getVerificationDetail(assetUid);
-  if (!detail) {
-    return res.status(404).json({ error: 'NOT_FOUND', resource: 'verification', id: assetUid });
+verificationsRouter.get('/', async (req, res, next) => {
+  try {
+    const { team, assetUid, page, pageSize } = req.query;
+    const result = await dataStore.listVerifications({ team, assetUid, page, pageSize });
+    return res.json(result);
+  } catch (error) {
+    return next(error);
   }
-  return res.json(detail);
 });
 
-verificationsRouter.post('/:assetUid/signatures', upload.single('file'), async (req, res) => {
+verificationsRouter.get('/:assetUid', async (req, res, next) => {
+  try {
+    const { assetUid } = req.params;
+    const detail = await dataStore.getVerificationDetail(assetUid);
+    if (!detail) {
+      return res.status(404).json({ error: 'NOT_FOUND', resource: 'verification', id: assetUid });
+    }
+    return res.json(detail);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+verificationsRouter.post('/:assetUid/signatures', upload.single('file'), async (req, res, next) => {
   const { assetUid } = req.params;
   try {
     const uploadMeta = req.signatureUpload;
     if (!uploadMeta) {
       return res.status(400).json({ error: 'INVALID_INPUT', message: 'file is required' });
     }
-    const metadata = dataStore.recordSignature(assetUid, {
+    const metadata = await dataStore.recordSignature(assetUid, {
       signatureId: uploadMeta.signatureId,
       fileName: uploadMeta.fileName,
       storedAt: new Date(),
@@ -59,32 +67,46 @@ verificationsRouter.post('/:assetUid/signatures', upload.single('file'), async (
       userName: req.body?.userName,
     });
     await dataStore.persistSignatures();
-    return res.status(201).json({ signatureId: metadata.signatureId, storageLocation: `/verifications/${assetUid}/signatures` });
+    return res.status(201).json({
+      signatureId: metadata.signatureId,
+      storageLocation: `/verifications/${assetUid}/signatures`,
+      signatureMeta: metadata,
+    });
   } catch (error) {
-    return res.status(400).json({ error: 'INVALID_INPUT', message: error.message });
+    if (error instanceof Error) {
+      return res.status(400).json({ error: 'INVALID_INPUT', message: error.message });
+    }
+    return next(error);
   }
 });
 
-verificationsRouter.get('/:assetUid/signatures', async (req, res) => {
-  const { assetUid } = req.params;
-  const filePath = dataStore.getSignatureFilePath(assetUid);
-  if (!filePath) {
-    return res.status(404).json({ error: 'NOT_FOUND', resource: 'signature', id: assetUid });
-  }
-  return res.sendFile(path.resolve(filePath));
-});
-
-verificationsRouter.post('/batch', async (req, res) => {
-  const { assetUids = [], signatureId, applyToAll } = req.body ?? {};
-  if (!signatureId) {
-    return res.status(400).json({ error: 'INVALID_INPUT', message: 'signatureId is required' });
-  }
-  const targets = applyToAll ? dataStore.getAllAssetUids() : assetUids;
+verificationsRouter.get('/:assetUid/signatures', async (req, res, next) => {
   try {
-    const applied = dataStore.batchAssignSignature({ assetUids: targets ?? [], signatureId });
+    const { assetUid } = req.params;
+    const filePath = await dataStore.getSignatureFilePath(assetUid);
+    if (!filePath) {
+      return res.status(404).json({ error: 'NOT_FOUND', resource: 'signature', id: assetUid });
+    }
+    return res.sendFile(path.resolve(filePath));
+  } catch (error) {
+    return next(error);
+  }
+});
+
+verificationsRouter.post('/batch', async (req, res, next) => {
+  try {
+    const { assetUids = [], signatureId, applyToAll } = req.body ?? {};
+    if (!signatureId) {
+      return res.status(400).json({ error: 'INVALID_INPUT', message: 'signatureId is required' });
+    }
+    const targets = applyToAll ? await dataStore.getAllAssetUids() : assetUids;
+    const applied = await dataStore.batchAssignSignature({ assetUids: targets ?? [], signatureId });
     await dataStore.persistSignatures();
     return res.json({ applied, signatureId });
   } catch (error) {
-    return res.status(404).json({ error: 'NOT_FOUND', message: error.message });
+    if (error instanceof Error && error.message.includes('signatureId')) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: error.message });
+    }
+    return next(error);
   }
 });

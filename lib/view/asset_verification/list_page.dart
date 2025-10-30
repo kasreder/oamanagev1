@@ -48,7 +48,6 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
   final ScrollController _horizontalScrollController = ScrollController();
   final ScrollController _verticalScrollController = ScrollController();
 
-  Set<String> _barcodePhotoAssetCodes = const <String>{};
   Set<String> _selectedAssetCodes = <String>{};
   final Map<String, bool> _signatureStatuses = <String, bool>{};
   final Set<String> _loadingSignatureKeys = <String>{};
@@ -66,7 +65,6 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
   void initState() {
     super.initState();
     _searchController = TextEditingController(text: _searchKeyword);
-    _loadBarcodePhotoAssets();
   }
 
   @override
@@ -75,14 +73,6 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
     _horizontalScrollController.dispose();
     _verticalScrollController.dispose();
     super.dispose();
-  }
-
-  Future<void> _loadBarcodePhotoAssets() async {
-    final codes = await BarcodePhotoRegistry.loadCodes();
-    if (!mounted) return;
-    setState(() {
-      _barcodePhotoAssetCodes = codes;
-    });
   }
 
   void _ensureSignatureStatus(List<_RowData> rows) {
@@ -327,7 +317,6 @@ class _AssetVerificationListPageState extends State<AssetVerificationListPage> {
           (inspection) => _RowData.fromInspection(
             inspection,
             provider,
-            _barcodePhotoAssetCodes,
           ),
         )
         .toList(growable: false);
@@ -1034,7 +1023,6 @@ class _RowData {
   factory _RowData.fromInspection(
     Inspection inspection,
     InspectionProvider provider,
-    Set<String> availableBarcodePhotos,
   ) {
     final asset = provider.assetOf(inspection.assetUid);
     final user = resolveUser(provider, inspection, asset);
@@ -1044,8 +1032,7 @@ class _RowData {
     final location = resolveLocation(asset);
     // 자산 정보에 조직명이 있으면 해당 값을 팀 이름으로 사용한다.
     final teamName = resolveTeamName(inspection, asset);
-    final normalizedCode = inspection.assetUid.trim().toLowerCase();
-    final hasPhoto = normalizedCode.isNotEmpty && availableBarcodePhotos.contains(normalizedCode);
+    final hasPhoto = _hasBarcodePhoto(inspection, asset);
 
     return _RowData(
       inspection: inspection,
@@ -1059,4 +1046,20 @@ class _RowData {
       hasPhoto: hasPhoto,
     );
   }
+}
+
+bool _hasBarcodePhoto(Inspection inspection, AssetInfo? asset) {
+  final inspectionPhoto = inspection.barcodePhotoUrl;
+  if (inspectionPhoto != null && inspectionPhoto.trim().isNotEmpty) {
+    return true;
+  }
+  final assetPhoto = asset?.barcodePhotoUrl;
+  if (assetPhoto != null && assetPhoto.trim().isNotEmpty) {
+    return true;
+  }
+  final metadataPhoto = asset?.metadata['barcode_photo_url'] ?? asset?.metadata['barcode_photo'];
+  if (metadataPhoto is String && metadataPhoto.trim().isNotEmpty) {
+    return true;
+  }
+  return false;
 }
