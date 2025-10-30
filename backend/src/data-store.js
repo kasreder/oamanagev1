@@ -612,6 +612,7 @@ export class DataStore {
       assetType: asset.assetType,
     }));
   
+  }
 }
 
 export const dataStore = new DataStore();
