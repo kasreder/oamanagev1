@@ -35,4 +35,5 @@ assetsRouter.delete('/:uid', (req, res) => {
     return res.status(404).json({ error: 'NOT_FOUND', resource: 'asset', id: uid });
   }
   return res.json({ uid: asset.uid, status: asset.status });
+
 });

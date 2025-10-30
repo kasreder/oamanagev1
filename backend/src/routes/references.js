@@ -13,4 +13,5 @@ referencesRouter.get('/assets', (req, res) => {
   const { q } = req.query;
   const assets = dataStore.searchAssetRefs({ q });
   return res.json({ items: assets });
+
 });

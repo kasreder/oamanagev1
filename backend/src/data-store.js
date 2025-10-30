@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
 
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -47,6 +48,7 @@ function normalizeString(value) {
 }
 
 function normalizeBoolean(value) {
+
   if (value === undefined || value === null) return undefined;
   if (typeof value === 'boolean') return value;
   if (typeof value === 'number') return value !== 0;
@@ -62,6 +64,7 @@ function toIsoString(value) {
   if (!value) {
     return undefined;
   }
+
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) {
     return undefined;
@@ -91,6 +94,7 @@ export class DataStore {
     await this.#loadAssets();
     await this.#loadInspections();
     await this.#hydrateExistingSignatures();
+
   }
 
   getSignatureDirectory() {
@@ -333,6 +337,7 @@ export class DataStore {
   }
 
   upsertAsset(payload) {
+
     const uid = normalizeString(payload.uid);
     if (!uid) {
       throw new Error('uid is required');
@@ -404,6 +409,7 @@ export class DataStore {
   }
 
   createInspection(payload) {
+
     const assetUid = normalizeString(payload.assetUid) ?? normalizeString(payload.asset_code);
     if (!assetUid) {
       throw new Error('assetUid is required');
@@ -565,6 +571,7 @@ export class DataStore {
       this.signaturesByAsset.set(uid, record);
       this.signaturesById.set(record.signatureId, record);
       applied.push(uid);
+
     }
     return applied;
   }
@@ -604,7 +611,7 @@ export class DataStore {
       name: asset.name,
       assetType: asset.assetType,
     }));
-  }
+  
 }
 
 export const dataStore = new DataStore();

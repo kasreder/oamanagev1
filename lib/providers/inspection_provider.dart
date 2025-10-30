@@ -112,6 +112,7 @@ class InspectionProvider extends ChangeNotifier {
   }
 
   void _finalizeInitialization(List<AssetInfo> assets, List<UserInfo> users, bool usingMock) {
+
     _assetMap
       ..clear()
       ..addEntries(assets.map((asset) => MapEntry(asset.uid, asset)));

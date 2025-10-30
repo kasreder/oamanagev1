@@ -36,4 +36,5 @@ inspectionsRouter.delete('/:id', (req, res) => {
     return res.status(404).json({ error: 'NOT_FOUND', resource: 'inspection', id });
   }
   return res.status(204).send();
+
 });

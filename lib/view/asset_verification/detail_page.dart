@@ -55,33 +55,39 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
           final userNameLabel = resolveUserNameLabel(user, asset);
 
           return FutureBuilder<_DetailExtras>(
-            future: _loadDetailExtras(resolvedAssetCode, user),
+            future: _loadDetailExtras(
+              resolvedAssetCode,
+              user,
+              asset,
+              inspection,
+            ),
             builder: (context, snapshot) {
               final extras = snapshot.data;
               final isLoadingExtras =
                   snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData;
-              final photoPath = extras?.photoPath;
+              final photoUrl = extras?.photoUrl;
               final signature = extras?.signature;
 
               // final photoStatus = () {
               //   if (isLoadingExtras) {
               //     return '불러오는 중...';
               //   }
-              //   return photoPath != null ? '사진 있음' : '등록된 사진이 사진 없습니다.';
+              //   return photoUrl != null ? '사진 있음' : '등록된 사진이 사진 없습니다.';
               // }();
 
               final Widget barcodePreview = () {
                 if (isLoadingExtras) {
                   return const SelectableText('불러오는 중...');
                 }
-                if (photoPath != null) {
+                if (photoUrl != null) {
                   return SizedBox(
                     height: 40,
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(4),
-                      child: Image.asset(
-                        photoPath,
+                      child: Image.network(
+                        photoUrl,
                         fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 24),
                       ),
                     ),
                   );
@@ -234,12 +240,16 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
                                             if (isLoadingExtras) {
                                               return const Center(child: CircularProgressIndicator());
                                             }
-                                            if (photoPath != null) {
+                                            if (photoUrl != null) {
                                               return ClipRRect(
                                                 borderRadius: BorderRadius.circular(8),
-                                                child: Image.asset(
-                                                  photoPath,
+                                                child: Image.network(
+                                                  photoUrl,
                                                   fit: BoxFit.contain,
+                                                  errorBuilder: (_, __, ___) => const Icon(
+                                                    Icons.broken_image,
+                                                    size: 48,
+                                                  ),
                                                 ),
                                               );
                                             }
@@ -399,10 +409,32 @@ class _AssetVerificationDetailPageState extends State<AssetVerificationDetailPag
     return Text(text, style: textStyle);
   }
 
-  Future<_DetailExtras> _loadDetailExtras(String assetUid, UserInfo? user) async {
-    final photoPath = await BarcodePhotoRegistry.pathFor(assetUid);
+  Future<_DetailExtras> _loadDetailExtras(
+    String assetUid,
+    UserInfo? user,
+    AssetInfo? asset,
+    Inspection? inspection,
+  ) async {
+    final candidatePhotoUrls = <String?>[
+      inspection?.barcodePhotoUrl,
+      asset?.barcodePhotoUrl,
+      asset?.metadata['barcode_photo_url'] as String?,
+      asset?.metadata['barcode_photo'] as String?,
+    ];
+    final photoUrl = candidatePhotoUrls
+        .map(_normalizePhotoUrl)
+        .firstWhere((value) => value != null && value.isNotEmpty, orElse: () => null);
     final signature = await loadSignatureData(assetUid: assetUid, user: user);
-    return _DetailExtras(photoPath: photoPath, signature: signature);
+    return _DetailExtras(photoUrl: photoUrl, signature: signature);
+  }
+
+  String? _normalizePhotoUrl(String? value) {
+    if (value == null) return null;
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    return trimmed;
   }
 
   static String _displayValue(String value) {
@@ -422,10 +454,10 @@ class _DetailCell {
 
 class _DetailExtras {
   const _DetailExtras({
-    required this.photoPath,
+    required this.photoUrl,
     required this.signature,
   });
 
-  final String? photoPath;
+  final String? photoUrl;
   final SignatureData? signature;
 }
