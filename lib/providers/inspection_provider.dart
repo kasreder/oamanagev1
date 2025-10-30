@@ -1,30 +1,32 @@
-// lib/providers/inspection_provider.dart
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
+import '../data/api_client.dart';
 import '../data/inspection_repository.dart';
+import '../data/mock_data_loader.dart';
+import '../models/asset_info.dart';
 import '../models/inspection.dart';
+import '../models/user_info.dart';
 
-/// 주요 기능:
-/// - 실사 데이터 상태를 관리하고 필터링합니다.
-/// - 더미 JSON 자산/사용자 참조 데이터를 로드합니다.
-/// - 실사 내역의 추가, 수정, 삭제 이벤트를 전파합니다.
+/// Provider responsible for bridging the UI with repositories and the backend API.
 class InspectionProvider extends ChangeNotifier {
-  InspectionProvider(this._repository);
+  InspectionProvider(this._repository, this._apiClient, this._mockDataLoader);
 
   final InspectionRepository _repository;
+  final ApiClient _apiClient;
+  final MockDataLoader _mockDataLoader;
+
   final Map<String, AssetInfo> _assetMap = {};
   final Map<String, UserInfo> _userMap = {};
 
   List<Inspection> _items = [];
   bool _onlyUnsynced = false;
   bool _initialized = false;
+  bool _backendAvailable = false;
 
   bool get isInitialized => _initialized;
   bool get onlyUnsynced => _onlyUnsynced;
+  bool get backendAvailable => _backendAvailable;
 
   List<Inspection> get items {
     if (_onlyUnsynced) {
@@ -54,19 +56,79 @@ class InspectionProvider extends ChangeNotifier {
 
   bool assetExists(String uid) => _assetMap.containsKey(uid);
 
-  void upsertAssetInfo(AssetInfo asset) {
-    _assetMap[asset.uid] = asset;
-    notifyListeners();
-  }
-
   UserInfo? userOf(String id) => _userMap[id];
 
   Future<void> initialize() async {
-    await Future.wait([
-      _loadReferenceData(),
-      _repository.loadFromAssets(),
-    ]);
+    List<AssetInfo> assets = const [];
+    List<UserInfo> users = const [];
+    bool usingMock = false;
+    try {
+      await _apiClient.ensureAuthenticated();
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Authentication failed, switching to mock data: $error');
+      }
+      await _repository.loadMockData();
+      assets = await _mockDataLoader.loadAssets();
+      users = await _mockDataLoader.loadUsers();
+      usingMock = true;
+      _finalizeInitialization(assets, users, usingMock);
+      return;
+    }
+
+    await _repository.synchronize();
+    usingMock = _repository.usingMockData;
+
+    bool assetsFromBackend = false;
+    bool usersFromBackend = false;
+
+    if (!usingMock) {
+      try {
+        assets = await _apiClient.fetchAssets();
+        assetsFromBackend = true;
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint('Asset fetch failed, using mock data: $error');
+        }
+        assets = await _mockDataLoader.loadAssets();
+      }
+
+      try {
+        users = await _apiClient.fetchUsers();
+        usersFromBackend = true;
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint('User fetch failed, using mock data: $error');
+        }
+        users = await _mockDataLoader.loadUsers();
+      }
+    } else {
+      assets = await _mockDataLoader.loadAssets();
+      users = await _mockDataLoader.loadUsers();
+    }
+
+    usingMock = usingMock || !assetsFromBackend || !usersFromBackend;
+    _finalizeInitialization(assets, users, usingMock);
+  }
+
+  void _finalizeInitialization(List<AssetInfo> assets, List<UserInfo> users, bool usingMock) {
+    _assetMap
+      ..clear()
+      ..addEntries(assets.map((asset) => MapEntry(asset.uid, asset)));
+    _userMap.clear();
+    for (final user in users) {
+      _userMap[user.id] = user;
+      final employeeId = user.employeeId;
+      if (employeeId != null && employeeId.isNotEmpty) {
+        _userMap[employeeId] = user;
+      }
+      final numericId = user.numericId;
+      if (numericId != null && numericId.isNotEmpty) {
+        _userMap[numericId] = user;
+      }
+    }
     _items = _repository.getAll();
+    _backendAvailable = !usingMock;
     _initialized = true;
     notifyListeners();
   }
@@ -84,15 +146,29 @@ class InspectionProvider extends ChangeNotifier {
     return null;
   }
 
-  void addOrUpdate(Inspection inspection) {
-    _repository.upsert(inspection);
+  Future<void> addOrUpdate(Inspection inspection) async {
+    final updated = await _repository.upsert(inspection);
+    final index = _items.indexWhere((item) => item.id == updated.id);
+    if (index >= 0) {
+      _items[index] = updated;
+    } else {
+      _items.add(updated);
+    }
+    _items.sort((a, b) => b.scannedAt.compareTo(a.scannedAt));
+    notifyListeners();
+  }
+
+  Future<void> remove(String id) async {
+    await _repository.delete(id);
     _items = _repository.getAll();
     notifyListeners();
   }
 
-  void remove(String id) {
-    _repository.delete(id);
-    _items = _repository.getAll();
+  Future<void> upsertAssetInfo(AssetInfo asset) async {
+    if (_backendAvailable) {
+      await _apiClient.upsertAsset(asset);
+    }
+    _assetMap[asset.uid] = asset;
     notifyListeners();
   }
 
@@ -101,194 +177,4 @@ class InspectionProvider extends ChangeNotifier {
     _onlyUnsynced = value;
     notifyListeners();
   }
-
-  Future<void> _loadReferenceData() async {
-    await Future.wait([
-      _loadAssets(),
-      _loadUsers(),
-    ]);
-  }
-
-  Future<void> _loadAssets() async {
-    try {
-      final raw = await _loadJsonWithFallback(
-        'assets/dummy/mock/assets.json',
-        'assets/mock/assets.json',
-      );
-      final decoded =
-          (jsonDecode(raw) as List<dynamic>).cast<Map<String, dynamic>>();
-      final entries = <MapEntry<String, AssetInfo>>[];
-      for (final item in decoded) {
-        final uid = _stringOrNull(item['asset_uid']) ?? _stringOrNull(item['uid']);
-        if (uid == null) {
-          continue;
-        }
-        final metadata = <String, String>{};
-        item.forEach((key, value) {
-          final normalizedKey = key?.toString();
-          if (normalizedKey == null) {
-            return;
-          }
-          final normalizedValue = _stringOrNull(value);
-          if (normalizedValue != null) {
-            metadata[normalizedKey] = normalizedValue;
-          }
-        });
-        entries.add(
-          MapEntry(
-            uid,
-            AssetInfo(
-              uid: uid,
-              name: _stringOrNull(item['name']) ?? '',
-              model: _stringOrNull(item['model_name']) ??
-                  _stringOrNull(item['model']) ??
-                  '',
-              serial: _stringOrNull(item['serial_number']) ??
-                  _stringOrNull(item['serial']) ??
-                  '',
-              vendor: _stringOrNull(item['vendor']) ?? '',
-              location: _resolveLocation(item),
-              status: _stringOrNull(item['assets_status']) ??
-                  _stringOrNull(item['status']) ??
-                  '',
-              assets_types: _stringOrNull(item['assets_types']) ?? '',
-              organization: _stringOrNull(item['organization']) ?? '',
-              metadata: metadata,
-            ),
-          ),
-        );
-      }
-      _assetMap
-        ..clear()
-        ..addEntries(entries);
-    } on FlutterError {
-      _assetMap.clear();
-    } on FormatException {
-      _assetMap.clear();
-    }
-  }
-
-  Future<void> _loadUsers() async {
-    try {
-      final raw = await _loadJsonWithFallback(
-        'assets/dummy/mock/users.json',
-        'assets/mock/users.json',
-      );
-      final decoded =
-          (jsonDecode(raw) as List<dynamic>).cast<Map<String, dynamic>>();
-      final entries = <MapEntry<String, UserInfo>>[];
-      for (final item in decoded) {
-        final employeeId = _stringOrNull(item['employee_id']);
-        final numericId = _stringOrNull(item['id']);
-        final primaryId = employeeId ?? numericId;
-        if (primaryId == null) {
-          continue;
-        }
-        final departmentParts = [
-          _stringOrNull(item['organization_hq']),
-          _stringOrNull(item['organization_dept']),
-          _stringOrNull(item['organization_team']),
-          _stringOrNull(item['organization_part']),
-        ].whereType<String>().toList();
-        final department = departmentParts.isEmpty
-            ? (_stringOrNull(item['department']) ?? '')
-            : departmentParts.join(' > ');
-        final info = UserInfo(
-          id: primaryId,
-          name: _stringOrNull(item['employee_name']) ??
-              _stringOrNull(item['name']) ??
-              '',
-          department: department,
-        );
-        entries.add(MapEntry(primaryId, info));
-        if (employeeId != null && numericId != null && employeeId != numericId) {
-          entries.add(MapEntry(numericId, info));
-        }
-      }
-      _userMap
-        ..clear()
-        ..addEntries(entries);
-    } on FlutterError {
-      _userMap.clear();
-    } on FormatException {
-      _userMap.clear();
-    }
-  }
-
-  Future<String> _loadJsonWithFallback(String primary, String fallback) async {
-    try {
-      return await rootBundle.loadString(primary);
-    } on FlutterError {
-      return rootBundle.loadString(fallback);
-    }
-  }
-
-  String _resolveLocation(Map<String, dynamic> item) {
-    final locationParts = <String>[];
-    final building1 = _stringOrNull(item['building1']);
-    final building = _stringOrNull(item['building']);
-    final floor = _stringOrNull(item['floor']);
-    final locationRow = item['location_row'];
-    final locationCol = item['location_col'];
-    if (building1 != null) locationParts.add(building1);
-    if (building != null) locationParts.add(building);
-    if (floor != null) locationParts.add(floor);
-    if (locationRow != null) {
-      locationParts.add('R${locationRow.toString()}');
-    }
-    if (locationCol != null) {
-      locationParts.add('C${locationCol.toString()}');
-    }
-    return locationParts.isEmpty
-        ? (_stringOrNull(item['location']) ??
-            _stringOrNull(item['member_name']) ??
-            '')
-        : locationParts.join(' ');
-  }
-
-  String? _stringOrNull(dynamic value) {
-    if (value == null) return null;
-    final stringValue = value.toString().trim();
-    return stringValue.isEmpty ? null : stringValue;
-  }
-}
-
-/// 자산 기본 정보를 표현하는 단순 DTO.
-class AssetInfo {
-  AssetInfo({
-    required this.uid,
-    required this.name,
-    required this.model,
-    required this.serial,
-    required this.vendor,
-    required this.location,
-    this.status = '',
-    this.assets_types = '',
-    this.organization = '',
-    Map<String, String> metadata = const {},
-  }) : metadata = Map.unmodifiable(metadata);
-
-  final String uid;
-  final String name;
-  final String model;
-  final String serial;
-  final String vendor;
-  final String location;
-  final String status;
-  final String assets_types;
-  final String organization;
-  final Map<String, String> metadata;
-}
-
-/// 사용자 참조 정보를 보관하는 DTO.
-class UserInfo {
-  const UserInfo({
-    required this.id,
-    required this.name,
-    required this.department,
-  });
-
-  final String id;
-  final String name;
-  final String department;
 }
