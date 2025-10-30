@@ -2,21 +2,13 @@
 
 # OA Manage v2
 
-OA 자산 실사 관리 앱입니다. 에셋 JSON을 로드하여 실사 목록을 관리하고, QR 스캔으로 신규 실사를 생성합니다.
+OA 자산 실사 관리 앱입니다. 백엔드 REST API와 연동하여 자산/사용자/실사 정보를 동기화하고, QR 스캔으로 신규 실사를 생성합니다.
 
 ## 주요 기능
 - 홈/스캔/실사 목록/미검증 자산 화면 제공
 - 모바일/웹 카메라 권한 안내 및 QR 스캔 처리
 - 실사 상세 편집, 삭제, 미동기화 필터링
 - Material 3 및 반응형 NavigationBar/NavigationRail 적용
-
-## 더미 데이터
-에셋 JSON은 `assets/dummy/mock` 아래에 위치하며, `pubspec.yaml`에 등록되어 있습니다.
-```
-assets/dummy/mock/users.json
-assets/dummy/mock/assets.json
-assets/dummy/mock/asset_inspections.json
-```
 
 ## DB 스키마 요약
 더미 JSON 구조를 기반으로 한 주요 테이블(또는 컬렉션)의 스키마입니다. 실제 구현 시 RDB 또는 NoSQL에 맞춰 타입을 조정하면 됩니다.
