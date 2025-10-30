@@ -23,11 +23,11 @@ export function createPoolFromEnv() {
   }
 
   return new Pool({
-    host: process.env.PGHOST ?? 'localhost',
+    host: process.env.PGHOST ?? '127.0.0.1',
     port: Number.parseInt(process.env.PGPORT ?? '5432', 10),
-    user: process.env.PGUSER ?? 'postgres',
+    user: process.env.PGUSER ?? 'root',
     password: process.env.PGPASSWORD,
-    database: process.env.PGDATABASE ?? 'oa_asset_manager',
+    database: process.env.PGDATABASE ?? 'aabb',
     ssl: resolveSslConfig(),
     max,
     idleTimeoutMillis,
