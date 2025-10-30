@@ -1,44 +1,15 @@
-import { readFile, writeFile, mkdir, access } from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { randomUUID } from 'crypto';
+import { mkdir, readFile } from 'fs/promises';
+import { createHash } from 'crypto';
+
+import { createPoolFromEnv } from './db/pool.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const DEFAULT_PAGE_SIZE = 20;
-const DATA_ROOT = path.resolve(__dirname, '../../assets/dummy/mock');
 const SIGNATURE_DIR = path.resolve(__dirname, './storage');
-
-const ASSET_CORE_KEYS = new Set([
-  'id',
-  'asset_uid',
-  'uid',
-  'name',
-  'assets_status',
-  'status',
-  'assets_types',
-  'assetType',
-  'serial_number',
-  'serialNumber',
-  'model_name',
-  'modelName',
-  'vendor',
-  'organization',
-  'network',
-  'building1',
-  'building',
-  'floor',
-  'location_drawing_id',
-  'location_row',
-  'location_col',
-  'location_drawing_file',
-  'member_name',
-  'user_id',
-  'userId',
-  'created_at',
-  'updated_at',
-]);
 
 function normalizeString(value) {
   if (value === undefined || value === null) return undefined;
@@ -46,7 +17,7 @@ function normalizeString(value) {
   return stringValue.length === 0 ? undefined : stringValue;
 }
 
-function normalizeBoolean(value) {
+function parseBoolean(value) {
   if (value === undefined || value === null) return undefined;
   if (typeof value === 'boolean') return value;
   if (typeof value === 'number') return value !== 0;
@@ -59,9 +30,7 @@ function normalizeBoolean(value) {
 }
 
 function toIsoString(value) {
-  if (!value) {
-    return undefined;
-  }
+  if (!value) return undefined;
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) {
     return undefined;
@@ -69,541 +38,1036 @@ function toIsoString(value) {
   return date.toISOString();
 }
 
+function mapMetadata(raw) {
+  if (!raw) return {};
+  if (typeof raw === 'string') {
+    try {
+      return JSON.parse(raw);
+    } catch (error) {
+      console.warn('Failed to parse metadata json', error);
+      return {};
+    }
+  }
+  if (typeof raw === 'object') {
+    return { ...raw };
+  }
+  return {};
+}
+
+function composeLocation(row) {
+  if (row.location_text) {
+    return row.location_text;
+  }
+  const parts = [
+    normalizeString(row.building),
+    normalizeString(row.floor),
+  ].filter(Boolean);
+  if (row.location_row !== undefined && row.location_row !== null) {
+    parts.push(`R${row.location_row}`);
+  }
+  if (row.location_col !== undefined && row.location_col !== null) {
+    parts.push(`C${row.location_col}`);
+  }
+  return parts.join(' ');
+}
+
+function composeDepartment(row) {
+  return [
+    normalizeString(row.department_hq),
+    normalizeString(row.department_dept),
+    normalizeString(row.department_team),
+    normalizeString(row.department_part),
+  ]
+    .filter(Boolean)
+    .join(' > ');
+}
+
+function resolveOrganization(metadata, ownerDepartment) {
+  return (
+    normalizeString(metadata.organization) ??
+    normalizeString(metadata.organization_team) ??
+    ownerDepartment ??
+    ''
+  );
+}
+
+function resolveBarcodePhotoUrl(row, metadata) {
+  return (
+    normalizeString(row.barcode_photo_url) ??
+    normalizeString(metadata.barcodePhotoUrl) ??
+    normalizeString(metadata.barcode_photo_url) ??
+    normalizeString(metadata.barcode_photo) ??
+    undefined
+  );
+}
+
+function normalizeUserId(value) {
+  const normalized = normalizeString(value);
+  if (normalized === undefined) {
+    return undefined;
+  }
+  const numeric = Number.parseInt(normalized, 10);
+  if (Number.isNaN(numeric)) {
+    return undefined;
+  }
+  return numeric;
+}
+
 export class DataStore {
-  constructor({
-    dataRoot = DATA_ROOT,
-    signatureDir = SIGNATURE_DIR,
-    logger = console,
-  } = {}) {
-    this.dataRoot = dataRoot;
+  constructor({ pool = createPoolFromEnv(), signatureDir = SIGNATURE_DIR, logger = console } = {}) {
+    this.pool = pool;
     this.signatureDir = signatureDir;
     this.logger = logger;
-    this.users = new Map();
-    this.assets = new Map();
-    this.inspections = new Map();
-    this.signaturesByAsset = new Map();
-    this.signaturesById = new Map();
   }
 
   async initialize() {
     await mkdir(this.signatureDir, { recursive: true });
-    await this.#loadUsers();
-    await this.#loadAssets();
-    await this.#loadInspections();
-    await this.#hydrateExistingSignatures();
+    await this.pool.query('SELECT 1');
   }
 
   getSignatureDirectory() {
     return this.signatureDir;
   }
 
-  async #readJson(fileName) {
-    const filePath = path.resolve(this.dataRoot, fileName);
-    const raw = await readFile(filePath, 'utf8');
-    return JSON.parse(raw);
-  }
+  async listAssets({ q, status, team, page = 0, pageSize = DEFAULT_PAGE_SIZE } = {}) {
+    const filters = [];
+    const params = [];
 
-  async #loadUsers() {
-    const items = await this.#readJson('users.json');
-    this.users.clear();
-    for (const item of items) {
-      const id = normalizeString(item.employee_id) ?? normalizeString(item.id);
-      if (!id) continue;
-      const name = normalizeString(item.employee_name) ?? normalizeString(item.name) ?? '미상';
-      const departmentParts = [
-        normalizeString(item.organization_hq),
-        normalizeString(item.organization_dept),
-        normalizeString(item.organization_team),
-        normalizeString(item.organization_part),
-      ].filter(Boolean);
-      const department = departmentParts.join(' > ');
-      const record = {
-        id,
-        numericId: normalizeString(item.id),
-        employeeId: normalizeString(item.employee_id),
-        name,
-        department,
-        meta: { ...item },
-      };
-      this.users.set(id, record);
-      if (record.numericId && record.numericId !== id) {
-        this.users.set(record.numericId, record);
-      }
-    }
-  }
-
-  async #loadAssets() {
-    const items = await this.#readJson('assets.json');
-    this.assets.clear();
-    for (const item of items) {
-      const uid = normalizeString(item.asset_uid) ?? normalizeString(item.uid);
-      if (!uid) continue;
-      const metadata = {};
-      for (const [key, value] of Object.entries(item)) {
-        if (ASSET_CORE_KEYS.has(key)) continue;
-        const normalized = normalizeString(value);
-        if (normalized !== undefined) {
-          metadata[key] = normalized;
-        }
-      }
-      const ownerId = normalizeString(item.user_id) ?? normalizeString(item.userId);
-      const owner = ownerId ? this.users.get(ownerId) : undefined;
-      const asset = {
-        uid,
-        name: normalizeString(item.name) ?? owner?.name ?? '미배정',
-        assetType: normalizeString(item.assets_types) ?? normalizeString(item.assetType) ?? '',
-        modelName: normalizeString(item.model_name) ?? normalizeString(item.modelName) ?? '',
-        serialNumber: normalizeString(item.serial_number) ?? normalizeString(item.serialNumber) ?? '',
-        status: normalizeString(item.assets_status) ?? normalizeString(item.status) ?? '사용',
-        vendor: normalizeString(item.vendor) ?? '',
-        location: this.#resolveLocation(item),
-        organization: normalizeString(item.organization) ?? '',
-        owner: owner
-          ? {
-              id: owner.id,
-              name: owner.name,
-            }
-          : undefined,
-        metadata,
-        barcodePhotoUrl: normalizeString(metadata.barcodePhotoUrl ?? metadata.barcode_photo_url ?? metadata.barcode_photo),
-      };
-      this.assets.set(uid, asset);
-    }
-  }
-
-  async #loadInspections() {
-    const items = await this.#readJson('asset_inspections.json');
-    this.inspections.clear();
-    for (const item of items) {
-      const normalized = this.#normalizeInspection(item);
-      this.inspections.set(normalized.id, normalized);
-    }
-  }
-
-  async #hydrateExistingSignatures() {
-    try {
-      await access(path.join(this.signatureDir, 'signatures.json'));
-      const raw = await readFile(path.join(this.signatureDir, 'signatures.json'), 'utf8');
-      const entries = JSON.parse(raw);
-      this.signaturesByAsset.clear();
-      this.signaturesById.clear();
-      for (const entry of entries) {
-        if (!entry.assetUid || !entry.signatureId || !entry.fileName) continue;
-        this.signaturesByAsset.set(entry.assetUid, entry);
-        this.signaturesById.set(entry.signatureId, entry);
-      }
-    } catch (error) {
-      if (error && error.code !== 'ENOENT') {
-        this.logger.error('Failed to hydrate signatures', error);
-      }
-    }
-  }
-
-  async #persistSignatures() {
-    const entries = Array.from(this.signaturesByAsset.values());
-    const filePath = path.join(this.signatureDir, 'signatures.json');
-    await writeFile(filePath, JSON.stringify(entries, null, 2), 'utf8');
-  }
-
-  #normalizeInspection(item) {
-    const assetUid = normalizeString(item.asset_code) ?? normalizeString(item.assetUid);
-    if (!assetUid) {
-      throw new Error('Inspection missing assetUid');
-    }
-    const asset = this.assets.get(assetUid);
-    const idRaw = normalizeString(item.id) ?? undefined;
-    const id = idRaw ?? `ins_${assetUid}_${item.inspection_date ?? Date.now()}`;
-    const scannedAtRaw =
-      normalizeString(item.inspection_date) ?? normalizeString(item.scannedAt) ?? new Date().toISOString();
-    const scannedAt = new Date(scannedAtRaw);
-    const memo = this.#buildMemo(item);
-    const userId = normalizeString(item.user_id) ?? normalizeString(item.userId);
-    const inspection = {
-      id,
-      assetUid,
-      status: normalizeString(item.status) ?? asset?.status ?? '사용',
-      memo,
-      scannedAt: toIsoString(scannedAt) ?? new Date().toISOString(),
-      synced: normalizeBoolean(item.synced) ?? ((item.inspection_count ?? 0) % 2 === 0),
-      userTeam: normalizeString(item.user_team) ?? undefined,
-      userId: userId ?? undefined,
-      assetType: normalizeString(item.asset_type) ?? asset?.assetType ?? undefined,
-      isVerified: normalizeBoolean(item.is_verified) ?? true,
-      barcodePhotoUrl: asset?.barcodePhotoUrl,
-    };
-    return inspection;
-  }
-
-  #buildMemo(item) {
-    const lines = [];
-    const inspector = normalizeString(item.inspector_name);
-    const team = normalizeString(item.user_team);
-    const departmentConfirm = normalizeString(item.department_confirm);
-    if (inspector) lines.push(`점검자: ${inspector}`);
-    if (team) lines.push(`소속: ${team}`);
-    const assetInfo = item.asset_info && typeof item.asset_info === 'object' ? item.asset_info : undefined;
-    if (assetInfo) {
-      const usage = normalizeString(assetInfo.usage);
-      const model = normalizeString(assetInfo.model_name ?? assetInfo.modelName);
-      const serial = normalizeString(assetInfo.serial_number ?? assetInfo.serialNumber);
-      if (usage) lines.push(`용도: ${usage}`);
-      if (model) lines.push(`모델: ${model}`);
-      if (serial) lines.push(`시리얼: ${serial}`);
-    }
-    if (departmentConfirm) lines.push(`확인부서: ${departmentConfirm}`);
-    return lines.length ? lines.join('\n') : undefined;
-  }
-
-  #resolveLocation(item) {
-    const parts = [
-      normalizeString(item.building1),
-      normalizeString(item.building),
-      normalizeString(item.floor),
-    ].filter(Boolean);
-    if (item.location_row !== undefined && item.location_row !== null) {
-      parts.push(`R${item.location_row}`);
-    }
-    if (item.location_col !== undefined && item.location_col !== null) {
-      parts.push(`C${item.location_col}`);
-    }
-    return parts.join(' ');
-  }
-
-  getAsset(uid) {
-    return this.assets.get(uid);
-  }
-
-  getAllAssetUids() {
-    return Array.from(this.assets.keys());
-  }
-
-  listAssets({ q, status, team, page = 0, pageSize = DEFAULT_PAGE_SIZE } = {}) {
-    let items = Array.from(this.assets.values());
     if (q) {
-      const lowered = q.trim().toLowerCase();
-      items = items.filter((item) => {
-        return [
-          item.uid,
-          item.name,
-          item.assetType,
-          item.modelName,
-          item.serialNumber,
-          item.organization,
-        ]
-          .filter(Boolean)
-          .some((field) => field.toLowerCase().includes(lowered));
-      });
+      params.push(`%${q.trim().toLowerCase()}%`);
+      const idx = params.length;
+      filters.push(`(
+        LOWER(a.uid) LIKE $${idx} OR
+        LOWER(COALESCE(a.name, '')) LIKE $${idx} OR
+        LOWER(COALESCE(a.asset_type, '')) LIKE $${idx} OR
+        LOWER(COALESCE(a.model_name, '')) LIKE $${idx} OR
+        LOWER(COALESCE(a.serial_number, '')) LIKE $${idx} OR
+        LOWER(COALESCE(a.vendor, '')) LIKE $${idx}
+      )`);
     }
+
     if (status) {
-      const lowered = status.trim().toLowerCase();
-      items = items.filter((item) => item.status?.toLowerCase() === lowered);
+      params.push(status.trim().toLowerCase());
+      const idx = params.length;
+      filters.push(`LOWER(COALESCE(a.status, '')) = $${idx}`);
     }
+
     if (team) {
-      const lowered = team.trim().toLowerCase();
-      items = items.filter((item) => {
-        const ownerDept = item.owner?.department?.toLowerCase();
-        const organization = item.organization?.toLowerCase();
-        return (ownerDept && ownerDept.includes(lowered)) || (organization && organization.includes(lowered));
-      });
+      params.push(`%${team.trim().toLowerCase()}%`);
+      const idx = params.length;
+      filters.push(`(
+        LOWER(COALESCE(a.metadata->>'organization', '')) LIKE $${idx} OR
+        LOWER(COALESCE(a.metadata->>'organization_team', '')) LIKE $${idx} OR
+        LOWER(COALESCE(u.department_hq, '')) LIKE $${idx} OR
+        LOWER(COALESCE(u.department_dept, '')) LIKE $${idx} OR
+        LOWER(COALESCE(u.department_team, '')) LIKE $${idx} OR
+        LOWER(COALESCE(u.department_part, '')) LIKE $${idx}
+      )`);
     }
-    const total = items.length;
-    const start = Number(page) * Number(pageSize);
-    const end = start + Number(pageSize);
-    const paged = items.slice(start, end);
+
+    const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+
+    const limit = Number(pageSize);
+    const offset = Number(page) * limit;
+
+    const rowsResult = await this.pool.query(
+      `
+      SELECT
+        a.uid,
+        a.name,
+        a.asset_type,
+        a.model_name,
+        a.serial_number,
+        a.vendor,
+        a.status,
+        a.location_text,
+        a.building,
+        a.floor,
+        a.location_row,
+        a.location_col,
+        a.metadata,
+        a.owner_user_id,
+        a.barcode_photo_url,
+        a.updated_at,
+        u.name AS owner_name,
+        u.department_hq,
+        u.department_dept,
+        u.department_team,
+        u.department_part
+      FROM assets a
+      LEFT JOIN users u ON a.owner_user_id = u.id
+      ${whereClause}
+      ORDER BY a.updated_at DESC, a.uid ASC
+      LIMIT $${params.length + 1}
+      OFFSET $${params.length + 2}
+      `,
+      [...params, limit, offset]
+    );
+
+    const countResult = await this.pool.query(
+      `
+      SELECT COUNT(*) AS total
+      FROM assets a
+      LEFT JOIN users u ON a.owner_user_id = u.id
+      ${whereClause}
+      `,
+      params
+    );
+
+    const items = rowsResult.rows.map((row) => this.#mapAssetRow(row));
+    const total = Number.parseInt(countResult.rows[0]?.total ?? '0', 10);
+
     return {
-      items: paged.map((item) => ({
-        ...item,
-        metadata: { ...item.metadata },
-      })),
+      items,
       total,
       page: Number(page),
-      pageSize: Number(pageSize),
+      pageSize: limit,
     };
   }
 
-  getAssetDetail(uid) {
-    const asset = this.assets.get(uid);
-    if (!asset) return undefined;
-    const history = this.listInspections({ assetUid: uid, pageSize: 50 }).items;
+  async getAssetDetail(uid) {
+    const result = await this.pool.query(
+      `
+      SELECT
+        a.uid,
+        a.name,
+        a.asset_type,
+        a.model_name,
+        a.serial_number,
+        a.vendor,
+        a.status,
+        a.location_text,
+        a.building,
+        a.floor,
+        a.location_row,
+        a.location_col,
+        a.metadata,
+        a.owner_user_id,
+        a.barcode_photo_url,
+        a.updated_at,
+        u.name AS owner_name,
+        u.department_hq,
+        u.department_dept,
+        u.department_team,
+        u.department_part
+      FROM assets a
+      LEFT JOIN users u ON a.owner_user_id = u.id
+      WHERE a.uid = $1
+      LIMIT 1
+      `,
+      [uid]
+    );
+
+    if (result.rowCount === 0) {
+      return undefined;
+    }
+
+    const asset = this.#mapAssetRow(result.rows[0]);
+    const history = await this.listInspections({ assetUid: uid, pageSize: 50 });
     return {
       ...asset,
-      metadata: { ...asset.metadata },
-      history,
+      history: history.items,
     };
   }
 
-  upsertAsset(payload) {
+  async upsertAsset(payload) {
     const uid = normalizeString(payload.uid);
     if (!uid) {
       throw new Error('uid is required');
     }
-    const existing = this.assets.get(uid);
-    const owner = payload.ownerId ? this.users.get(String(payload.ownerId)) : existing?.owner;
-    const asset = {
-      uid,
-      name: normalizeString(payload.name) ?? existing?.name ?? '미배정',
-      assetType: normalizeString(payload.assetType) ?? normalizeString(payload.assets_types) ?? existing?.assetType ?? '',
-      modelName: normalizeString(payload.modelName) ?? normalizeString(payload.model) ?? existing?.modelName ?? '',
-      serialNumber: normalizeString(payload.serialNumber) ?? normalizeString(payload.serial) ?? existing?.serialNumber ?? '',
-      status: normalizeString(payload.status) ?? existing?.status ?? '사용',
-      vendor: normalizeString(payload.vendor) ?? existing?.vendor ?? '',
-      location: normalizeString(payload.location) ?? existing?.location ?? '',
-      organization: normalizeString(payload.organization) ?? existing?.organization ?? '',
-      owner: owner
-        ? {
-            id: owner.id,
-            name: owner.name,
-            department: owner.department,
-          }
-        : existing?.owner,
-      metadata: { ...(existing?.metadata ?? {}), ...(payload.metadata ?? {}) },
-      barcodePhotoUrl:
-        normalizeString(payload.barcodePhotoUrl) ?? existing?.barcodePhotoUrl ?? undefined,
-    };
-    this.assets.set(uid, asset);
-    return { asset, created: !existing };
+    const metadata = mapMetadata(payload.metadata);
+    const ownerId = normalizeUserId(payload.ownerId);
+    const location = normalizeString(payload.location);
+    const status = normalizeString(payload.status);
+    const name = normalizeString(payload.name);
+    const assetType = normalizeString(payload.assetType ?? payload.assets_types);
+    const modelName = normalizeString(payload.modelName ?? payload.model);
+    const serialNumber = normalizeString(payload.serialNumber ?? payload.serial);
+    const vendor = normalizeString(payload.vendor);
+    const barcodePhotoUrl = normalizeString(payload.barcodePhotoUrl);
+
+    const updateResult = await this.pool.query(
+      `
+      UPDATE assets
+      SET
+        name = COALESCE($2, name),
+        asset_type = COALESCE($3, asset_type),
+        model_name = COALESCE($4, model_name),
+        serial_number = COALESCE($5, serial_number),
+        vendor = COALESCE($6, vendor),
+        status = COALESCE($7, status),
+        location_text = COALESCE($8, location_text),
+        metadata = COALESCE($9, metadata),
+        owner_user_id = COALESCE($10::bigint, owner_user_id),
+        barcode_photo_url = COALESCE($11, barcode_photo_url),
+        updated_at = now()
+      WHERE uid = $1
+      RETURNING uid
+      `,
+      [
+        uid,
+        name,
+        assetType,
+        modelName,
+        serialNumber,
+        vendor,
+        status,
+        location,
+        Object.keys(metadata).length ? metadata : null,
+        ownerId === undefined ? null : ownerId,
+        barcodePhotoUrl,
+      ]
+    );
+
+    if (updateResult.rowCount > 0) {
+      return { asset: { uid }, created: false };
+    }
+
+    await this.pool.query(
+      `
+      INSERT INTO assets (
+        uid,
+        name,
+        asset_type,
+        model_name,
+        serial_number,
+        vendor,
+        status,
+        location_text,
+        metadata,
+        owner_user_id,
+        barcode_photo_url,
+        created_at,
+        updated_at
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,now(),now()
+      )
+      `,
+      [
+        uid,
+        name ?? '미배정',
+        assetType,
+        modelName,
+        serialNumber,
+        vendor,
+        status ?? '사용',
+        location,
+        Object.keys(metadata).length ? metadata : {},
+        ownerId === undefined ? null : ownerId,
+        barcodePhotoUrl,
+      ]
+    );
+
+    return { asset: { uid }, created: true };
   }
 
-  softDeleteAsset(uid) {
-    const asset = this.assets.get(uid);
-    if (!asset) return undefined;
-    const updated = { ...asset, status: '폐기' };
-    this.assets.set(uid, updated);
-    return updated;
-  }
-
-  listInspections({ assetUid, synced, from, to, page = 0, pageSize = DEFAULT_PAGE_SIZE } = {}) {
-    let items = Array.from(this.inspections.values());
-    if (assetUid) {
-      const lowered = assetUid.trim().toLowerCase();
-      items = items.filter((item) => item.assetUid.toLowerCase() === lowered);
+  async softDeleteAsset(uid) {
+    const result = await this.pool.query(
+      `
+      UPDATE assets
+      SET status = '폐기', updated_at = now()
+      WHERE uid = $1
+      RETURNING uid, status
+      `,
+      [uid]
+    );
+    if (result.rowCount === 0) {
+      return undefined;
     }
-    if (synced !== undefined) {
-      const boolValue = synced === 'false' ? false : synced === 'true' ? true : Boolean(synced);
-      items = items.filter((item) => item.synced === boolValue);
-    }
-    if (from) {
-      const fromDate = new Date(from);
-      items = items.filter((item) => new Date(item.scannedAt) >= fromDate);
-    }
-    if (to) {
-      const toDate = new Date(to);
-      items = items.filter((item) => new Date(item.scannedAt) <= toDate);
-    }
-    items.sort((a, b) => new Date(b.scannedAt) - new Date(a.scannedAt));
-    const total = items.length;
-    const start = Number(page) * Number(pageSize);
-    const end = start + Number(pageSize);
-    const paged = items.slice(start, end);
     return {
-      items: paged.map((item) => ({ ...item })),
+      uid: result.rows[0].uid,
+      status: result.rows[0].status,
+    };
+  }
+
+  async listInspections({ assetUid, synced, from, to, page = 0, pageSize = DEFAULT_PAGE_SIZE } = {}) {
+    const filters = [];
+    const params = [];
+
+    if (assetUid) {
+      params.push(assetUid.trim().toLowerCase());
+      const idx = params.length;
+      filters.push(`LOWER(i.asset_uid) = $${idx}`);
+    }
+
+    if (synced !== undefined) {
+      const value = typeof synced === 'string' ? synced.toLowerCase() === 'true' : Boolean(synced);
+      params.push(value);
+      const idx = params.length;
+      filters.push(`i.synced = $${idx}`);
+    }
+
+    if (from) {
+      params.push(new Date(from));
+      const idx = params.length;
+      filters.push(`i.scanned_at >= $${idx}`);
+    }
+
+    if (to) {
+      params.push(new Date(to));
+      const idx = params.length;
+      filters.push(`i.scanned_at <= $${idx}`);
+    }
+
+    const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const limit = Number(pageSize);
+    const offset = Number(page) * limit;
+
+    const rowsResult = await this.pool.query(
+      `
+      SELECT
+        i.id,
+        i.asset_uid,
+        i.status,
+        i.memo,
+        i.scanned_at,
+        i.synced,
+        i.user_team,
+        i.user_id,
+        i.asset_type,
+        i.verified,
+        i.barcode_photo_url
+      FROM inspections i
+      ${whereClause}
+      ORDER BY i.scanned_at DESC
+      LIMIT $${params.length + 1}
+      OFFSET $${params.length + 2}
+      `,
+      [...params, limit, offset]
+    );
+
+    const countResult = await this.pool.query(
+      `
+      SELECT COUNT(*) AS total
+      FROM inspections i
+      ${whereClause}
+      `,
+      params
+    );
+
+    const items = rowsResult.rows.map((row) => this.#mapInspectionRow(row));
+    const total = Number.parseInt(countResult.rows[0]?.total ?? '0', 10);
+
+    return {
+      items,
       page: Number(page),
-      pageSize: Number(pageSize),
+      pageSize: limit,
       total,
     };
   }
 
-  createInspection(payload) {
+  async createInspection(payload) {
     const assetUid = normalizeString(payload.assetUid) ?? normalizeString(payload.asset_code);
     if (!assetUid) {
       throw new Error('assetUid is required');
     }
     const id = normalizeString(payload.id) ?? `ins_${assetUid}_${Date.now()}`;
-    const record = {
-      id,
-      assetUid,
-      status: normalizeString(payload.status) ?? '사용',
-      memo: normalizeString(payload.memo),
-      scannedAt: toIsoString(payload.scannedAt) ?? new Date().toISOString(),
-      synced: normalizeBoolean(payload.synced) ?? false,
-      userTeam: normalizeString(payload.userTeam),
-      userId: normalizeString(payload.userId),
-      assetType: normalizeString(payload.assetType),
-      isVerified: normalizeBoolean(payload.isVerified) ?? false,
-      barcodePhotoUrl: normalizeString(payload.barcodePhotoUrl),
-    };
-    this.inspections.set(id, record);
-    return record;
+    const status = normalizeString(payload.status) ?? '사용';
+    const memo = normalizeString(payload.memo);
+    const scannedAt = toIsoString(payload.scannedAt) ?? new Date().toISOString();
+    const synced = parseBoolean(payload.synced) ?? false;
+    const userTeam = normalizeString(payload.userTeam);
+    const userId = normalizeUserId(payload.userId);
+    const assetType = normalizeString(payload.assetType);
+    const isVerified = parseBoolean(payload.isVerified) ?? false;
+    const barcodePhotoUrl = normalizeString(payload.barcodePhotoUrl);
+
+    const result = await this.pool.query(
+      `
+      INSERT INTO inspections (
+        id,
+        asset_uid,
+        status,
+        memo,
+        scanned_at,
+        synced,
+        user_team,
+        user_id,
+        asset_type,
+        verified,
+        barcode_photo_url,
+        created_at,
+        updated_at
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,now(),now()
+      )
+      RETURNING id, asset_uid, status, memo, scanned_at, synced, user_team, user_id, asset_type, verified, barcode_photo_url
+      `,
+      [
+        id,
+        assetUid,
+        status,
+        memo,
+        new Date(scannedAt),
+        synced,
+        userTeam,
+        userId === undefined ? null : userId,
+        assetType,
+        isVerified,
+        barcodePhotoUrl,
+      ]
+    );
+
+    return this.#mapInspectionRow(result.rows[0]);
   }
 
-  updateInspection(id, payload) {
-    const existing = this.inspections.get(id);
-    if (!existing) {
+  async updateInspection(id, payload) {
+    const result = await this.pool.query(
+      `
+      UPDATE inspections
+      SET
+        status = COALESCE($2, status),
+        memo = CASE WHEN $3 IS NULL THEN memo ELSE $3 END,
+        scanned_at = COALESCE($4, scanned_at),
+        synced = COALESCE($5, synced),
+        updated_at = now()
+      WHERE id = $1
+      RETURNING id, asset_uid, status, memo, scanned_at, synced, user_team, user_id, asset_type, verified, barcode_photo_url
+      `,
+      [
+        id,
+        normalizeString(payload.status),
+        payload.memo === undefined ? null : normalizeString(payload.memo),
+        payload.scannedAt ? new Date(payload.scannedAt) : null,
+        payload.synced === undefined ? null : Boolean(payload.synced),
+      ]
+    );
+
+    if (result.rowCount === 0) {
       throw new Error('Inspection not found');
     }
-    const updated = {
-      ...existing,
-      status: normalizeString(payload.status) ?? existing.status,
-      memo: payload.memo !== undefined ? normalizeString(payload.memo) : existing.memo,
-      scannedAt: toIsoString(payload.scannedAt) ?? existing.scannedAt,
-      synced: payload.synced !== undefined ? normalizeBoolean(payload.synced) ?? existing.synced : existing.synced,
-    };
-    this.inspections.set(id, updated);
-    return updated;
+
+    return this.#mapInspectionRow(result.rows[0]);
   }
 
-  deleteInspection(id) {
-    const existed = this.inspections.delete(id);
-    return existed;
+  async deleteInspection(id) {
+    const result = await this.pool.query('DELETE FROM inspections WHERE id = $1', [id]);
+    return result.rowCount > 0;
   }
 
-  latestInspectionByAsset(uid) {
-    const inspections = Array.from(this.inspections.values()).filter((item) => item.assetUid === uid);
-    if (!inspections.length) return undefined;
-    inspections.sort((a, b) => new Date(b.scannedAt) - new Date(a.scannedAt));
-    return inspections[0];
-  }
-
-  listVerifications({ team, assetUid, page = 0, pageSize = DEFAULT_PAGE_SIZE } = {}) {
-    let items = Array.from(this.assets.values()).map((asset) => this.#composeVerification(asset.uid));
-    if (assetUid) {
-      const lowered = assetUid.trim().toLowerCase();
-      items = items.filter((item) => item.assetUid.toLowerCase().includes(lowered));
-    }
-    if (team) {
-      const lowered = team.trim().toLowerCase();
-      items = items.filter((item) => {
-        const targetTeam = item.team?.toLowerCase();
-        return targetTeam?.includes(lowered);
-      });
-    }
-    const total = items.length;
-    const start = Number(page) * Number(pageSize);
-    const end = start + Number(pageSize);
-    const paged = items.slice(start, end);
-    return {
-      items: paged,
-      page: Number(page),
-      pageSize: Number(pageSize),
-      total,
-    };
-  }
-
-  getVerificationDetail(assetUid) {
-    const asset = this.assets.get(assetUid);
-    if (!asset) return undefined;
-    return this.#composeVerification(assetUid, { includeAsset: true, includeHistory: true });
-  }
-
-  #composeVerification(assetUid, { includeAsset = false, includeHistory = false } = {}) {
-    const asset = this.assets.get(assetUid);
-    if (!asset) {
+  async latestInspectionByAsset(assetUid) {
+    const result = await this.pool.query(
+      `
+      SELECT id, asset_uid, status, memo, scanned_at, synced, user_team, user_id, asset_type, verified, barcode_photo_url
+      FROM inspections
+      WHERE asset_uid = $1
+      ORDER BY scanned_at DESC
+      LIMIT 1
+      `,
+      [assetUid]
+    );
+    if (result.rowCount === 0) {
       return undefined;
     }
-    const signature = this.signaturesByAsset.get(assetUid);
-    const latestInspection = this.latestInspectionByAsset(assetUid);
-    const verification = {
-      assetUid,
+    return this.#mapInspectionRow(result.rows[0]);
+  }
+
+  async listVerifications({ team, assetUid, page = 0, pageSize = DEFAULT_PAGE_SIZE } = {}) {
+    const filters = [];
+    const params = [];
+
+    if (assetUid) {
+      params.push(`%${assetUid.trim().toLowerCase()}%`);
+      const idx = params.length;
+      filters.push(`LOWER(a.uid) LIKE $${idx}`);
+    }
+
+    if (team) {
+      params.push(`%${team.trim().toLowerCase()}%`);
+      const idx = params.length;
+      filters.push(`(
+        LOWER(COALESCE(a.metadata->>'organization', '')) LIKE $${idx} OR
+        LOWER(COALESCE(a.metadata->>'organization_team', '')) LIKE $${idx} OR
+        LOWER(COALESCE(u.department_hq, '')) LIKE $${idx} OR
+        LOWER(COALESCE(u.department_dept, '')) LIKE $${idx} OR
+        LOWER(COALESCE(u.department_team, '')) LIKE $${idx} OR
+        LOWER(COALESCE(u.department_part, '')) LIKE $${idx}
+      )`);
+    }
+
+    const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const limit = Number(pageSize);
+    const offset = Number(page) * limit;
+
+    const baseQuery = `
+      FROM assets a
+      LEFT JOIN users u ON a.owner_user_id = u.id
+      LEFT JOIN LATERAL (
+        SELECT s.id AS signature_id,
+               s.user_id AS signature_user_id,
+               s.user_name AS signature_user_name,
+               s.storage_location AS signature_storage_location,
+               s.sha256 AS signature_sha256,
+               s.captured_at AS signature_captured_at
+        FROM signatures s
+        WHERE s.asset_uid = a.uid
+        ORDER BY s.captured_at DESC
+        LIMIT 1
+      ) sig ON true
+      LEFT JOIN LATERAL (
+        SELECT i.scanned_at AS latest_scanned_at,
+               i.status AS latest_status
+        FROM inspections i
+        WHERE i.asset_uid = a.uid
+        ORDER BY i.scanned_at DESC
+        LIMIT 1
+      ) latest ON true
+      ${whereClause}
+    `;
+
+    const rowsResult = await this.pool.query(
+      `
+      SELECT
+        a.uid,
+        a.asset_type,
+        a.status,
+        a.metadata,
+        a.location_text,
+        a.building,
+        a.floor,
+        a.location_row,
+        a.location_col,
+        a.barcode_photo_url,
+        u.id AS owner_id,
+        u.name AS owner_name,
+        u.department_hq,
+        u.department_dept,
+        u.department_team,
+        u.department_part,
+        sig.signature_id,
+        sig.signature_user_id,
+        sig.signature_user_name,
+        sig.signature_storage_location,
+        sig.signature_sha256,
+        sig.signature_captured_at,
+        latest.latest_scanned_at,
+        latest.latest_status
+      ${baseQuery}
+      ORDER BY a.uid ASC
+      LIMIT $${params.length + 1}
+      OFFSET $${params.length + 2}
+      `,
+      [...params, limit, offset]
+    );
+
+    const countResult = await this.pool.query(
+      `
+      SELECT COUNT(*) AS total
+      ${baseQuery}
+      `,
+      params
+    );
+
+    const items = rowsResult.rows.map((row) => this.#mapVerificationSummary(row));
+    const total = Number.parseInt(countResult.rows[0]?.total ?? '0', 10);
+
+    return {
+      items,
+      total,
+      page: Number(page),
+      pageSize: limit,
+    };
+  }
+
+  async getVerificationDetail(assetUid) {
+    const rowsResult = await this.pool.query(
+      `
+      SELECT
+        a.uid,
+        a.name,
+        a.asset_type,
+        a.model_name,
+        a.serial_number,
+        a.vendor,
+        a.status,
+        a.location_text,
+        a.building,
+        a.floor,
+        a.location_row,
+        a.location_col,
+        a.metadata,
+        a.owner_user_id,
+        a.barcode_photo_url,
+        u.name AS owner_name,
+        u.department_hq,
+        u.department_dept,
+        u.department_team,
+        u.department_part,
+        sig.signature_id,
+        sig.signature_user_id,
+        sig.signature_user_name,
+        sig.signature_storage_location,
+        sig.signature_sha256,
+        sig.signature_captured_at,
+        latest.latest_scanned_at,
+        latest.latest_status
+      FROM assets a
+      LEFT JOIN users u ON a.owner_user_id = u.id
+      LEFT JOIN LATERAL (
+        SELECT s.id AS signature_id,
+               s.user_id AS signature_user_id,
+               s.user_name AS signature_user_name,
+               s.storage_location AS signature_storage_location,
+               s.sha256 AS signature_sha256,
+               s.captured_at AS signature_captured_at
+        FROM signatures s
+        WHERE s.asset_uid = a.uid
+        ORDER BY s.captured_at DESC
+        LIMIT 1
+      ) sig ON true
+      LEFT JOIN LATERAL (
+        SELECT i.scanned_at AS latest_scanned_at,
+               i.status AS latest_status
+        FROM inspections i
+        WHERE i.asset_uid = a.uid
+        ORDER BY i.scanned_at DESC
+        LIMIT 1
+      ) latest ON true
+      WHERE a.uid = $1
+      LIMIT 1
+      `,
+      [assetUid]
+    );
+
+    if (rowsResult.rowCount === 0) {
+      return undefined;
+    }
+
+    const row = rowsResult.rows[0];
+    const asset = this.#mapAssetRow(row);
+    const signatureMeta = this.#mapSignatureMeta(row);
+    const latestInspection = row.latest_scanned_at
+      ? {
+          scannedAt: new Date(row.latest_scanned_at).toISOString(),
+          status: row.latest_status ?? asset.status,
+        }
+      : undefined;
+    const history = await this.listInspections({ assetUid, pageSize: 100 });
+
+    return {
+      assetUid: asset.uid,
       team: asset.organization,
-      user: asset.owner
-        ? { id: asset.owner.id, name: asset.owner.name }
-        : undefined,
+      user: asset.owner ? { id: asset.owner.id, name: asset.owner.name } : undefined,
       assetType: asset.assetType,
       barcodePhoto: Boolean(asset.barcodePhotoUrl),
-      signature: Boolean(signature),
-      latestInspection: latestInspection
-        ? {
-            scannedAt: latestInspection.scannedAt,
-            status: latestInspection.status,
-          }
-        : undefined,
+      signature: Boolean(signatureMeta),
+      latestInspection,
+      asset,
+      signatureMeta,
+      history: history.items,
     };
-    if (includeAsset) {
-      verification.asset = {
-        ...asset,
-        metadata: { ...asset.metadata },
-      };
-      verification.signatureMeta = signature;
-    }
-    if (includeHistory) {
-      verification.history = this.listInspections({ assetUid, pageSize: 100 }).items;
-    }
-    return verification;
   }
 
-  recordSignature(assetUid, metadata) {
-    const signatureId = metadata.signatureId ?? randomUUID();
-    const record = {
-      assetUid,
-      signatureId,
-      fileName: metadata.fileName,
-      storedAt: toIsoString(metadata.storedAt) ?? new Date().toISOString(),
-      userId: metadata.userId,
-      userName: metadata.userName,
+  async recordSignature(assetUid, metadata) {
+    const fileName = normalizeString(metadata.fileName);
+    if (!fileName) {
+      throw new Error('fileName is required');
+    }
+    const absolutePath = path.join(this.signatureDir, fileName);
+    const fileBuffer = await readFile(absolutePath);
+    const sha256 = createHash('sha256').update(fileBuffer).digest('hex');
+    const storedAt = metadata.storedAt ? new Date(metadata.storedAt) : new Date();
+    const userId = normalizeUserId(metadata.userId);
+    const userName = normalizeString(metadata.userName);
+
+    const result = await this.pool.query(
+      `
+      INSERT INTO signatures (
+        asset_uid,
+        user_id,
+        user_name,
+        storage_location,
+        sha256,
+        captured_at,
+        migrated
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,false
+      )
+      RETURNING id, asset_uid, user_id, user_name, storage_location, sha256, captured_at
+      `,
+      [
+        assetUid,
+        userId === undefined ? null : userId,
+        userName,
+        fileName,
+        sha256,
+        storedAt,
+      ]
+    );
+
+    const row = result.rows[0];
+    return {
+      signatureId: String(row.id),
+      assetUid: row.asset_uid,
+      storageLocation: row.storage_location,
+      sha256: row.sha256,
+      userId: row.user_id === null || row.user_id === undefined ? undefined : String(row.user_id),
+      userName: row.user_name ?? undefined,
+      capturedAt: new Date(row.captured_at).toISOString(),
     };
-    this.signaturesByAsset.set(assetUid, record);
-    this.signaturesById.set(signatureId, record);
-    return record;
   }
 
-  findSignatureById(signatureId) {
-    return this.signaturesById.get(signatureId);
+  async findSignatureById(signatureId) {
+    const result = await this.pool.query(
+      `
+      SELECT id, asset_uid, user_id, user_name, storage_location, sha256, captured_at
+      FROM signatures
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [signatureId]
+    );
+    if (result.rowCount === 0) {
+      return undefined;
+    }
+    const row = result.rows[0];
+    return {
+      signatureId: String(row.id),
+      assetUid: row.asset_uid,
+      storageLocation: row.storage_location,
+      sha256: row.sha256,
+      userId: row.user_id === null || row.user_id === undefined ? undefined : String(row.user_id),
+      userName: row.user_name ?? undefined,
+      capturedAt: new Date(row.captured_at).toISOString(),
+    };
   }
 
   async persistSignatures() {
-    await this.#persistSignatures();
+    // No-op: signatures are persisted immediately in the database.
   }
 
-  getSignatureFilePath(assetUid) {
-    const meta = this.signaturesByAsset.get(assetUid);
-    if (!meta) return undefined;
-    return path.join(this.signatureDir, meta.fileName);
+  async getSignatureFilePath(assetUid) {
+    const result = await this.pool.query(
+      `
+      SELECT storage_location
+      FROM signatures
+      WHERE asset_uid = $1
+      ORDER BY captured_at DESC
+      LIMIT 1
+      `,
+      [assetUid]
+    );
+    if (result.rowCount === 0) {
+      return undefined;
+    }
+    const fileName = result.rows[0].storage_location;
+    if (!fileName) {
+      return undefined;
+    }
+    return path.join(this.signatureDir, fileName);
   }
 
-  batchAssignSignature({ assetUids, signatureId }) {
-    const source = signatureId ? this.signaturesById.get(signatureId) : undefined;
+  async batchAssignSignature({ assetUids, signatureId }) {
+    if (!Array.isArray(assetUids) || assetUids.length === 0) {
+      return [];
+    }
+    const source = await this.findSignatureById(signatureId);
     if (!source) {
       throw new Error('signatureId not found');
     }
+
     const applied = [];
     for (const uid of assetUids) {
-      if (!this.assets.has(uid)) continue;
-      const record = {
-        ...source,
-        assetUid: uid,
-      };
-      this.signaturesByAsset.set(uid, record);
-      this.signaturesById.set(record.signatureId, record);
-      applied.push(uid);
+      const normalized = normalizeString(uid);
+      if (!normalized) continue;
+      const userIdValue = source.userId !== undefined ? Number.parseInt(source.userId, 10) : null;
+      const normalizedUserId = userIdValue !== null && !Number.isNaN(userIdValue) ? userIdValue : null;
+      try {
+        const result = await this.pool.query(
+          `
+          INSERT INTO signatures (
+            asset_uid,
+            user_id,
+            user_name,
+            storage_location,
+            sha256,
+            captured_at,
+            migrated
+          ) VALUES (
+            $1,$2,$3,$4,$5,$6,false
+          )
+          RETURNING asset_uid
+          `,
+          [
+            normalized,
+            normalizedUserId,
+            source.userName ?? null,
+            source.storageLocation,
+            source.sha256 ?? null,
+            new Date(),
+          ]
+        );
+        if (result.rowCount > 0) {
+          applied.push(result.rows[0].asset_uid);
+        }
+      } catch (error) {
+        this.logger.error?.('Failed to assign signature', { assetUid: normalized, error });
+      }
     }
     return applied;
   }
 
-  searchUsers({ q, team }) {
-    let users = Array.from(new Set(this.users.values()));
+  async getAllAssetUids() {
+    const result = await this.pool.query('SELECT uid FROM assets ORDER BY uid ASC');
+    return result.rows.map((row) => row.uid);
+  }
+
+  async searchUsers({ q, team } = {}) {
+    const filters = [];
+    const params = [];
+
     if (q) {
-      const lowered = q.trim().toLowerCase();
-      users = users.filter((user) => {
-        return (
-          user.name.toLowerCase().includes(lowered) ||
-          (user.employeeId && user.employeeId.toLowerCase().includes(lowered))
-        );
-      });
+      params.push(`%${q.trim().toLowerCase()}%`);
+      const idx = params.length;
+      filters.push(`(
+        LOWER(name) LIKE $${idx} OR
+        LOWER(employee_id) LIKE $${idx}
+      )`);
     }
+
     if (team) {
-      const lowered = team.trim().toLowerCase();
-      users = users.filter((user) => user.department?.toLowerCase().includes(lowered));
+      params.push(`%${team.trim().toLowerCase()}%`);
+      const idx = params.length;
+      filters.push(`(
+        LOWER(COALESCE(department_hq, '')) LIKE $${idx} OR
+        LOWER(COALESCE(department_dept, '')) LIKE $${idx} OR
+        LOWER(COALESCE(department_team, '')) LIKE $${idx} OR
+        LOWER(COALESCE(department_part, '')) LIKE $${idx}
+      )`);
     }
-    return users.map((user) => ({
-      id: user.id,
-      name: user.name,
-      department: user.department,
-      employeeId: user.employeeId,
-      numericId: user.numericId,
+
+    const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+
+    const result = await this.pool.query(
+      `
+      SELECT id, name, employee_id, department_hq, department_dept, department_team, department_part
+      FROM users
+      ${whereClause}
+      ORDER BY name ASC
+      LIMIT 100
+      `,
+      params
+    );
+
+    return result.rows.map((row) => ({
+      id: String(row.id),
+      name: row.name ?? '',
+      department: composeDepartment(row),
+      employeeId: row.employee_id ?? undefined,
+      numericId: row.id !== undefined && row.id !== null ? String(row.id) : undefined,
     }));
   }
 
-  searchAssetRefs({ q }) {
-    let assets = Array.from(this.assets.values());
+  async searchAssetRefs({ q } = {}) {
+    const params = [];
+    let whereClause = '';
     if (q) {
-      const lowered = q.trim().toLowerCase();
-      assets = assets.filter((asset) => asset.uid.toLowerCase().includes(lowered));
+      params.push(`%${q.trim().toLowerCase()}%`);
+      const idx = params.length;
+      whereClause = `WHERE LOWER(uid) LIKE $${idx}`;
     }
-    return assets.slice(0, 25).map((asset) => ({
-      uid: asset.uid,
-      name: asset.name,
-      assetType: asset.assetType,
+
+    const result = await this.pool.query(
+      `
+      SELECT uid, name, asset_type
+      FROM assets
+      ${whereClause}
+      ORDER BY uid ASC
+      LIMIT 25
+      `,
+      params
+    );
+
+    return result.rows.map((row) => ({
+      uid: row.uid,
+      name: row.name ?? '',
+      assetType: row.asset_type ?? '',
     }));
+  }
+
+  #mapAssetRow(row) {
+    const metadata = mapMetadata(row.metadata);
+    const ownerDepartment = composeDepartment(row);
+    const ownerId = row.owner_user_id === null || row.owner_user_id === undefined ? undefined : String(row.owner_user_id);
+    const owner = ownerId
+      ? {
+          id: ownerId,
+          name: row.owner_name ?? '미상',
+          department: ownerDepartment || undefined,
+        }
+      : undefined;
+    const organization = resolveOrganization(metadata, ownerDepartment);
+    const barcodePhotoUrl = resolveBarcodePhotoUrl(row, metadata);
+
+    return {
+      uid: row.uid,
+      name: row.name ?? owner?.name ?? '미배정',
+      assetType: row.asset_type ?? '',
+      modelName: row.model_name ?? '',
+      serialNumber: row.serial_number ?? '',
+      status: row.status ?? '사용',
+      vendor: row.vendor ?? '',
+      location: composeLocation(row),
+      organization,
+      metadata,
+      owner,
+      barcodePhotoUrl,
+    };
+  }
+
+  #mapInspectionRow(row) {
+    return {
+      id: row.id,
+      assetUid: row.asset_uid,
+      status: row.status ?? '사용',
+      memo: row.memo ?? undefined,
+      scannedAt: new Date(row.scanned_at).toISOString(),
+      synced: row.synced ?? false,
+      userTeam: row.user_team ?? undefined,
+      userId: row.user_id === null || row.user_id === undefined ? undefined : String(row.user_id),
+      assetType: row.asset_type ?? undefined,
+      isVerified: row.verified ?? false,
+      barcodePhotoUrl: row.barcode_photo_url ?? undefined,
+    };
+  }
+
+  #mapSignatureMeta(row) {
+    if (!row.signature_id) {
+      return undefined;
+    }
+    return {
+      signatureId: String(row.signature_id),
+      userId: row.signature_user_id === null || row.signature_user_id === undefined ? undefined : String(row.signature_user_id),
+      userName: row.signature_user_name ?? undefined,
+      storageLocation: row.signature_storage_location,
+      sha256: row.signature_sha256 ?? undefined,
+      capturedAt: row.signature_captured_at ? new Date(row.signature_captured_at).toISOString() : undefined,
+    };
+  }
+
+  #mapVerificationSummary(row) {
+    const metadata = mapMetadata(row.metadata);
+    const ownerDepartment = composeDepartment(row);
+    const organization = resolveOrganization(metadata, ownerDepartment);
+    const barcodePhotoUrl = resolveBarcodePhotoUrl(row, metadata);
+    const signatureMeta = this.#mapSignatureMeta(row);
+
+    return {
+      assetUid: row.uid,
+      team: organization,
+      user: row.owner_id !== null && row.owner_id !== undefined
+        ? { id: String(row.owner_id), name: row.owner_name ?? '미상' }
+        : undefined,
+      assetType: row.asset_type ?? '',
+      barcodePhoto: Boolean(barcodePhotoUrl),
+      signature: Boolean(signatureMeta),
+      latestInspection: row.latest_scanned_at
+        ? {
+            scannedAt: new Date(row.latest_scanned_at).toISOString(),
+            status: row.latest_status ?? row.status ?? '사용',
+          }
+        : undefined,
+    };
   }
 }
 
