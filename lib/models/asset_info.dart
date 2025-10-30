@@ -11,7 +11,7 @@ class AssetInfo {
     this.organization = '',
     this.owner,
     this.barcodePhotoUrl,
-    Map<String, String> metadata = const {},
+    Map<String, String> metadata = const {}, required String assets_types,
   }) : metadata = Map.unmodifiable(metadata);
 
   factory AssetInfo.fromJson(Map<String, dynamic> json) {
@@ -35,7 +35,7 @@ class AssetInfo {
       organization: json['organization'] as String? ?? '',
       owner: ownerJson is Map<String, dynamic> ? OwnerInfo.fromJson(ownerJson) : null,
       barcodePhotoUrl: json['barcodePhotoUrl'] as String?,
-      metadata: metadata,
+      metadata: metadata, assets_types: '',
     );
   }
 
@@ -96,7 +96,7 @@ class AssetInfo {
       organization: organization ?? this.organization,
       owner: owner ?? this.owner,
       metadata: metadata ?? this.metadata,
-      barcodePhotoUrl: barcodePhotoUrl ?? this.barcodePhotoUrl,
+      barcodePhotoUrl: barcodePhotoUrl ?? this.barcodePhotoUrl, assets_types: '',
     );
   }
 }

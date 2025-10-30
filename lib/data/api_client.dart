@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import '../models/asset_info.dart';
@@ -197,6 +198,12 @@ class ApiClient {
       throw ApiException('Request failed (${response.statusCode}): ${response.body}');
     }
   }
+
+  uploadSignature({required String assetUid, required Uint8List bytes, required String fileName, required String userId, required String userName}) {}
+
+  fetchVerificationDetail(String assetUid) {}
+
+  downloadSignature(String s) {}
 }
 
 class ApiException implements Exception {

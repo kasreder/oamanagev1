@@ -136,7 +136,7 @@ class MockDataLoader {
                 )
               : null,
           barcodePhotoUrl: metadata['barcode_photo_url'] ?? metadata['barcodePhotoUrl'],
-          metadata: metadata,
+          metadata: metadata, assets_types: '',
         ),
       );
     }
