@@ -1,6 +1,6 @@
 <!-- Path: README.md -->
 
-# OA Manage v2
+# OA Manage v1
 
 OA 자산 실사 관리 앱입니다. 백엔드 REST API와 연동하여 자산/사용자/실사 정보를 동기화하고, QR 스캔으로 신규 실사를 생성합니다.
 
