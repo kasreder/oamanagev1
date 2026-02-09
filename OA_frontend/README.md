@@ -13,20 +13,26 @@
 OA 자산의 효율적인 관리 및 실사를 위한 웹/모바일 통합 애플리케이션 개발
 
 ### 1.2 주요 기능
-본 시스템은 다음 **세 가지 핵심 기능**을 제공합니다:
+본 시스템은 다음 **네 가지 핵심 기능**을 제공합니다:
 
 #### 1) 자산관리
 - **자산 등록**: 신규 OA 자산 정보 입력 및 QR 코드 생성
 - **자산 변경**: 기존 자산 정보 수정 (위치, 담당자, 상태 등)
 - **자산 삭제**: 폐기/이관된 자산 삭제 처리
+- **자산 유형별 관리**: 데스크탑, 모니터, 노트북, IP전화기, 스캐너, 프린터, 태블릿, 테스트폰
 
 #### 2) 자산실사
 - **위치 정보 관리**: 건물, 층수, 자리번호 기반 자산 위치 추적
 - **QR 촬영 확인**: 모바일 카메라를 통한 QR 스캔으로 자산 실사
-- **실사 사인**: 실사 담당자 서명 기능으로 책임 소재 명확화
-- **실사 기록 저장**: 실사 일시, 담당자, 자산 상태 등 이력 관리
+- **실사 사인**: 실사 담당자 친필 서명 기능으로 책임 소재 명확화
+- **실사 기록 저장**: 실사 일시, 담당자, 자산 상태, 서명 이미지 등 이력 관리
 
-#### 3) 실시간 현황 파악
+#### 3) 도면 관리
+- **도면 등록/수정/삭제**: 건물별 층별 도면 이미지 관리
+- **격자 기반 위치 지정**: 도면 위 격자로 자산 위치 시각화
+- **자산 마커**: 도면 위 자산 위치 표시 및 상태별 색상 구분
+
+#### 4) 실시간 현황 파악
 - **자산 정보 대시보드**: 전체 자산 현황 실시간 조회
 - **실사 진행률**: 미검증 자산 및 실사 완료율 통계
 - **검색 및 필터링**: 자산 코드, 담당자, 위치 기반 검색
@@ -90,11 +96,13 @@ lib/
 ├── screens/                       # 화면 UI
 │   ├── home_page.dart             # 홈 대시보드
 │   ├── scan_page.dart             # QR 스캔 화면
-│   ├── list_page.dart             # 자산 리스트 (그룹화 표시)
+│   ├── asset_list_page.dart       # 자산 목록 (건물별/부서별 그룹화)
+│   ├── inspection_list_page.dart  # 실사 기록 목록
 │   ├── detail_page.dart           # 자산 상세 및 편집
 │   ├── signature_page.dart        # 친필 서명 화면
 │   ├── drawing_manager_page.dart  # 도면 관리 화면 (추가/삭제)
-│   └── drawing_viewer_page.dart   # 도면 뷰어 (격자+자산위치)
+│   ├── drawing_viewer_page.dart   # 도면 뷰어 (격자+자산위치)
+│   └── unverified_page.dart       # 미검증 자산 목록
 ├── widgets/                       # 재사용 컴포넌트
 │   ├── common/                    # 공통 위젯
 │   ├── signature_pad.dart         # 서명 패드 위젯
@@ -226,9 +234,53 @@ lib/
 
 ---
 
-## 6. API 연동 명세
+## 6. UI/UX 디자인 가이드
 
-### 6.1 엔드포인트
+### 6.1 디자인 시스템
+- **Material 3 (Material You)** 기반
+- **Dynamic Color**: 기기 테마 색상 연동 (Android 12+)
+
+### 6.2 색상 팔레트
+| 용도 | Light Mode | Dark Mode | 설명 |
+|------|-----------|-----------|------|
+| Primary | `#1565C0` | `#90CAF9` | 주요 버튼, 앱바, 선택 상태 |
+| Secondary | `#2E7D32` | `#A5D6A7` | 보조 액션, 실사 완료 표시 |
+| Error | `#C62828` | `#EF9A9A` | 에러, 삭제, 고장 상태 |
+| Surface | `#FFFFFF` | `#1C1B1F` | 카드, 바텀시트 배경 |
+| On Surface | `#1C1B1F` | `#E6E1E5` | 텍스트, 아이콘 |
+
+### 6.3 자산 상태별 색상
+| 상태 | 색상 | 용도 |
+|------|------|------|
+| 정상 (사용) | `#4CAF50` (Green) | 리스트 뱃지, 도면 마커 |
+| 가용 | `#2196F3` (Blue) | 리스트 뱃지, 도면 마커 |
+| 점검필요 | `#FF9800` (Orange) | 리스트 뱃지, 도면 마커 |
+| 고장 | `#F44336` (Red) | 리스트 뱃지, 도면 마커 |
+| 이동 | `#9C27B0` (Purple) | 리스트 뱃지, 도면 마커 |
+
+### 6.4 타이포그래피
+| 스타일 | 크기 | 용도 |
+|--------|------|------|
+| Title Large | 22sp | 화면 타이틀 |
+| Title Medium | 16sp | 카드 헤더, 섹션 제목 |
+| Body Large | 16sp | 본문 텍스트 |
+| Body Medium | 14sp | 리스트 항목, 폼 입력 |
+| Label Small | 11sp | 뱃지, 캡션, 도면 격자 라벨 |
+
+### 6.5 공통 UI 상태
+모든 데이터 화면은 다음 **4가지 상태**를 반드시 구현:
+| 상태 | UI |
+|------|------|
+| **로딩** | 중앙 CircularProgressIndicator 또는 Shimmer |
+| **데이터 있음** | 정상 콘텐츠 표시 |
+| **빈 상태** | 안내 일러스트 + 메시지 (예: "등록된 자산이 없습니다") |
+| **에러** | 에러 메시지 + 재시도 버튼 |
+
+---
+
+## 7. API 연동 명세
+
+### 7.1 엔드포인트
 | 메서드 | 경로 | 설명 |
 |--------|------|------|
 | GET | `/api/assets` | 자산 목록 조회 |
@@ -236,8 +288,14 @@ lib/
 | POST | `/api/assets` | 자산 등록 |
 | PUT | `/api/assets/:id` | 자산 수정 |
 | DELETE | `/api/assets/:id` | 자산 삭제 |
+| GET | `/api/users` | 사용자(사원) 목록 조회 |
+| GET | `/api/users/:id` | 사용자 상세 조회 |
 | GET | `/api/inspections` | 실사 목록 조회 |
 | POST | `/api/inspections` | 실사 기록 생성 |
+| PUT | `/api/inspections/:id` | 실사 기록 수정 |
+| DELETE | `/api/inspections/:id` | 실사 기록 삭제 |
+| POST | `/api/inspections/:id/signature` | 실사 서명 이미지 업로드 |
+| GET | `/api/inspections/:id/signature` | 실사 서명 이미지 조회 |
 | **GET** | **`/api/drawings`** | **도면 목록 조회** |
 | **GET** | **`/api/drawings/:id`** | **도면 상세 조회** |
 | **POST** | **`/api/drawings`** | **도면 등록 (이미지 업로드 포함)** |
@@ -245,7 +303,7 @@ lib/
 | **DELETE** | **`/api/drawings/:id`** | **도면 삭제** |
 | **GET** | **`/api/drawings/:id/assets`** | **도면 내 자산 목록 조회** |
 
-### 6.2 요청/응답 예시
+### 7.2 요청/응답 예시
 ```json
 // POST /api/inspections
 {
@@ -260,16 +318,16 @@ lib/
 
 ---
 
-## 7. 데이터 모델 (DB 스키마)
+## 8. 데이터 모델 (DB 스키마)
 
-### 7.1 assets (자산 정보)
+### 8.1 assets (자산 정보)
 | 컬럼 | 타입 | 설명                  |
 | --- | --- |---------------------|
 | `id` | INTEGER | 자산 기본 키             |
 | `asset_uid` | TEXT | 자산 고유 코드(실사 시 매칭 키) |
 | `name` | TEXT | 자산 명칭 또는 사용자        |
 | `assets_status` | TEXT | 사용/가용/이동 등 자산 상태    |
-| `category` | TEXT | 자산 분류(사무기기, 네트워크 등) |
+| `category` | TEXT | 자산 분류(데스크탑/모니터/노트북/IP전화기/스캐너/프린터/태블릿/테스트폰) |
 | `serial_number` | TEXT | 시리얼 번호              |
 | `model_name` | TEXT | 모델명                 |
 | `vendor` | TEXT | 제조사                 |
@@ -290,8 +348,129 @@ lib/
 | `created_at` | DATETIME | 생성일                 |
 | `updated_at` | DATETIME | 수정일                 |
 | `user_id` | INTEGER | 자산 담당 사용자 FK        |
+| `specifications` | JSON | 자산 유형별 추가 사양 (하이브리드 방식) |
 
-### 7.2 users (사원 정보)
+> **설계 방침**: 공통 항목은 assets 테이블 컬럼으로 관리하고, 자산 유형(category)별로 다른 추가 사양은 `specifications` JSON 컬럼에 저장합니다. 이 하이브리드 방식은 공통 필드의 검색/정렬 성능을 유지하면서, 자산 유형별 확장에 유연하게 대응할 수 있습니다.
+
+### 8.2 자산 유형별 specifications JSON 구조
+
+#### 데스크탑 (`category: "데스크탑"`)
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `ram_capacity` | TEXT | 램 용량 (예: "16GB", "32GB") |
+| `ram_slots` | INTEGER | 램 슬롯 수 (예: 2, 4) |
+| `os_type` | TEXT | OS 종류 (예: "Windows", "Linux", "macOS") |
+| `os_version` | TEXT | OS 버전 (예: "11", "10") |
+| `os_detail_version` | TEXT | OS 상세 버전 (예: "22H2", "23H1") |
+
+```json
+{
+  "ram_capacity": "16GB",
+  "ram_slots": 2,
+  "os_type": "Windows",
+  "os_version": "11",
+  "os_detail_version": "22H2"
+}
+```
+
+#### 모니터 (`category: "모니터"`)
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `size_inch` | REAL | 화면 크기 (인치, 예: 27.0) |
+| `resolution` | TEXT | 해상도 (예: "2560x1440", "1920x1080") |
+| `is_4k` | BOOLEAN | 4K 지원 여부 (true/false) |
+
+```json
+{
+  "size_inch": 27.0,
+  "resolution": "2560x1440",
+  "is_4k": true
+}
+```
+
+#### IP전화기 (`category: "IP전화기"`)
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `phone_number1` | TEXT | 전화번호1 (예: "02-1234-5678") |
+| `phone_number2` | TEXT | 전화번호2 (예: "02-8765-4321") |
+
+```json
+{
+  "phone_number1": "02-1234-5678",
+  "phone_number2": "02-8765-4321"
+}
+```
+
+#### 노트북 (`category: "노트북"`)
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `ram_capacity` | TEXT | 램 용량 (예: "16GB", "32GB") |
+| `os_type` | TEXT | OS 종류 (예: "Windows", "macOS") |
+| `os_version` | TEXT | OS 버전 (예: "11", "Sonoma") |
+| `os_detail_version` | TEXT | OS 상세 버전 (예: "23H2") |
+| `supports_5g` | BOOLEAN | 5G 지원 여부 (true/false) |
+
+```json
+{
+  "ram_capacity": "16GB",
+  "os_type": "Windows",
+  "os_version": "11",
+  "os_detail_version": "23H2",
+  "supports_5g": false
+}
+```
+
+#### 스캐너 (`category: "스캐너"`)
+추가 관리 항목 없음 → `specifications`는 `{}` 또는 `null`
+
+#### 프린터 (`category: "프린터"`)
+추가 관리 항목 없음 → `specifications`는 `{}` 또는 `null`
+
+#### 태블릿 (`category: "태블릿"`)
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `ram_capacity` | TEXT | 램 용량 (예: "8GB", "12GB") |
+| `os_type` | TEXT | OS 종류 (예: "Android", "iOS") |
+| `os_version` | TEXT | OS 버전 (예: "14", "17.2") |
+| `os_detail_version` | TEXT | OS 상세 버전 (예: "One UI 6.0") |
+| `supports_5g` | BOOLEAN | 5G 지원 여부 (true/false) |
+| `has_keyboard` | BOOLEAN | 키보드 지급 여부 (true/false) |
+| `has_pen` | BOOLEAN | 펜 지급 여부 (true/false) |
+
+```json
+{
+  "ram_capacity": "8GB",
+  "os_type": "Android",
+  "os_version": "14",
+  "os_detail_version": "One UI 6.0",
+  "supports_5g": true,
+  "has_keyboard": true,
+  "has_pen": false
+}
+```
+
+#### 테스트폰 (`category: "테스트폰"`)
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `ram_capacity` | TEXT | 램 용량 (예: "8GB", "12GB") |
+| `os_type` | TEXT | OS 종류 (예: "Android", "iOS") |
+| `os_version` | TEXT | OS 버전 (예: "14", "17.2") |
+| `os_detail_version` | TEXT | OS 상세 버전 (예: "One UI 6.0") |
+| `supports_5g` | BOOLEAN | 5G 지원 여부 (true/false) |
+
+```json
+{
+  "ram_capacity": "8GB",
+  "os_type": "Android",
+  "os_version": "14",
+  "os_detail_version": "One UI 6.0",
+  "supports_5g": true
+}
+```
+
+> **참고**: `specifications` JSON의 구조는 `category` 값에 따라 결정됩니다. 프론트엔드에서는 category별로 동적 폼을 렌더링하여 해당 필드만 입력받습니다. 향후 새로운 자산 유형이 추가되더라도 테이블 스키마 변경 없이 JSON 구조만 정의하면 됩니다.
+
+### 8.3 users (사원 정보)
 | 컬럼 | 타입 | 설명 |
 | --- | --- | --- |
 | `id` | INTEGER | 사용자 기본 키 |
@@ -305,7 +484,7 @@ lib/
 | `work_building` | TEXT | 근무 건물 |
 | `work_floor` | TEXT | 근무 층 |
 
-### 7.3 asset_inspections (실사 기록)
+### 8.4 asset_inspections (실사 기록)
 | 컬럼 | 타입 | 설명 |
 | --- | --- | --- |
 | `id` | INTEGER 또는 TEXT | 실사 기본 키(없을 경우 `ins_{asset_uid}` 형태 생성) |
@@ -322,9 +501,10 @@ lib/
 | `department_confirm` | TEXT | 확인 부서 |
 | `status` | TEXT | 앱에서 병합된 상태(assets 상태와 동기화) |
 | `memo` | TEXT | 점검 메모(점검자/소속/모델 등) |
+| `signature_image` | TEXT | 친필 서명 이미지 파일 경로 또는 URL (PNG) |
 | `synced` | BOOLEAN | 서버 동기화 여부 |
 
-### 7.4 drawings (도면 정보)
+### 8.5 drawings (도면 정보)
 | 컬럼 | 타입 | 설명 |
 | --- | --- | --- |
 | `id` | INTEGER | 도면 기본 키 |
@@ -341,12 +521,12 @@ lib/
 
 ---
 
-## 8. 상태 관리
+## 9. 상태 관리
 
-### 8.1 Riverpod 기반 상태 관리
+### 9.1 Riverpod 기반 상태 관리
 본 프로젝트는 **Flutter Riverpod**을 사용하여 상태를 관리합니다.
 
-### 8.2 AssetNotifier
+### 9.2 AssetNotifier
 ```dart
 // 자산 목록 Notifier
 @riverpod
@@ -365,7 +545,7 @@ class AssetNotifier extends _$AssetNotifier {
 }
 ```
 
-### 8.3 InspectionNotifier
+### 9.3 InspectionNotifier
 ```dart
 // 실사 기록 Notifier
 @riverpod
@@ -380,7 +560,7 @@ class InspectionNotifier extends _$InspectionNotifier {
 }
 ```
 
-### 8.4 SignatureNotifier
+### 9.4 SignatureNotifier
 ```dart
 // 서명 상태 Notifier
 @riverpod
@@ -393,7 +573,7 @@ class SignatureNotifier extends _$SignatureNotifier {
 }
 ```
 
-### 8.5 DrawingNotifier
+### 9.5 DrawingNotifier
 ```dart
 // 도면 관리 Notifier
 @riverpod
@@ -421,9 +601,9 @@ class DrawingNotifier extends _$DrawingNotifier {
 
 ---
 
-## 9. 라우팅
+## 10. 라우팅
 
-### 9.1 GoRouter 설정
+### 10.1 GoRouter 설정
 ```dart
 final router = GoRouter(
   routes: [
@@ -442,14 +622,114 @@ final router = GoRouter(
 
 ---
 
-## 10. 개발 환경 설정
+## 11. 인증/보안
 
-### 10.1 의존성 설치
+### 11.1 인증 방식
+- **JWT (JSON Web Token)** 기반 인증
+- 로그인 → Access Token + Refresh Token 발급
+- Access Token: API 요청 시 `Authorization: Bearer {token}` 헤더 포함
+- Refresh Token: Access Token 만료 시 자동 갱신
+
+### 11.2 로그인 플로우
+1. 사번 + 비밀번호 입력
+2. `POST /api/auth/login` → 토큰 발급
+3. 토큰을 `SharedPreferences` (또는 `flutter_secure_storage`)에 저장
+4. 이후 모든 API 요청에 토큰 자동 포함 (Dio Interceptor)
+
+### 11.3 토큰 관리
+| 항목 | 설명 |
+|------|------|
+| Access Token 만료 | 30분 (백엔드 협의) |
+| Refresh Token 만료 | 7일 |
+| 자동 갱신 | Dio Interceptor에서 401 응답 시 Refresh Token으로 재발급 |
+| 강제 로그아웃 | Refresh Token 만료 시 로그인 화면 이동 |
+
+### 11.4 보안 정책
+- API 통신: **HTTPS 필수**
+- 토큰 저장: `flutter_secure_storage` 권장 (암호화 저장)
+- 민감 정보 (비밀번호 등) 로컬 저장 금지
+- 앱 백그라운드 전환 시 화면 마스킹 (선택 사항)
+
+---
+
+## 12. 에러/예외 처리
+
+### 12.1 API 에러 처리
+| HTTP 상태 | 처리 |
+|-----------|------|
+| 400 Bad Request | 입력값 검증 에러 → 필드별 에러 메시지 표시 |
+| 401 Unauthorized | Access Token 만료 → 자동 갱신 시도, 실패 시 로그인 이동 |
+| 403 Forbidden | 권한 없음 → "접근 권한이 없습니다" 스낵바 |
+| 404 Not Found | 리소스 없음 → "데이터를 찾을 수 없습니다" |
+| 408 Timeout | 요청 시간 초과 → 재시도 버튼 표시 |
+| 500 Server Error | 서버 오류 → "서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요" |
+
+### 12.2 네트워크 에러
+- **연결 없음**: 오프라인 모드 안내 배너 표시 + 로컬 데이터 사용
+- **타임아웃**: 기본 30초, 재시도 버튼 제공
+- **연결 복구**: 자동 감지 → 미동기화 데이터 자동 전송
+
+### 12.3 사용자 입력 검증
+- **필수 입력**: 미입력 시 빨간 테두리 + 에러 메시지
+- **형식 검증**: MAC 주소, 전화번호 등 포맷 체크
+- **중복 검증**: 자산 UID 중복 시 경고
+
+---
+
+## 13. 오프라인/동기화 전략
+
+### 13.1 오프라인 지원 범위
+| 기능 | 오프라인 지원 | 설명 |
+|------|-------------|------|
+| 자산 목록 조회 | O | 마지막 동기화 캐시 데이터 표시 |
+| QR 스캔 실사 | O | 로컬 저장 후 온라인 복귀 시 전송 |
+| 친필 서명 | O | 서명 이미지 로컬 저장 |
+| 자산 등록/수정 | O | 로컬 큐에 저장 후 동기화 |
+| 도면 조회 | O | 캐시된 이미지 사용 |
+| 도면 등록/삭제 | X | 온라인 필수 |
+
+### 13.2 동기화 정책
+- **동기화 시점**: 앱 시작 시 + 네트워크 복구 시 + 수동 새로고침
+- **충돌 해결**: 서버 데이터 우선 (Server Wins), 로컬 변경분은 충돌 시 사용자에게 확인 요청
+- **재시도 정책**: 실패 시 최대 3회 재시도 (지수 백오프: 1초 → 2초 → 4초)
+- **동기화 상태 표시**: 각 레코드의 `synced` 필드로 미동기화 항목 필터링
+
+### 13.3 로컬 저장소
+- **Sqflite**: 자산/실사/사용자 데이터 로컬 캐싱
+- **SharedPreferences**: 설정값, 토큰, 마지막 동기화 시간
+- **파일 시스템**: 서명 이미지 PNG, 도면 이미지 캐시
+
+---
+
+## 14. 로깅/모니터링
+
+### 14.1 앱 로깅
+| 레벨 | 용도 | 예시 |
+|------|------|------|
+| ERROR | 예외 발생, API 실패 | API 500 에러, 파싱 실패 |
+| WARN | 비정상 동작 | 토큰 갱신 실패, 오프라인 전환 |
+| INFO | 주요 사용자 행동 | 로그인, QR 스캔, 실사 저장 |
+| DEBUG | 개발 디버깅 | API 요청/응답, 상태 변경 |
+
+### 14.2 에러 추적
+- **Firebase Crashlytics** (또는 Sentry) 연동
+- 비정상 종료 자동 보고
+- API 에러 자동 리포팅 (상태 코드, 요청 URL)
+
+### 14.3 사용자 분석 (선택 사항)
+- Firebase Analytics 또는 자체 로그 서버
+- 주요 추적 이벤트: 로그인, QR 스캔, 실사 완료, 도면 조회
+
+---
+
+## 15. 개발 환경 설정
+
+### 15.1 의존성 설치
 ```bash
 flutter pub get
 ```
 
-### 10.2 Riverpod 코드 생성 (필수)
+### 15.2 Riverpod 코드 생성 (필수)
 Riverpod의 `@riverpod` 어노테이션을 사용하려면 코드 생성이 필요합니다.
 
 ```bash
@@ -460,7 +740,7 @@ dart run build_runner build
 dart run build_runner watch --delete-conflicting-outputs
 ```
 
-### 10.3 환경 변수 설정
+### 15.3 환경 변수 설정
 `.env` 파일 생성 (루트 디렉토리)
 ```
 API_BASE_URL=https://api.oamanager.com
@@ -468,9 +748,9 @@ API_BASE_URL=https://api.oamanager.com
 
 ---
 
-## 11. 빌드 및 배포
+## 16. 빌드 및 배포
 
-### 11.1 로컬 실행
+### 16.1 로컬 실행
 ```bash
 # Android
 flutter run -d android
@@ -482,7 +762,7 @@ flutter run -d ios
 flutter run -d chrome --web-port=8080 --web-hostname=localhost
 ```
 
-### 11.2 프로덕션 빌드
+### 16.2 프로덕션 빌드
 ```bash
 # Android APK
 flutter build apk --release
@@ -496,24 +776,29 @@ flutter build web --release
 
 ---
 
-## 12. 권한 관리
+## 17. 권한 관리
 
-### 12.1 카메라 권한
+### 17.1 카메라 권한
 - **Android**: `AndroidManifest.xml`에 카메라 권한 추가
 - **iOS**: `Info.plist`에 카메라 사용 설명 추가
 - **Web**: HTTPS 환경에서만 작동, 브라우저 권한 허용 필요
 
-### 12.2 권한 거부 시 처리
+### 17.2 저장소/갤러리 권한
+- **Android**: 저장소 읽기/쓰기 권한 (도면 이미지 업로드, 서명 이미지 저장)
+- **iOS**: 사진 라이브러리 접근 권한 (도면 이미지 선택)
+- **용도**: image_picker를 통한 도면 이미지 선택, 서명 PNG 로컬 저장
+
+### 17.3 권한 거부 시 처리
 - 설정 화면으로 이동하는 버튼 표시
 - 권한 요청 안내 다이얼로그
 
 ---
 
-## 13. 테스트
+## 18. 테스트
 
-### 13.1 테스트 플로우
+### 18.1 테스트 플로우
 
-#### 13.1.1 실사 테스트
+#### 18.1.1 실사 테스트
 1. 홈에서 "QR 코드 촬영" 버튼 클릭
 2. QR 코드 스캔 → 자동으로 실사 화면 이동
 3. 위치 정보 입력 (건물, 층수, 자리번호)
@@ -527,7 +812,26 @@ flutter build web --release
 8. 실사 목록에서 미동기화 필터 확인
 9. 자산 목록에서 건물별/부서별 그룹화 확인
 
-#### 13.1.2 도면 관리 테스트
+#### 18.1.2 자산 관리 테스트
+1. **자산 등록**:
+   - 자산 등록 화면 진입
+   - 공통 정보 입력 (자산명, 시리얼번호, 모델명, 건물, 층 등)
+   - 자산 유형(category) 선택 → 해당 유형의 추가 사양 폼 동적 표시 확인
+   - 데스크탑 선택 시: 램용량, 램슬롯수, OS종류, OS버전, OS상세버전 입력 폼 확인
+   - 모니터 선택 시: 인치, 해상도, 4K여부 입력 폼 확인
+   - 태블릿 선택 시: 키보드/펜 지급 여부 체크박스 확인
+   - 스캐너/프린터 선택 시: 추가 사양 폼 없음 확인
+   - 저장 → specifications JSON 정상 저장 확인
+2. **자산 수정**:
+   - 자산 상세 화면에서 편집 모드 진입
+   - 공통 정보 및 유형별 사양 수정
+   - 저장 → 서버 반영 확인
+3. **자산 삭제**:
+   - 자산 목록에서 슬라이드 삭제 또는 상세 화면 삭제
+   - 삭제 확인 다이얼로그 표시 확인
+   - 삭제 후 목록 갱신 확인
+
+#### 18.1.3 도면 관리 테스트
 1. **도면 추가**:
    - 도면 관리 화면 진입
    - "도면 추가" 버튼 클릭
@@ -552,16 +856,16 @@ flutter build web --release
    - 사용 중인 자산 경고 표시 확인
    - 삭제 확인 → 도면 제거 확인
 
-### 13.2 단위 테스트
+### 18.2 단위 테스트
 ```bash
 flutter test
 ```
 
 ---
 
-## 14. 향후 작업 (TODO)
+## 19. 향후 작업 (TODO)
 
-### 14.1 기능 개선
+### 19.1 기능 개선
 - [ ] 동기화 API 연동 및 미동기화 전송 큐
 - [ ] 로컬 영속화 (Hive/Sqflite) 지원
 - [ ] 카메라 라이트 토글/전면 카메라 전환
@@ -577,7 +881,7 @@ flutter test
 - [ ] **도면 히트맵** - 자산 밀집도를 색상으로 표시
 - [ ] **도면 자동 격자 생성** - AI/이미지 분석으로 격자 자동 설정
 
-### 14.2 성능 최적화
+### 19.2 성능 최적화
 - [ ] 이미지 압축 및 캐싱 (서명 이미지 포함)
 - [ ] 페이지네이션 성능 개선 (Lazy Loading)
 - [ ] 오프라인 모드 지원 (로컬 DB 동기화)
@@ -589,14 +893,14 @@ flutter test
 
 ---
 
-## 15. 참고사항
+## 20. 참고사항
 
-### 15.1 Git 브랜치 전략
+### 20.1 Git 브랜치 전략
 - `main`: 프로덕션 배포 브랜치
 - `develop`: 개발 브랜치
 - `feature/*`: 기능 개발 브랜치
 
-### 15.2 코딩 컨벤션
+### 20.2 코딩 컨벤션
 - **Dart**: [Effective Dart](https://dart.dev/guides/language/effective-dart) 준수
 - **파일명**: snake_case
 - **클래스명**: PascalCase
