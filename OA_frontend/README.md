@@ -5,6 +5,20 @@
 > **DB 스키마 및 API 연동 규격은 반드시 백엔드팀과 협의 후 진행해야 합니다.**
 > **QR 스캔 기능은 HTTPS 환경에서만 정상 작동합니다.**
 
+### 예제 코드 정책 (Example Code Policy)
+
+본 명세서에 포함된 모든 코드 블록에 대해 아래 정책을 적용합니다.
+
+| 구분 | 구속력 | 설명 |
+|------|--------|------|
+| 예제 코드 (코드 블록 내 구현부) | **변경 가능** | 설계 이해를 돕기 위한 참고용. 동일한 기능을 수행하는 다른 구조의 코드도 허용 |
+| 함수 시그니처 / API 규격 | **고정** | 메서드명, 파라미터, 반환 타입, API 경로/메서드는 반드시 준수 |
+| 상태 흐름 / 사용자 시나리오 | **고정** | 화면 전환 순서, 사용자 인터랙션 흐름, 데이터 흐름은 반드시 준수 |
+| 내부 구현 로직 | **구현자 재량** | 동일한 입출력을 보장하는 범위 내에서 자유롭게 구현 가능 |
+
+> **원칙**: 예제 코드는 구현 예시 중 하나일 뿐이며, 동일한 기능을 수행하는 다른 구조의 코드도 허용됩니다.
+> AI 기반 코드 생성 시에도 본 명세의 **기능 요구사항**을 우선합니다.
+
 ---
 
 ## 1. 프로젝트 개요
@@ -66,6 +80,9 @@ OA 자산의 효율적인 관리 및 실사를 위한 웹/모바일 통합 애�
 | `photo_view` | ^0.14.0 | 도면 이미지 확대/축소/팬 |
 | `cached_network_image` | ^3.3.0 | 도면 이미지 캐싱 |
 | `flutter_painter` | ^2.0.0 | 도면 위 격자 및 마커 그리기 |
+| `sqflite` | ^2.3.0 | 로컬 DB (오프라인 캐싱) |
+| `flutter_secure_storage` | ^9.0.0 | 토큰 암호화 저장 |
+| `connectivity_plus` | ^6.0.0 | 네트워크 상태 감지 |
 
 ### 2.3 개발 도구 (dev_dependencies)
 | 패키지명 | 버전 | 용도 |
@@ -73,6 +90,7 @@ OA 자산의 효율적인 관리 및 실사를 위한 웹/모바일 통합 애�
 | `build_runner` | ^2.4.0 | Riverpod 코드 생성 |
 | `riverpod_generator` | ^2.3.0 | Riverpod 어노테이션 프로세서 |
 | `flutter_lints` | ^3.0.0 | Dart 코드 린트 |
+| `firebase_crashlytics` | ^3.5.0 | 에러 추적 및 비정상 종료 보고 |
 
 ---
 
@@ -92,13 +110,16 @@ lib/
 │   ├── asset_notifier.dart        # 자산 상태 관리
 │   ├── inspection_notifier.dart   # 실사 상태 관리
 │   ├── signature_notifier.dart    # 서명 상태 관리
-│   └── drawing_notifier.dart      # 도면 상태 관리
+│   ├── drawing_notifier.dart      # 도면 상태 관리
+│   └── auth_notifier.dart         # 인증/토큰 상태 관리
 ├── screens/                       # 화면 UI
 │   ├── home_page.dart             # 홈 대시보드
+│   ├── login_page.dart            # 로그인 화면
 │   ├── scan_page.dart             # QR 스캔 화면
 │   ├── asset_list_page.dart       # 자산 목록 (건물별/부서별 그룹화)
+│   ├── asset_detail_page.dart     # 자산 상세 및 편집
 │   ├── inspection_list_page.dart  # 실사 기록 목록
-│   ├── detail_page.dart           # 자산 상세 및 편집
+│   ├── inspection_detail_page.dart # 실사 상세 화면
 │   ├── signature_page.dart        # 친필 서명 화면
 │   ├── drawing_manager_page.dart  # 도면 관리 화면 (추가/삭제)
 │   ├── drawing_viewer_page.dart   # 도면 뷰어 (격자+자산위치)
@@ -110,7 +131,8 @@ lib/
 │   ├── drawing_grid_overlay.dart  # 도면 격자 오버레이
 │   └── asset_marker.dart          # 도면 위 자산 마커
 └── services/                      # API 통신 레이어
-    ├── api_service.dart           # Dio 기반 API 서비스
+    ├── api_service.dart           # Dio 기반 API 서비스 (인터셉터 포함)
+    ├── auth_service.dart          # 로그인/토큰 갱신/로그아웃 API
     ├── signature_service.dart     # 서명 이미지 저장/로드
     └── drawing_service.dart       # 도면 이미지 업로드/다운로드
 ```
@@ -261,11 +283,13 @@ lib/
 ### 5.1 화면 목록
 | 화면명 | 라우트 | 설명 |
 |--------|--------|------|
+| 로그인 | `/login` | 사번/비밀번호 입력 → 토큰 발급 |
 | 홈 | `/` | 대시보드 및 주요 기능 진입 |
 | 스캔 | `/scan` | QR 코드 스캔 화면 |
-| 실사 목록 | `/inspections` | 실사 기록 목록 (그룹화 표시) |
-| 자산 목록 | `/assets` | 전체 자산 목록 (건물별/부서별 그룹화) |
+| 자산 목록 | `/assets` | 전체 자산 목록 (자산번호 기준 리스트) |
 | 자산 상세 | `/asset/:id` | 자산 정보 상세 및 편집 |
+| 실사 목록 | `/inspections` | 실사 기록 목록 (리스트 형식) |
+| 실사 상세 | `/inspection/:id` | 실사 기록 상세 (사진/서명/메모) |
 | 친필 서명 | `/signature` | 실사 담당자 서명 입력 화면 |
 | **도면 관리** | `/drawings` | 건물/층별 도면 추가/삭제/수정 |
 | **도면 뷰어** | `/drawing/:id` | 도면 + 격자 + 자산 위치 표시 |
@@ -314,13 +338,15 @@ lib/
 | On Surface | `#1C1B1F` | `#E6E1E5` | 텍스트, 아이콘 |
 
 ### 6.3 자산 상태별 색상
-| 상태 | 색상 | 용도 |
-|------|------|------|
-| 정상 (사용) | `#4CAF50` (Green) | 리스트 뱃지, 도면 마커 |
-| 가용 | `#2196F3` (Blue) | 리스트 뱃지, 도면 마커 |
-| 점검필요 | `#FF9800` (Orange) | 리스트 뱃지, 도면 마커 |
-| 고장 | `#F44336` (Red) | 리스트 뱃지, 도면 마커 |
-| 이동 | `#9C27B0` (Purple) | 리스트 뱃지, 도면 마커 |
+| 상태 | Light Mode | Dark Mode | 용도 |
+|------|-----------|-----------|------|
+| 정상 (사용) | `#4CAF50` (Green) | `#81C784` (Green 300) | 리스트 뱃지, 도면 마커 |
+| 가용 | `#2196F3` (Blue) | `#64B5F6` (Blue 300) | 리스트 뱃지, 도면 마커 |
+| 점검필요 | `#FF9800` (Orange) | `#FFB74D` (Orange 300) | 리스트 뱃지, 도면 마커 |
+| 고장 | `#F44336` (Red) | `#E57373` (Red 300) | 리스트 뱃지, 도면 마커 |
+| 이동 | `#9C27B0` (Purple) | `#BA68C8` (Purple 300) | 리스트 뱃지, 도면 마커 |
+
+> **Dark Mode 원칙**: 어두운 배경에서 가독성을 위해 Light Mode 대비 채도를 낮추고 밝기를 높인 **Material 300 톤**을 사용합니다.
 
 ### 6.4 타이포그래피
 | 스타일 | 크기 | 용도 |
@@ -347,6 +373,9 @@ lib/
 ### 7.1 엔드포인트
 | 메서드 | 경로 | 설명 |
 |--------|------|------|
+| POST | `/api/auth/login` | 로그인 (사번+비밀번호 → Access/Refresh Token 발급) |
+| POST | `/api/auth/refresh` | 토큰 갱신 (Refresh Token → 새 Access Token 발급) |
+| POST | `/api/auth/logout` | 로그아웃 (Refresh Token 무효화) |
 | GET | `/api/assets` | 자산 목록 조회 |
 | GET | `/api/assets/:id` | 자산 상세 조회 |
 | POST | `/api/assets` | 자산 등록 |
@@ -565,6 +594,9 @@ lib/
 | `inspection_date` | DATETIME | 실사 일시 |
 | `maintenance_company_staff` | TEXT | 유지보수 담당자 |
 | `department_confirm` | TEXT | 확인 부서 |
+| `inspection_building` | TEXT | 실사 시 확인한 건물명 |
+| `inspection_floor` | TEXT | 실사 시 확인한 층 정보 |
+| `inspection_position` | TEXT | 실사 시 확인한 자리번호 (예: "A-3") |
 | `status` | TEXT | 앱에서 병합된 상태(assets 상태와 동기화) |
 | `memo` | TEXT | 점검 메모(점검자/소속/모델 등) |
 | `inspection_photo` | TEXT | 실사 사진 이미지 파일 경로 또는 URL (JPG/PNG) |
@@ -640,7 +672,24 @@ class SignatureNotifier extends _$SignatureNotifier {
 }
 ```
 
-### 9.5 DrawingNotifier
+### 9.5 AuthNotifier
+```dart
+// 인증 상태 Notifier
+@riverpod
+class AuthNotifier extends _$AuthNotifier {
+  @override
+  Future<AuthState> build() async {
+    return await checkAuthStatus();
+  }
+
+  Future<void> login(String employeeId, String password) async { ... }
+  Future<void> logout() async { ... }
+  Future<void> refreshToken() async { ... }
+  bool get isLoggedIn { ... }
+}
+```
+
+### 9.6 DrawingNotifier
 ```dart
 // 도면 관리 Notifier
 @riverpod
@@ -673,12 +722,15 @@ class DrawingNotifier extends _$DrawingNotifier {
 ### 10.1 GoRouter 설정
 ```dart
 final router = GoRouter(
+  redirect: (context, state) => /* 미인증 시 /login 리다이렉트 */,
   routes: [
+    GoRoute(path: '/login', builder: (context, state) => LoginPage()),
     GoRoute(path: '/', builder: (context, state) => HomePage()),
     GoRoute(path: '/scan', builder: (context, state) => ScanPage()),
-    GoRoute(path: '/inspections', builder: (context, state) => ListPage()),
     GoRoute(path: '/assets', builder: (context, state) => AssetListPage()),
-    GoRoute(path: '/asset/:id', builder: (context, state) => DetailPage()),
+    GoRoute(path: '/asset/:id', builder: (context, state) => AssetDetailPage()),
+    GoRoute(path: '/inspections', builder: (context, state) => InspectionListPage()),
+    GoRoute(path: '/inspection/:id', builder: (context, state) => InspectionDetailPage()),
     GoRoute(path: '/signature', builder: (context, state) => SignaturePage()),
     GoRoute(path: '/drawings', builder: (context, state) => DrawingManagerPage()),
     GoRoute(path: '/drawing/:id', builder: (context, state) => DrawingViewerPage()),
@@ -922,6 +974,35 @@ flutter build web --release
    - 도면 목록에서 삭제 버튼 클릭
    - 사용 중인 자산 경고 표시 확인
    - 삭제 확인 → 도면 제거 확인
+
+#### 18.1.4 인증 테스트
+1. **로그인**:
+   - 로그인 화면 진입
+   - 사번 + 비밀번호 입력
+   - 로그인 버튼 클릭 → Access/Refresh Token 발급 확인
+   - 토큰 로컬 저장 확인 (flutter_secure_storage)
+   - 홈 화면 자동 이동 확인
+2. **토큰 만료 처리**:
+   - Access Token 만료 시 자동 갱신 확인 (Dio Interceptor)
+   - Refresh Token 만료 시 로그인 화면 강제 이동 확인
+3. **로그아웃**:
+   - 로그아웃 버튼 클릭 → 토큰 삭제 확인
+   - 로그인 화면 이동 확인
+   - 로그아웃 후 인증 필요 페이지 접근 시 리다이렉트 확인
+
+#### 18.1.5 오프라인/동기화 테스트
+1. **오프라인 모드 진입**:
+   - 네트워크 끊김 → 오프라인 배너 표시 확인
+   - 캐시된 자산 목록 정상 표시 확인
+2. **오프라인 실사 생성**:
+   - 오프라인 상태에서 QR 스캔 실사 생성
+   - 로컬 저장 확인 (synced = false)
+   - 실사 목록에서 미동기화 표시 확인
+3. **동기화**:
+   - 네트워크 복구 → 자동 동기화 시작 확인
+   - 미동기화 데이터 서버 전송 확인
+   - synced = true 변경 확인
+   - 충돌 발생 시 사용자 확인 다이얼로그 표시 확인
 
 ### 18.2 단위 테스트
 ```bash
