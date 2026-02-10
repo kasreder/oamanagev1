@@ -154,20 +154,36 @@ lib/
 
 - **리스트 구조**:
   - 자산번호(asset_uid) 기준 정렬, 한 줄에 한 자산
-  - 각 행 표시 항목: 자산번호 | 자산명 | 유형(category) | 상태 | 건물/층
+  - **공통 표시 항목**: 자산번호 | 자산명 | 유형(category) | 상태 | 지급형태 | 건물/층
+  - **유형별 추가 표시 항목** (유형 필터 선택 시 해당 컬럼 동적 추가):
+
+| 유형 | 추가 표시 항목 |
+|------|---------------|
+| 데스크탑 | RAM, OS |
+| 모니터 | 인치, 해상도, 4K |
+| IP전화기 | 전화번호1, 전화번호2, 전화번호3 |
+| 노트북 | RAM, OS, 5G |
+| 스캐너 | — |
+| 프린터 | — |
+| 태블릿 | RAM, OS, 5G, 키보드, 펜 |
+| 테스트폰 | RAM, OS, 5G |
+
+  - 전체 유형 조회 시: 공통 항목만 표시
+  - 특정 유형 필터 시: 공통 항목 + 해당 유형 추가 항목 표시
   - **30개 항목 단위 페이지네이션** (하단 페이지 번호 또는 무한 스크롤)
   - 현재 페이지 / 전체 페이지 표시
 - **행 클릭 → 자산 상세 페이지 이동** (`/asset/:id`)
   - 상세 페이지에서 공통 정보 + 유형별 specifications 확인
   - 인라인 편집 모드 전환 가능
 - **필터/정렬**:
-  - 상단 필터바: 유형별, 상태별, 건물별 필터
+  - 상단 필터바: 유형별, 상태별, 지급형태별, 건물별 필터
   - 정렬 옵션: 자산번호순(기본), 등록일순, 상태순
 - **검색**: 자산번호, 자산명, 시리얼번호로 즉시 검색
 - **슬라이드 액션**: 좌측 스와이프 → 편집/삭제 버튼
 
 #### 4.1.2 자산 등록
 - 자산 정보 입력 폼 → 서버 전송 → QR 코드 생성 및 다운로드
+- 지급형태(`supply_type`) 선택: 지급 / 렌탈 / 대여 / 창고(대기) / 창고(점검)
 - 유형(category) 선택 시 해당 specifications 입력 폼 동적 표시
 
 #### 4.1.3 자산 수정
@@ -272,7 +288,7 @@ lib/
 
 ### 4.5 실시간 현황
 - **대시보드**: 총 자산 수, 실사 완료율, 미검증 자산 수
-- **필터링**: 건물별, 부서별, 상태별, 서명 유무별 필터
+- **필터링**: 건물별, 부서별, 상태별, 지급형태별, 서명 유무별 필터
 - **검색**: 자산 코드, 담당자 이름으로 검색
 - **통계**: 건물별/부서별 실사 진행률 차트
 
@@ -306,15 +322,33 @@ lib/
 | 4 | FactCheck | 실사 목록 | `/inspections` | 실사 기록 목록 |
 | 5 | Map | 도면 | `/drawings` | 건물/층별 도면 관리 |
 
+#### 공통 Drawer (사이드 메뉴)
+모든 화면에서 접근 가능한 **Drawer** 메뉴:
+| 항목 | 아이콘 | 설명 |
+|------|--------|------|
+| 사용자 정보 | Person | 상단 헤더: 사번, 이름, 고용형태, 소속 부서 표시 |
+| 홈 | Home | 대시보드 이동 |
+| 자산 목록 | ListAlt | 자산 목록 이동 |
+| 실사 목록 | FactCheck | 실사 기록 목록 이동 |
+| 도면 관리 | Map | 도면 관리 이동 |
+| 미검증 자산 | Warning | 미검증 자산 목록 이동 |
+| 설정 | Settings | 앱 설정 (다크 모드, 알림 등) |
+| 로그아웃 | Logout | 로그아웃 → 로그인 화면 이동 |
+
+- 모바일: 햄버거 메뉴(AppBar leading) 또는 좌측 스와이프로 열기
+- 웹/태블릿: NavigationRail 상단 메뉴 아이콘으로 열기
+
 #### 반응형 조건
 - **화면 너비 < 600px**: 모바일 레이아웃
   - **BottomNavigationBar** 사용
   - 하단에 위 5개 메뉴 아이콘 + 라벨 표시
   - 선택된 메뉴: Primary 색상 강조
+  - **Drawer**: AppBar 햄버거 아이콘으로 접근
 - **화면 너비 ≥ 600px**: 웹/태블릿 레이아웃
   - **NavigationRail** 사용 (좌측 사이드바)
   - 아이콘 + 라벨 세로 배치
   - 확장 버튼으로 라벨 표시/숨김 토글
+  - **Drawer**: NavigationRail 상단 메뉴 아이콘으로 접근
 
 #### 디자인
 - **Material 3 디자인 시스템** 적용
@@ -337,7 +371,10 @@ lib/
 | Surface | `#FFFFFF` | `#1C1B1F` | 카드, 바텀시트 배경 |
 | On Surface | `#1C1B1F` | `#E6E1E5` | 텍스트, 아이콘 |
 
-### 6.3 자산 상태별 색상
+### 6.3 자산 실시간 현황 색상
+> 자산의 **현재 접속/운영 상태**를 나타내는 색상입니다. 도면 마커, 리스트 뱃지 등에 사용됩니다.
+> ※ 8.1의 `assets_status`(자산현재진행상태), `supply_type`(자산지급형태)과는 별개의 개념입니다.
+
 | 상태 | Light Mode | Dark Mode | 용도 |
 |------|-----------|-----------|------|
 | 정상 (사용) | `#4CAF50` (Green) | `#81C784` (Green 300) | 리스트 뱃지, 도면 마커 |
@@ -399,16 +436,86 @@ lib/
 | **GET** | **`/api/drawings/:id/assets`** | **도면 내 자산 목록 조회** |
 
 ### 7.2 요청/응답 예시
+
+#### 자산 등록 요청
+```json
+// POST /api/assets
+// 공통 항목 + category에 따른 specifications JSON 포함
+{
+  "asset_uid": "OA-2024-001",           // 자산 고유 코드
+  "name": "개발팀 데스크탑",               // 자산 명칭
+  "assets_status": "사용",               // 자산현재진행상태 (사용/가용/이동/점검필요/고장)
+  "supply_type": "지급",                 // 자산지급형태 (지급/렌탈/대여/창고(대기)/창고(점검))
+  "category": "데스크탑",                 // 자산 분류 → specifications 구조 결정
+  "serial_number": "SN-12345",          // 시리얼 번호
+  "model_name": "Dell OptiPlex 7090",   // 모델명
+  "vendor": "Dell",                     // 제조사
+  "building": "본관",                    // 건물명
+  "floor": "3F",                        // 층 정보
+  "user_id": 42,                        // 담당 사용자 FK
+  "specifications": {                   // category별 추가 사양 (8.2 참고)
+    "ram_capacity": "16GB",
+    "ram_slots": 2,
+    "os_type": "Windows",
+    "os_version": "11",
+    "os_detail_version": "22H2"
+  }
+}
+```
+
+#### 자산 목록 조회 요청
+```json
+// GET /api/assets?page=1&size=30&category=데스크탑&supply_type=지급&building=본관
+// 쿼리 파라미터:
+//   page     - 페이지 번호 (기본 1)
+//   size     - 페이지당 항목 수 (기본 30)
+//   category - 유형 필터 (선택)
+//   supply_type - 지급형태 필터 (선택)
+//   assets_status - 상태 필터 (선택)
+//   building - 건물 필터 (선택)
+//   search   - 자산번호/자산명/시리얼번호 검색 (선택)
+```
+
+#### 자산 목록 조회 응답
+```json
+// 200 OK
+{
+  "total": 152,                          // 전체 자산 수
+  "page": 1,                             // 현재 페이지
+  "size": 30,                            // 페이지당 항목 수
+  "total_pages": 6,                      // 전체 페이지 수
+  "data": [
+    {
+      "id": 1,
+      "asset_uid": "OA-2024-001",
+      "name": "개발팀 데스크탑",
+      "assets_status": "사용",
+      "supply_type": "지급",
+      "category": "데스크탑",
+      "building": "본관",
+      "floor": "3F",
+      "specifications": { "ram_capacity": "16GB", "os_type": "Windows" }
+    }
+  ]
+}
+```
+
+#### 실사 기록 생성 요청
 ```json
 // POST /api/inspections
+// QR 스캔 후 실사 데이터 저장
 {
-  "asset_uid": "OA-2024-001",
-  "inspector_name": "홍길동",
-  "user_team": "IT팀",
-  "inspection_date": "2024-02-07T16:00:00Z",
-  "status": "정상",
-  "memo": "건물 A동 3층 확인 완료"
+  "asset_uid": "OA-2024-001",           // 스캔한 자산 코드
+  "inspector_name": "홍길동",             // 실사 담당자
+  "user_team": "IT팀",                   // 담당자 소속
+  "inspection_date": "2024-02-07T16:00:00Z",  // 실사 일시
+  "inspection_building": "본관",          // 실사 확인 건물
+  "inspection_floor": "3F",              // 실사 확인 층
+  "inspection_position": "A-3",          // 실사 확인 자리번호
+  "status": "정상",                       // 자산 상태
+  "memo": "건물 A동 3층 확인 완료"          // 점검 메모
 }
+// ※ 사진/서명은 별도 엔드포인트로 업로드 (POST /api/inspections/:id/photo, /signature)
 ```
 
 ---
@@ -421,7 +528,8 @@ lib/
 | `id` | INTEGER | 자산 기본 키             |
 | `asset_uid` | TEXT | 자산 고유 코드(실사 시 매칭 키) |
 | `name` | TEXT | 자산 명칭 또는 사용자        |
-| `assets_status` | TEXT | 사용/가용/이동 등 자산 상태    |
+| `assets_status` | TEXT | 자산현재진행상태 (사용/가용/이동/점검필요/고장 등) |
+| `supply_type` | TEXT | 자산지급형태 (지급/렌탈/대여/창고(대기)/창고(점검)) |
 | `category` | TEXT | 자산 분류(데스크탑/모니터/노트북/IP전화기/스캐너/프린터/태블릿/테스트폰) |
 | `serial_number` | TEXT | 시리얼 번호              |
 | `model_name` | TEXT | 모델명                 |
@@ -488,11 +596,13 @@ lib/
 | --- | --- | --- |
 | `phone_number1` | TEXT | 전화번호1 (예: "02-1234-5678") |
 | `phone_number2` | TEXT | 전화번호2 (예: "02-8765-4321") |
+| `phone_number3` | TEXT | 전화번호3 (예: "02-5555-1234") |
 
 ```json
 {
   "phone_number1": "02-1234-5678",
-  "phone_number2": "02-8765-4321"
+  "phone_number2": "02-8765-4321",
+  "phone_number3": "02-5555-1234"
 }
 ```
 
@@ -571,6 +681,7 @@ lib/
 | `id` | INTEGER | 사용자 기본 키 |
 | `employee_id` | TEXT | 사번 |
 | `employee_name` | TEXT | 사원 이름 |
+| `employment_type` | TEXT | 고용형태 (정규직 / 계약직 / 도급직) |
 | `organization_hq` | TEXT | 소속 본부 |
 | `organization_dept` | TEXT | 소속 부서 |
 | `organization_team` | TEXT | 소속 팀 |
@@ -935,6 +1046,7 @@ flutter build web --release
 1. **자산 등록**:
    - 자산 등록 화면 진입
    - 공통 정보 입력 (자산명, 시리얼번호, 모델명, 건물, 층 등)
+   - 지급형태(supply_type) 선택 → 지급/렌탈/대여/창고(대기)/창고(점검) 확인
    - 자산 유형(category) 선택 → 해당 유형의 추가 사양 폼 동적 표시 확인
    - 데스크탑 선택 시: 램용량, 램슬롯수, OS종류, OS버전, OS상세버전 입력 폼 확인
    - 모니터 선택 시: 인치, 해상도, 4K여부 입력 폼 확인
