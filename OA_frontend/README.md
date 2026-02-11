@@ -188,6 +188,32 @@ lib/
 - 자산 정보 입력 폼 → 서버 전송 → QR 코드 생성 및 다운로드
 - 지급형태(`supply_type`) 선택: 지급 / 렌탈 / 대여 / 창고(대기) / 창고(점검)
 - 유형(category) 선택 시 해당 specifications 입력 폼 동적 표시
+- **자산번호(`asset_uid`) 부여 기준**
+  - 기준 형식: `등록경로(대문자 1자리) + 등록장비(대문자 2자리) + 숫자 5자리`
+  - 검증 정규식: `^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD)[0-9]{5}$`
+  - 예시: `BDT00001`, `RNB00027`, `CSV10342`
+
+| 등록경로 | 코드 | 의미 |
+|------|------|------|
+| Buy | `B` | 구매 |
+| Rental | `R` | 렌탈 |
+| Contact | `C` | 계약 |
+| Lease | `L` | 리스 |
+| Spot | `S` | 스팟 |
+
+| 등록장비 | 코드 | 의미 |
+|------|------|------|
+| DeskTop (iMac 포함) | `DT` | 데스크탑 |
+| NoteBook | `NB` | 노트북 |
+| MoNitor | `MN` | 모니터 |
+| PRinter | `PR` | 프린터 |
+| TaBlet | `TB` | 태블릿 |
+| SCanner | `SC` | 스캐너 |
+| IP Phone | `IP` | IP 전화기 |
+| NetWork | `NW` | 네트워크 장비 |
+| SerVer | `SV` | 서버 |
+| Wearable | `WR` | 웨어러블 |
+| SpecialDevice | `SD` | 특수장비 |
 
 #### 4.1.3 자산 수정
 - 상세 페이지에서 편집 버튼 클릭 → 인라인 편집 모드
@@ -659,7 +685,7 @@ lib/
 // POST /api/assets
 // 공통 항목 + category에 따른 specifications JSON 포함
 {
-  "asset_uid": "OA-2024-001",           // 자산 고유 코드
+  "asset_uid": "BDT00001",              // 자산 고유 코드 (등록경로+등록장비+숫자5자리)
   "name": "개발팀 데스크탑",               // 자산 명칭
   "assets_status": "사용",               // 자산현재진행상태 (사용/가용/이동/점검필요/고장)
   "supply_type": "지급",                 // 자산지급형태 (지급/렌탈/대여/창고(대기)/창고(점검))
@@ -704,7 +730,7 @@ lib/
   "data": [
     {
       "id": 1,
-      "asset_uid": "OA-2024-001",
+      "asset_uid": "BDT00001",
       "name": "개발팀 데스크탑",
       "assets_status": "사용",
       "supply_type": "지급",
@@ -722,7 +748,7 @@ lib/
 // POST /api/inspections
 // QR 스캔 후 실사 데이터 저장
 {
-  "asset_uid": "OA-2024-001",           // 스캔한 자산 코드
+  "asset_uid": "BDT00001",              // 스캔한 자산 코드
   "inspector_name": "홍길동",             // 실사 담당자
   "user_team": "IT팀",                   // 담당자 소속
   "inspection_date": "2024-02-07T16:00:00Z",  // 실사 일시
@@ -743,7 +769,7 @@ lib/
 | 컬럼 | 타입 | 설명                  |
 | --- | --- |---------------------|
 | `id` | INTEGER | 자산 기본 키             |
-| `asset_uid` | TEXT | 자산 고유 코드(실사 시 매칭 키) |
+| `asset_uid` | TEXT | 자산 고유 코드(실사 시 매칭 키, 형식: 등록경로1자리+등록장비2자리+숫자5자리) |
 | `name` | TEXT | 자산 명칭 또는 사용자        |
 | `assets_status` | TEXT | 자산현재진행상태 (사용/가용/이동/점검필요/고장 등) |
 | `supply_type` | TEXT | 자산지급형태 (지급/렌탈/대여/창고(대기)/창고(점검)) |
@@ -1135,7 +1161,7 @@ final router = GoRouter(
 
 ### 12.3 사용자 입력 검증
 - **필수 입력**: 미입력 시 빨간 테두리 + 에러 메시지
-- **형식 검증**: MAC 주소, 전화번호 등 포맷 체크
+- **형식 검증**: 자산 UID(`^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD)[0-9]{5}$`), MAC 주소, 전화번호 등 포맷 체크
 - **중복 검증**: 자산 UID 중복 시 경고
 
 ---
