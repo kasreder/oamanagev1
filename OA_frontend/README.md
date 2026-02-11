@@ -537,34 +537,45 @@ lib/
 ## 7. API 연동 명세
 
 ### 7.1 엔드포인트
+#### 7.1.1 인증 불필요 API
+> 정책: **일반 조회(GET)는 인증 없이 가능**  
+> (로그인/토큰 갱신 API도 인증 없이 호출 가능)
+
 | 메서드 | 경로 | 설명 |
 |--------|------|------|
 | POST | `/api/auth/login` | 로그인 (사번+비밀번호 → Access/Refresh Token 발급) |
 | POST | `/api/auth/sns/kakao` | 카카오 SNS 로그인 (카카오 토큰 → Access/Refresh Token 발급) |
 | POST | `/api/auth/sns/google` | 구글 SNS 로그인 (구글 토큰 → Access/Refresh Token 발급) |
 | POST | `/api/auth/refresh` | 토큰 갱신 (Refresh Token → 새 Access Token 발급) |
-| POST | `/api/auth/logout` | 로그아웃 (Refresh Token 무효화) |
 | GET | `/api/assets` | 자산 목록 조회 |
 | GET | `/api/assets/:id` | 자산 상세 조회 |
-| POST | `/api/assets` | 자산 등록 |
-| PUT | `/api/assets/:id` | 자산 수정 |
-| DELETE | `/api/assets/:id` | 자산 삭제 |
 | GET | `/api/users` | 사용자(사원) 목록 조회 |
 | GET | `/api/users/:id` | 사용자 상세 조회 |
 | GET | `/api/inspections` | 실사 목록 조회 |
+| GET | `/api/inspections/:id/photo` | 실사 사진 이미지 조회 |
+| GET | `/api/inspections/:id/signature` | 실사 서명 이미지 조회 |
+| GET | `/api/drawings` | 도면 목록 조회 |
+| GET | `/api/drawings/:id` | 도면 상세 조회 |
+| GET | `/api/drawings/:id/assets` | 도면 내 자산 목록 조회 |
+
+#### 7.1.2 인증 필요 API
+> 정책: **등록(POST) / 수정(PUT) / 삭제(DELETE)는 인증 필요**  
+> 요청 헤더: `Authorization: Bearer {token}`
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| POST | `/api/auth/logout` | 로그아웃 (Refresh Token 무효화) |
+| POST | `/api/assets` | 자산 등록 |
+| PUT | `/api/assets/:id` | 자산 수정 |
+| DELETE | `/api/assets/:id` | 자산 삭제 |
 | POST | `/api/inspections` | 실사 기록 생성 |
 | PUT | `/api/inspections/:id` | 실사 기록 수정 |
 | DELETE | `/api/inspections/:id` | 실사 기록 삭제 |
 | POST | `/api/inspections/:id/photo` | 실사 사진 이미지 업로드 |
-| GET | `/api/inspections/:id/photo` | 실사 사진 이미지 조회 |
 | POST | `/api/inspections/:id/signature` | 실사 서명 이미지 업로드 |
-| GET | `/api/inspections/:id/signature` | 실사 서명 이미지 조회 |
-| **GET** | **`/api/drawings`** | **도면 목록 조회** |
-| **GET** | **`/api/drawings/:id`** | **도면 상세 조회** |
-| **POST** | **`/api/drawings`** | **도면 등록 (이미지 업로드 포함)** |
-| **PUT** | **`/api/drawings/:id`** | **도면 수정** |
-| **DELETE** | **`/api/drawings/:id`** | **도면 삭제** |
-| **GET** | **`/api/drawings/:id/assets`** | **도면 내 자산 목록 조회** |
+| POST | `/api/drawings` | 도면 등록 (이미지 업로드 포함) |
+| PUT | `/api/drawings/:id` | 도면 수정 |
+| DELETE | `/api/drawings/:id` | 도면 삭제 |
 
 ### 7.2 요청/응답 예시
 
@@ -594,7 +605,7 @@ lib/
 // 200 OK
 // 토큰 + 로그인 사용자 기본 정보 반환 (Drawer 헤더 표시용)
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIs...",   // API 요청 시 Authorization 헤더에 포함
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",   // 인증 필요 API 요청 시 Authorization 헤더에 포함
   "refresh_token": "eyJhbGciOiJIUzI1NiIs...",  // Access Token 만료 시 갱신용
   "token_type": "Bearer",                       // 토큰 타입
   "expires_in": 1800,                            // Access Token 만료 시간 (초, 30분)
@@ -1071,7 +1082,7 @@ final router = GoRouter(
 ### 11.1 인증 방식
 - **JWT (JSON Web Token)** 기반 인증
 - 로그인 → Access Token + Refresh Token 발급
-- Access Token: API 요청 시 `Authorization: Bearer {token}` 헤더 포함
+- Access Token: **인증 필요 API 요청 시** `Authorization: Bearer {token}` 헤더 포함
 - Refresh Token: Access Token 만료 시 자동 갱신
 
 ### 11.2 로그인 플로우
@@ -1080,7 +1091,7 @@ final router = GoRouter(
 1. 사번 + 비밀번호 입력
 2. `POST /api/auth/login` → 토큰 발급
 3. 토큰을 `flutter_secure_storage`에 암호화 저장
-4. 이후 모든 API 요청에 토큰 자동 포함 (Dio Interceptor)
+4. 이후 **인증 필요 API 요청에만** 토큰 자동 포함 (Dio Interceptor)
 
 #### SNS 로그인 (카카오 / 구글)
 1. SNS 로그인 버튼 클릭

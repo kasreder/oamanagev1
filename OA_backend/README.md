@@ -451,6 +451,9 @@ FK 의존성을 고려한 생성 순서:
 ---
 
 ## 5. Row Level Security (RLS)
+> 정책 기준(프론트엔드와 동일):
+> - `GET` 조회 API: 비인증(`anon`) + 인증(`authenticated`) 허용
+> - `POST`/`PUT`/`DELETE`: 인증(`authenticated`)만 허용
 
 ### 5.1 RLS 활성화
 ```sql
@@ -463,9 +466,9 @@ ALTER TABLE public.drawings ENABLE ROW LEVEL SECURITY;
 
 ### 5.2 users 정책
 ```sql
--- 인증된 사용자: 전체 목록 조회 가능
+-- 비인증 포함: 전체 목록/상세 조회 가능 (GET 정책)
 CREATE POLICY "users_select" ON public.users
-  FOR SELECT TO authenticated
+  FOR SELECT TO anon, authenticated
   USING (true);
 
 -- 본인 정보만 수정 가능
@@ -477,9 +480,9 @@ CREATE POLICY "users_update_own" ON public.users
 
 ### 5.3 assets 정책
 ```sql
--- 인증된 사용자: 전체 자산 조회
+-- 비인증 포함: 전체 자산 조회 가능 (GET 정책)
 CREATE POLICY "assets_select" ON public.assets
-  FOR SELECT TO authenticated
+  FOR SELECT TO anon, authenticated
   USING (true);
 
 -- 인증된 사용자: 자산 등록
@@ -507,9 +510,9 @@ CREATE POLICY "assets_delete" ON public.assets
 
 ### 5.4 asset_inspections 정책
 ```sql
--- 인증된 사용자: 전체 실사 기록 조회
+-- 비인증 포함: 전체 실사 기록 조회 가능 (GET 정책)
 CREATE POLICY "inspections_select" ON public.asset_inspections
-  FOR SELECT TO authenticated
+  FOR SELECT TO anon, authenticated
   USING (true);
 
 -- 인증된 사용자: 실사 기록 생성
@@ -531,9 +534,9 @@ CREATE POLICY "inspections_delete" ON public.asset_inspections
 
 ### 5.5 drawings 정책
 ```sql
--- 인증된 사용자: 전체 도면 조회
+-- 비인증 포함: 전체 도면 조회 가능 (GET 정책)
 CREATE POLICY "drawings_select" ON public.drawings
-  FOR SELECT TO authenticated
+  FOR SELECT TO anon, authenticated
   USING (true);
 
 -- 인증된 사용자: 도면 등록/수정/삭제
@@ -580,9 +583,9 @@ drawing-images/{drawing_id}/{filename}.png
 
 ### 6.3 Storage RLS 정책
 ```sql
--- inspection-photos: 인증된 사용자 업로드/조회 가능
+-- inspection-photos: 조회는 비인증 포함 허용, 업로드/수정/삭제는 인증 필요
 CREATE POLICY "inspection_photos_select" ON storage.objects
-  FOR SELECT TO authenticated
+  FOR SELECT TO anon, authenticated
   USING (bucket_id = 'inspection-photos');
 
 CREATE POLICY "inspection_photos_insert" ON storage.objects
@@ -599,7 +602,7 @@ CREATE POLICY "inspection_photos_delete" ON storage.objects
 
 -- inspection-signatures: 동일
 CREATE POLICY "inspection_signatures_select" ON storage.objects
-  FOR SELECT TO authenticated
+  FOR SELECT TO anon, authenticated
   USING (bucket_id = 'inspection-signatures');
 
 CREATE POLICY "inspection_signatures_insert" ON storage.objects
@@ -616,7 +619,7 @@ CREATE POLICY "inspection_signatures_delete" ON storage.objects
 
 -- drawing-images: 동일
 CREATE POLICY "drawing_images_select" ON storage.objects
-  FOR SELECT TO authenticated
+  FOR SELECT TO anon, authenticated
   USING (bucket_id = 'drawing-images');
 
 CREATE POLICY "drawing_images_insert" ON storage.objects
@@ -661,7 +664,10 @@ Supabase는 PostgREST를 통해 테이블별 REST API를 자동 생성합니다.
 기본 URL: `https://<project-id>.supabase.co/rest/v1/{table_name}`
 
 ### 7.2 프론트엔드 API ↔ Supabase 매핑
-> 프론트엔드 명세 7.1의 모든 엔드포인트를 Supabase 방식으로 구현합니다.
+> 프론트엔드 명세 7.1 정책과 동일하게 구현합니다.
+
+#### 7.2.1 인증 불필요 API (일반 조회 + 인증 진입)
+> 정책: 일반 조회(`GET`)는 인증 없이 호출 가능
 
 | 프론트엔드 API | Supabase 구현 (Dart) |
 |--------------|---------------------|
@@ -669,28 +675,34 @@ Supabase는 PostgREST를 통해 테이블별 REST API를 자동 생성합니다.
 | `POST /api/auth/sns/kakao` | `supabase.functions.invoke('auth-kakao', body)` |
 | `POST /api/auth/sns/google` | `supabase.auth.signInWithOAuth(OAuthProvider.google)` |
 | `POST /api/auth/refresh` | `supabase_flutter` SDK 자동 처리 |
-| `POST /api/auth/logout` | `supabase.auth.signOut()` |
 | `GET /api/assets` | `supabase.from('assets').select().range(from, to)` |
 | `GET /api/assets/:id` | `supabase.from('assets').select().eq('id', id).single()` |
-| `POST /api/assets` | `supabase.from('assets').insert(data)` |
-| `PUT /api/assets/:id` | `supabase.from('assets').update(data).eq('id', id)` |
-| `DELETE /api/assets/:id` | `supabase.from('assets').delete().eq('id', id)` |
 | `GET /api/users` | `supabase.from('users').select()` |
 | `GET /api/users/:id` | `supabase.from('users').select().eq('id', id).single()` |
 | `GET /api/inspections` | `supabase.from('asset_inspections').select().range(from, to)` |
+| `GET /api/inspections/:id/photo` | `supabase.storage.from('inspection-photos').createSignedUrl(path, 3600)` |
+| `GET /api/inspections/:id/signature` | `supabase.storage.from('inspection-signatures').createSignedUrl(path, 3600)` |
+| `GET /api/drawings` | `supabase.from('drawings').select()` |
+| `GET /api/drawings/:id` | `supabase.from('drawings').select().eq('id', id).single()` |
+| `GET /api/drawings/:id/assets` | `supabase.from('assets').select().eq('location_drawing_id', id)` |
+
+#### 7.2.2 인증 필요 API (등록/수정/삭제)
+> 정책: `POST`/`PUT`/`DELETE`는 인증 필요 (`Authorization: Bearer {token}`)
+
+| 프론트엔드 API | Supabase 구현 (Dart) |
+|--------------|---------------------|
+| `POST /api/auth/logout` | `supabase.auth.signOut()` |
+| `POST /api/assets` | `supabase.from('assets').insert(data)` |
+| `PUT /api/assets/:id` | `supabase.from('assets').update(data).eq('id', id)` |
+| `DELETE /api/assets/:id` | `supabase.from('assets').delete().eq('id', id)` |
 | `POST /api/inspections` | `supabase.from('asset_inspections').insert(data)` |
 | `PUT /api/inspections/:id` | `supabase.from('asset_inspections').update(data).eq('id', id)` |
 | `DELETE /api/inspections/:id` | `supabase.from('asset_inspections').delete().eq('id', id)` |
 | `POST /api/inspections/:id/photo` | `supabase.storage.from('inspection-photos').upload(path, file)` |
-| `GET /api/inspections/:id/photo` | `supabase.storage.from('inspection-photos').createSignedUrl(path, 3600)` |
 | `POST /api/inspections/:id/signature` | `supabase.storage.from('inspection-signatures').upload(path, file)` |
-| `GET /api/inspections/:id/signature` | `supabase.storage.from('inspection-signatures').createSignedUrl(path, 3600)` |
-| `GET /api/drawings` | `supabase.from('drawings').select()` |
-| `GET /api/drawings/:id` | `supabase.from('drawings').select().eq('id', id).single()` |
 | `POST /api/drawings` | `supabase.from('drawings').insert(data)` + Storage 업로드 |
 | `PUT /api/drawings/:id` | `supabase.from('drawings').update(data).eq('id', id)` |
 | `DELETE /api/drawings/:id` | `supabase.from('drawings').delete().eq('id', id)` + Storage 삭제 |
-| `GET /api/drawings/:id/assets` | `supabase.from('assets').select().eq('location_drawing_id', id)` |
 
 ### 7.3 페이지네이션
 > 프론트엔드 30건 단위 페이지네이션 구현
@@ -1073,7 +1085,7 @@ final inspectionChannel = supabase.channel('inspections-changes')
 | 201 Created | INSERT 성공 | 생성 완료 |
 | 204 No Content | DELETE 성공 | 삭제 완료 |
 | 400 Bad Request | CHECK 제약 위반, 잘못된 쿼리 | 필드별 에러 메시지 |
-| 401 Unauthorized | JWT 만료/무효 | 토큰 갱신 시도 → 실패 시 로그인 |
+| 401 Unauthorized | 인증 필요 API에 JWT 없음/만료/무효 | 토큰 갱신 시도 → 실패 시 로그인 |
 | 403 Forbidden | RLS 정책 거부 | "접근 권한이 없습니다" |
 | 404 Not Found | 레코드 없음 | "데이터를 찾을 수 없습니다" |
 | 409 Conflict | UNIQUE 제약 위반 | "이미 존재하는 자산번호입니다" |
@@ -1230,7 +1242,7 @@ curl -X POST http://localhost:54321/functions/v1/dashboard-stats \
 | 14 | 도면 내 자산 조회 | location_drawing_id 기반 필터 |
 | 15 | 대시보드 통계 | Edge Function → 총 자산/실사율/미검증 수 |
 | 16 | 만료 임박 자산 | supply_end_date D-7 이내 조회 |
-| 17 | RLS 비인증 차단 | 토큰 없이 API 호출 → 401 거부 |
+| 17 | RLS 접근 제어 | `GET` 조회 API는 토큰 없이 허용, `POST/PUT/DELETE`는 토큰 없이 401/403 거부 |
 | 18 | Realtime 구독 | 자산 상태 변경 → WebSocket 이벤트 수신 |
 
 ---
