@@ -125,10 +125,12 @@ supabase db reset
 supabase db push
 ```
 
-### 2.5 이번 변경 적용 (asset_uid 규칙 정렬)
+### 2.5 이번 변경 적용 (asset_uid 규칙 + 자산 담당정보 필드)
 ```bash
 # 1) 마이그레이션 파일 위치
 # OA_backend/supabase/migrations/20260211_asset_uid_format_alignment.sql
+# OA_backend/supabase/migrations/20260211_add_asset_party_fields.sql
+# OA_backend/supabase/migrations/20260211_inspection_permissions_and_reset.sql
 
 # 2) 로컬 반영
 supabase db reset
@@ -338,7 +340,7 @@ CREATE TABLE public.assets (
   id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   asset_uid     text UNIQUE NOT NULL                                 -- 자산 고유 코드 (QR 매칭 키)
     CHECK (asset_uid ~ '^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD)[0-9]{5}$'),
-  name          text,                                                -- 자산 명칭 또는 사용자
+  name          text,                                                -- 자산 명칭
   assets_status text DEFAULT '가용'                                   -- 자산현재진행상태
     CHECK (assets_status IN ('사용', '가용', '이동', '점검필요', '고장')),
   supply_type   text DEFAULT '지급'                                   -- 자산지급형태
@@ -358,7 +360,12 @@ CREATE TABLE public.assets (
   building1      text,                                               -- 사용자 유형 (내부/외부 등)
   building       text,                                               -- 건물명
   floor          text,                                               -- 층 정보
-  member_name    text,                                               -- 관리자 이름
+  owner_name     text,                                               -- 소유자명
+  owner_department text,                                             -- 소유자부서
+  user_name      text,                                               -- 사용자명
+  user_department text,                                              -- 사용자부서
+  admin_name     text,                                               -- 관리자명
+  admin_department text,                                             -- 관리자부서
   location_drawing_id bigint REFERENCES public.drawings(id)
     ON DELETE SET NULL,                                              -- 도면 FK
   location_row   int,                                                -- 도면 좌표 (행)
@@ -463,6 +470,10 @@ CREATE INDEX idx_inspections_date ON public.asset_inspections(inspection_date DE
 CREATE INDEX idx_inspections_synced ON public.asset_inspections(synced)
   WHERE synced = false;  -- 미동기화 항목 조회용
 ```
+
+> **완료 상태(`completed`) 기준**: 아래 항목이 모두 존재하면 완료로 간주합니다.  
+> `inspection_building`, `inspection_floor`, `inspection_position`, `inspection_photo`, `signature_image`  
+> `completed`는 API 응답에서 계산 필드로 노출할 수 있으며(7.6 참고), 완료건 수정 권한은 5.4 RLS 정책으로 제어합니다.
 
 ### 4.6 drawings (도면 정보)
 > 프론트엔드 명세 8.5 기반
@@ -569,14 +580,35 @@ CREATE POLICY "inspections_insert" ON public.asset_inspections
 -- 인증된 사용자: 실사 기록 수정
 CREATE POLICY "inspections_update" ON public.asset_inspections
   FOR UPDATE TO authenticated
-  USING (true)
-  WITH CHECK (true);
+  USING (
+    COALESCE((auth.jwt() ->> 'is_admin')::boolean, false)
+    OR NOT (
+      inspection_building IS NOT NULL
+      AND inspection_floor IS NOT NULL
+      AND inspection_position IS NOT NULL
+      AND inspection_photo IS NOT NULL
+      AND signature_image IS NOT NULL
+    )
+  )
+  WITH CHECK (
+    COALESCE((auth.jwt() ->> 'is_admin')::boolean, false)
+    OR NOT (
+      inspection_building IS NOT NULL
+      AND inspection_floor IS NOT NULL
+      AND inspection_position IS NOT NULL
+      AND inspection_photo IS NOT NULL
+      AND signature_image IS NOT NULL
+    )
+  );
 
 -- 인증된 사용자: 실사 기록 삭제
 CREATE POLICY "inspections_delete" ON public.asset_inspections
   FOR DELETE TO authenticated
   USING (true);
 ```
+
+> **권한 규칙**: 완료건(완료 기준은 4.5 참고)은 관리자만 수정/초기화 가능합니다.  
+> 관리자 판단은 JWT custom claim `is_admin=true` 기준이며, 실사 초기화는 `public.reset_inspection()` RPC(9.5)로 처리합니다.
 
 ### 5.5 drawings 정책
 ```sql
@@ -726,6 +758,7 @@ Supabase는 PostgREST를 통해 테이블별 REST API를 자동 생성합니다.
 | `GET /api/users` | `supabase.from('users').select()` |
 | `GET /api/users/:id` | `supabase.from('users').select().eq('id', id).single()` |
 | `GET /api/inspections` | `supabase.from('asset_inspections').select().range(from, to)` |
+| `GET /api/inspections/:id` | `supabase.from('asset_inspections').select('id,asset_id,asset_code,inspection_building,inspection_floor,inspection_position,inspection_photo,signature_image,assets!inner(user_name,user_department)').eq('id', id).single()` + `completed` 계산 |
 | `GET /api/inspections/:id/photo` | `supabase.storage.from('inspection-photos').createSignedUrl(path, 3600)` |
 | `GET /api/inspections/:id/signature` | `supabase.storage.from('inspection-signatures').createSignedUrl(path, 3600)` |
 | `GET /api/drawings` | `supabase.from('drawings').select()` |
@@ -742,7 +775,8 @@ Supabase는 PostgREST를 통해 테이블별 REST API를 자동 생성합니다.
 | `PUT /api/assets/:id` | `supabase.from('assets').update(data).eq('id', id)` |
 | `DELETE /api/assets/:id` | `supabase.from('assets').delete().eq('id', id)` |
 | `POST /api/inspections` | `supabase.from('asset_inspections').insert(data)` |
-| `PUT /api/inspections/:id` | `supabase.from('asset_inspections').update(data).eq('id', id)` |
+| `PUT /api/inspections/:id` | `supabase.from('asset_inspections').update(data).eq('id', id)` (완료건은 RLS로 관리자만 허용) |
+| `POST /api/inspections/:id/reset` | `supabase.rpc('reset_inspection', params: {'p_inspection_id': id, 'p_reason': reason})` |
 | `DELETE /api/inspections/:id` | `supabase.from('asset_inspections').delete().eq('id', id)` |
 | `POST /api/inspections/:id/photo` | `supabase.storage.from('inspection-photos').upload(path, file)` |
 | `POST /api/inspections/:id/signature` | `supabase.storage.from('inspection-signatures').upload(path, file)` |
@@ -817,6 +851,12 @@ final response = await supabase.from('assets').insert({
   'vendor': 'Dell',
   'building': '본관',
   'floor': '3F',
+  'owner_name': '홍길동',
+  'owner_department': '경영지원팀',
+  'user_name': '김개발',
+  'user_department': '개발팀',
+  'admin_name': '박관리',
+  'admin_department': 'IT운영팀',
   'user_id': 42,
   'specifications': {
     'ram_capacity': '16GB',
@@ -827,6 +867,36 @@ final response = await supabase.from('assets').insert({
   },
 }).select().single();
 ```
+
+### 7.6 실사 상세/초기화/권한 예시
+```dart
+// GET /api/inspections/:id
+final raw = await supabase
+  .from('asset_inspections')
+  .select('''
+    id, asset_id, asset_code,
+    inspection_building, inspection_floor, inspection_position,
+    inspection_photo, signature_image,
+    assets!inner(user_name, user_department)
+  ''')
+  .eq('id', inspectionId)
+  .single();
+
+final completed =
+    raw['inspection_building'] != null &&
+    raw['inspection_floor'] != null &&
+    raw['inspection_position'] != null &&
+    raw['inspection_photo'] != null &&
+    raw['signature_image'] != null;
+
+// POST /api/inspections/:id/reset (관리자 전용)
+await supabase.rpc('reset_inspection', params: {
+  'p_inspection_id': inspectionId,
+  'p_reason': '재실사 필요',
+});
+```
+
+> **권한 동작**: 일반사용자가 완료건을 수정하거나 초기화하면 RLS/RPC에서 `403`을 반환합니다.
 
 ---
 
@@ -1078,6 +1148,57 @@ CREATE TRIGGER on_auth_user_created
 ```
 > **참고**: `raw_user_meta_data`에 없는 필드는 `NULL`이 삽입됩니다. 관리자가 회원 생성 시 `userMetadata`에 조직 정보를 포함하면 자동으로 `users` 테이블에 반영됩니다.
 
+### 9.5 실사 권한/초기화 함수
+```sql
+-- 관리자 여부: JWT custom claim is_admin 사용
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT COALESCE((auth.jwt() ->> 'is_admin')::boolean, false);
+$$;
+
+-- 실사 초기화 RPC (관리자 전용)
+CREATE OR REPLACE FUNCTION public.reset_inspection(
+  p_inspection_id bigint,
+  p_reason text DEFAULT NULL
+)
+RETURNS public.asset_inspections
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_row public.asset_inspections;
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'forbidden: admin only';
+  END IF;
+
+  UPDATE public.asset_inspections
+  SET
+    status = NULL,
+    memo = p_reason,
+    inspection_photo = NULL,
+    signature_image = NULL,
+    synced = false,
+    updated_at = now()
+  WHERE id = p_inspection_id
+  RETURNING * INTO v_row;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'inspection not found: %', p_inspection_id;
+  END IF;
+
+  RETURN v_row;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.reset_inspection(bigint, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.reset_inspection(bigint, text) TO authenticated;
+```
+
 ---
 
 ## 10. 실시간 (Realtime)
@@ -1200,7 +1321,10 @@ supabase/
 │   ├── 20240201000006_create_storage_rls.sql     # 6.3 Storage RLS 정책
 │   ├── 20240201000007_create_functions_triggers.sql # 9.1~9.4 DB 함수/트리거
 │   ├── 20240201000008_create_rpc_functions.sql   # 8.4 get_expiring_assets 등 RPC 함수
-│   └── 20240201000009_enable_realtime.sql        # 10.1 Realtime 활성화
+│   ├── 20240201000009_enable_realtime.sql        # 10.1 Realtime 활성화
+│   ├── 20260211_asset_uid_format_alignment.sql   # asset_uid 규칙 정렬 (9.2)
+│   ├── 20260211_add_asset_party_fields.sql       # 자산 담당정보 6개 필드 추가
+│   └── 20260211_inspection_permissions_and_reset.sql # 실사 완료건 권한 + 초기화 RPC
 ├── functions/
 │   ├── auth-kakao/
 │   │   └── index.ts                              # 8.2 카카오 로그인
@@ -1242,8 +1366,14 @@ class AppConfig {
 ### 13.1 SQL 테스트
 ```sql
 -- 자산 등록 테스트
-INSERT INTO public.assets (asset_uid, name, category, assets_status, supply_type)
-VALUES ('BDT00001', '테스트 자산', '데스크탑', '사용', '지급');
+INSERT INTO public.assets (
+  asset_uid, name, category, assets_status, supply_type,
+  owner_name, owner_department, user_name, user_department, admin_name, admin_department
+)
+VALUES (
+  'BDT00001', '테스트 자산', '데스크탑', '사용', '지급',
+  '홍길동', '경영지원팀', '김개발', '개발팀', '박관리', 'IT운영팀'
+);
 
 -- asset_uid 형식 검증 테스트 (실패가 정상)
 INSERT INTO public.assets (asset_uid, name, category)
@@ -1268,6 +1398,20 @@ SELECT * FROM public.assets
 WHERE supply_type IN ('렌탈', '대여')
   AND supply_end_date <= CURRENT_DATE + INTERVAL '7 days';
 -- 예상: RNB00002 포함
+
+-- 실사 완료 기준 테스트 (완료건)
+UPDATE public.asset_inspections
+SET
+  inspection_building = '본관',
+  inspection_floor = '3F',
+  inspection_position = 'A-3',
+  inspection_photo = 'inspection-photos/1/photo.jpg',
+  signature_image = 'inspection-signatures/1/signature.png'
+WHERE id = 1;
+
+-- 실사 초기화 RPC 테스트 (관리자 토큰 컨텍스트에서 실행)
+SELECT public.reset_inspection(1, '재실사 필요');
+-- 예상: status/memo/photo/signature 초기화, synced=false
 ```
 
 ### 13.2 Edge Function 테스트
@@ -1296,14 +1440,17 @@ curl -X POST http://localhost:54321/functions/v1/dashboard-stats \
 | 8 | 자산 수정 | UPDATE → updated_at 자동 갱신 |
 | 9 | 자산 삭제 | DELETE (실사 기록 없을 때), 삭제 거부 (실사 기록 있을 때) |
 | 10 | 실사 기록 생성 | INSERT → inspection_count 자동 증가 |
-| 11 | 실사 사진 업로드 | Storage 업로드 → URL 반환 |
-| 12 | 서명 이미지 업로드 | Storage 업로드 → URL 반환 |
-| 13 | 도면 등록 | INSERT + Storage 이미지 업로드 |
-| 14 | 도면 내 자산 조회 | location_drawing_id 기반 필터 |
-| 15 | 대시보드 통계 | Edge Function → 총 자산/실사율/미검증 수 |
-| 16 | 만료 임박 자산 | supply_end_date D-7 이내 조회 |
-| 17 | RLS 접근 제어 | `GET` 조회 API는 토큰 없이 허용, `POST/PUT/DELETE`는 토큰 없이 401/403 거부 |
-| 18 | Realtime 구독 | 자산 상태 변경 → WebSocket 이벤트 수신 |
+| 11 | 실사 상세 조회 | `GET /api/inspections/:id` 응답에 사용자명/부서 + completed 계산 포함 |
+| 12 | 실사 완료건 수정 제한 | 일반사용자 `PUT /api/inspections/:id` 시 완료건은 403 |
+| 13 | 실사 초기화 | `POST /api/inspections/:id/reset` 관리자 성공, 일반사용자 403 |
+| 14 | 실사 사진 업로드 | Storage 업로드 → URL 반환 |
+| 15 | 서명 이미지 업로드 | Storage 업로드 → URL 반환 |
+| 16 | 도면 등록 | INSERT + Storage 이미지 업로드 |
+| 17 | 도면 내 자산 조회 | location_drawing_id 기반 필터 |
+| 18 | 대시보드 통계 | Edge Function → 총 자산/실사율/미검증 수 |
+| 19 | 만료 임박 자산 | supply_end_date D-7 이내 조회 |
+| 20 | RLS 접근 제어 | `GET` 조회 API는 토큰 없이 허용, `POST/PUT/DELETE`는 토큰 없이 401/403 거부 |
+| 21 | Realtime 구독 | 자산 상태 변경 → WebSocket 이벤트 수신 |
 
 ---
 
