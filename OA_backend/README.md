@@ -385,7 +385,7 @@ CREATE INDEX idx_assets_specifications ON public.assets
 CREATE TABLE public.asset_inspections (
   id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   asset_id      bigint REFERENCES public.assets(id)
-    ON DELETE CASCADE,                                               -- 자산 FK
+    ON DELETE RESTRICT,                                              -- 자산 FK (실사 기록 보호: 5.3 RLS 정책과 일치)
   user_id       bigint REFERENCES public.users(id)
     ON DELETE SET NULL,                                              -- 사용자 FK
   inspector_name text,                                               -- 실사 담당자
@@ -589,6 +589,14 @@ CREATE POLICY "inspection_photos_insert" ON storage.objects
   FOR INSERT TO authenticated
   WITH CHECK (bucket_id = 'inspection-photos');
 
+CREATE POLICY "inspection_photos_update" ON storage.objects
+  FOR UPDATE TO authenticated
+  USING (bucket_id = 'inspection-photos');
+
+CREATE POLICY "inspection_photos_delete" ON storage.objects
+  FOR DELETE TO authenticated
+  USING (bucket_id = 'inspection-photos');
+
 -- inspection-signatures: 동일
 CREATE POLICY "inspection_signatures_select" ON storage.objects
   FOR SELECT TO authenticated
@@ -598,6 +606,14 @@ CREATE POLICY "inspection_signatures_insert" ON storage.objects
   FOR INSERT TO authenticated
   WITH CHECK (bucket_id = 'inspection-signatures');
 
+CREATE POLICY "inspection_signatures_update" ON storage.objects
+  FOR UPDATE TO authenticated
+  USING (bucket_id = 'inspection-signatures');
+
+CREATE POLICY "inspection_signatures_delete" ON storage.objects
+  FOR DELETE TO authenticated
+  USING (bucket_id = 'inspection-signatures');
+
 -- drawing-images: 동일
 CREATE POLICY "drawing_images_select" ON storage.objects
   FOR SELECT TO authenticated
@@ -606,6 +622,10 @@ CREATE POLICY "drawing_images_select" ON storage.objects
 CREATE POLICY "drawing_images_insert" ON storage.objects
   FOR INSERT TO authenticated
   WITH CHECK (bucket_id = 'drawing-images');
+
+CREATE POLICY "drawing_images_update" ON storage.objects
+  FOR UPDATE TO authenticated
+  USING (bucket_id = 'drawing-images');
 
 CREATE POLICY "drawing_images_delete" ON storage.objects
   FOR DELETE TO authenticated
@@ -622,8 +642,9 @@ await supabase.storage.from('inspection-photos').upload(path, file);
 final sigPath = 'inspection-signatures/$inspectionId/signature.png';
 await supabase.storage.from('inspection-signatures').upload(sigPath, signatureBytes);
 
-// 파일 URL 조회
-final url = supabase.storage.from('inspection-photos').getPublicUrl(path);
+// 파일 URL 조회 (Private 버킷이므로 Signed URL 사용)
+final url = await supabase.storage.from('inspection-photos')
+  .createSignedUrl(path, 3600);  // 1시간 유효
 
 // 도면 이미지 업로드
 final drawingPath = 'drawing-images/$drawingId/floor_plan.png';
@@ -656,14 +677,15 @@ Supabase는 PostgREST를 통해 테이블별 REST API를 자동 생성합니다.
 | `DELETE /api/assets/:id` | `supabase.from('assets').delete().eq('id', id)` |
 | `GET /api/users` | `supabase.from('users').select()` |
 | `GET /api/users/:id` | `supabase.from('users').select().eq('id', id).single()` |
+| `PUT /api/users/:id` | `supabase.from('users').update(data).eq('id', id)` (본인만 수정 가능 — 5.2 RLS) |
 | `GET /api/inspections` | `supabase.from('asset_inspections').select().range(from, to)` |
 | `POST /api/inspections` | `supabase.from('asset_inspections').insert(data)` |
 | `PUT /api/inspections/:id` | `supabase.from('asset_inspections').update(data).eq('id', id)` |
 | `DELETE /api/inspections/:id` | `supabase.from('asset_inspections').delete().eq('id', id)` |
 | `POST /api/inspections/:id/photo` | `supabase.storage.from('inspection-photos').upload(path, file)` |
-| `GET /api/inspections/:id/photo` | `supabase.storage.from('inspection-photos').getPublicUrl(path)` |
+| `GET /api/inspections/:id/photo` | `supabase.storage.from('inspection-photos').createSignedUrl(path, 3600)` |
 | `POST /api/inspections/:id/signature` | `supabase.storage.from('inspection-signatures').upload(path, file)` |
-| `GET /api/inspections/:id/signature` | `supabase.storage.from('inspection-signatures').getPublicUrl(path)` |
+| `GET /api/inspections/:id/signature` | `supabase.storage.from('inspection-signatures').createSignedUrl(path, 3600)` |
 | `GET /api/drawings` | `supabase.from('drawings').select()` |
 | `GET /api/drawings/:id` | `supabase.from('drawings').select().eq('id', id).single()` |
 | `POST /api/drawings` | `supabase.from('drawings').insert(data)` + Storage 업로드 |
@@ -814,7 +836,8 @@ serve(async (req) => {
 ```
 
 ### 8.3 dashboard-stats (대시보드 통계)
-> 홈 화면 상단 카드에 필요한 통계 데이터를 집계합니다.
+> 홈 화면 상단 카드에 필요한 **집계 숫자 데이터**를 반환합니다.
+> 목록 데이터(최신 자산, 만료 임박 자산)는 PostgREST 직접 쿼리 또는 8.4를 사용합니다.
 
 ```typescript
 // supabase/functions/dashboard-stats/index.ts
@@ -825,25 +848,48 @@ serve(async (req) => {
   "total_assets": 152,           // 총 자산 수
   "inspection_rate": 78.5,       // 실사 완료율 (%)
   "unverified_count": 33,        // 미검증 자산 수
-  "recent_assets": [...],        // 최신 등록 자산 10건
-  "expiring_assets": [...]       // 만료 임박 자산 (D-7 이내)
+  "expiring_count": 5            // 만료 임박 자산 수 (D-7 이내)
 }
 ```
 
-### 8.4 expiring-assets (만료 임박 자산)
-> supply_type이 '렌탈' 또는 '대여'이고 supply_end_date가 7일 이내인 자산 조회
+> **역할 구분**: `dashboard-stats`는 통계 숫자만 반환합니다. 홈 화면의 **최신 자산 10건**은 `supabase.from('assets').select().order('created_at', ascending: false).limit(10)`으로 직접 조회하고, **만료 임박 자산 상세 목록**은 8.4 `expiring-assets`에서 조회합니다.
+
+### 8.4 expiring-assets (만료 임박 자산 목록)
+> supply_type이 '렌탈' 또는 '대여'이고 supply_end_date가 7일 이내인 자산의 **상세 목록**을 반환합니다.
+> 홈 화면의 만료 임박 자산 리스트 렌더링에 사용합니다.
 
 ```sql
--- 이 쿼리는 Edge Function 내부 또는 DB Function으로 구현 가능
-SELECT
-  id, asset_uid, name, supply_type, supply_end_date,
-  (supply_end_date::date - CURRENT_DATE) AS d_day
-FROM public.assets
-WHERE supply_type IN ('렌탈', '대여')
-  AND supply_end_date IS NOT NULL
-  AND supply_end_date <= CURRENT_DATE + INTERVAL '7 days'
-  AND supply_end_date >= CURRENT_DATE
-ORDER BY supply_end_date ASC;
+-- DB Function으로 구현 (Edge Function에서 호출하거나 RPC로 직접 호출 가능)
+CREATE OR REPLACE FUNCTION public.get_expiring_assets()
+RETURNS TABLE (
+  id bigint,
+  asset_uid text,
+  name text,
+  supply_type text,
+  supply_end_date timestamptz,
+  d_day int
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    a.id, a.asset_uid, a.name, a.supply_type, a.supply_end_date,
+    (a.supply_end_date::date - CURRENT_DATE)::int AS d_day
+  FROM public.assets a
+  WHERE a.supply_type IN ('렌탈', '대여')
+    AND a.supply_end_date IS NOT NULL
+    AND a.supply_end_date <= CURRENT_DATE + INTERVAL '7 days'
+    AND a.supply_end_date >= CURRENT_DATE
+  ORDER BY a.supply_end_date ASC;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
+
+```dart
+// 클라이언트 호출 (RPC)
+final expiring = await supabase.rpc('get_expiring_assets');
+
+// 또는 Edge Function 호출
+final res = await supabase.functions.invoke('expiring-assets');
 ```
 
 ---
@@ -917,15 +963,39 @@ CREATE TRIGGER auto_inspection_count BEFORE INSERT ON public.asset_inspections
 ### 9.4 사용자 생성 시 Auth ↔ users 동기화
 ```sql
 -- Supabase Auth 회원가입 시 public.users 자동 생성
+-- 3.2 회원가입의 userMetadata 전체 필드를 반영합니다.
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
-  INSERT INTO public.users (auth_uid, employee_id, employee_name, employment_type)
+  INSERT INTO public.users (
+    auth_uid,
+    employee_id,
+    employee_name,
+    employment_type,
+    organization_hq,
+    organization_dept,
+    organization_team,
+    organization_part,
+    organization_etc,
+    work_building,
+    work_floor,
+    auth_provider,
+    sns_id
+  )
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'employee_id', split_part(NEW.email, '@', 1)),
     COALESCE(NEW.raw_user_meta_data->>'employee_name', ''),
-    COALESCE(NEW.raw_user_meta_data->>'employment_type', '정규직')
+    COALESCE(NEW.raw_user_meta_data->>'employment_type', '정규직'),
+    NEW.raw_user_meta_data->>'organization_hq',
+    NEW.raw_user_meta_data->>'organization_dept',
+    NEW.raw_user_meta_data->>'organization_team',
+    NEW.raw_user_meta_data->>'organization_part',
+    NEW.raw_user_meta_data->>'organization_etc',
+    NEW.raw_user_meta_data->>'work_building',
+    NEW.raw_user_meta_data->>'work_floor',
+    COALESCE(NEW.raw_user_meta_data->>'auth_provider', 'email'),
+    NEW.raw_user_meta_data->>'sns_id'
   );
   RETURN NEW;
 END;
@@ -935,6 +1005,7 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 ```
+> **참고**: `raw_user_meta_data`에 없는 필드는 `NULL`이 삽입됩니다. 관리자가 회원 생성 시 `userMetadata`에 조직 정보를 포함하면 자동으로 `users` 테이블에 반영됩니다.
 
 ---
 
@@ -1049,21 +1120,23 @@ try {
 # 마이그레이션 파일 구조
 supabase/
 ├── migrations/
-│   ├── 20240201000000_create_users.sql
-│   ├── 20240201000001_create_drawings.sql
-│   ├── 20240201000002_create_assets.sql
-│   ├── 20240201000003_create_inspections.sql
-│   ├── 20240201000004_create_rls_policies.sql
-│   ├── 20240201000005_create_storage_buckets.sql
-│   ├── 20240201000006_create_functions_triggers.sql
-│   └── 20240201000007_enable_realtime.sql
+│   ├── 20240201000000_create_users.sql          # 4.2 users 테이블
+│   ├── 20240201000001_create_drawings.sql        # 4.6 drawings 테이블
+│   ├── 20240201000002_create_assets.sql          # 4.3 assets 테이블 + 4.4 specifications
+│   ├── 20240201000003_create_inspections.sql     # 4.5 asset_inspections 테이블
+│   ├── 20240201000004_create_rls_policies.sql    # 5.1~5.5 테이블 RLS 정책
+│   ├── 20240201000005_create_storage_buckets.sql # 6.1 버킷 생성
+│   ├── 20240201000006_create_storage_rls.sql     # 6.3 Storage RLS 정책
+│   ├── 20240201000007_create_functions_triggers.sql # 9.1~9.4 DB 함수/트리거
+│   ├── 20240201000008_create_rpc_functions.sql   # 8.4 get_expiring_assets 등 RPC 함수
+│   └── 20240201000009_enable_realtime.sql        # 10.1 Realtime 활성화
 ├── functions/
 │   ├── auth-kakao/
-│   │   └── index.ts
+│   │   └── index.ts                              # 8.2 카카오 로그인
 │   ├── dashboard-stats/
-│   │   └── index.ts
+│   │   └── index.ts                              # 8.3 대시보드 통계
 │   └── expiring-assets/
-│       └── index.ts
+│       └── index.ts                              # 8.4 만료 임박 자산 (RPC 래퍼)
 └── config.toml
 ```
 
