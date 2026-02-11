@@ -125,6 +125,28 @@ supabase db reset
 supabase db push
 ```
 
+### 2.5 이번 변경 적용 (asset_uid 규칙 정렬)
+```bash
+# 1) 마이그레이션 파일 위치
+# OA_backend/supabase/migrations/20260211_asset_uid_format_alignment.sql
+
+# 2) 로컬 반영
+supabase db reset
+
+# 3) 원격 반영
+supabase db push
+```
+
+```sql
+-- 배포 후 legacy UID 점검
+SELECT id, asset_uid
+FROM public.assets
+WHERE asset_uid !~ '^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD)[0-9]{5}$';
+
+-- legacy 데이터 정리 완료 후 제약 검증
+ALTER TABLE public.assets VALIDATE CONSTRAINT chk_assets_asset_uid_format;
+```
+
 ---
 
 ## 3. 인증 (Authentication)
@@ -314,7 +336,8 @@ CREATE INDEX idx_users_employee_id ON public.users(employee_id);
 ```sql
 CREATE TABLE public.assets (
   id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  asset_uid     text UNIQUE NOT NULL,                                -- 자산 고유 코드 (QR 매칭 키)
+  asset_uid     text UNIQUE NOT NULL                                 -- 자산 고유 코드 (QR 매칭 키)
+    CHECK (asset_uid ~ '^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD)[0-9]{5}$'),
   name          text,                                                -- 자산 명칭 또는 사용자
   assets_status text DEFAULT '가용'                                   -- 자산현재진행상태
     CHECK (assets_status IN ('사용', '가용', '이동', '점검필요', '고장')),
@@ -363,6 +386,29 @@ CREATE INDEX idx_assets_specifications ON public.assets
 ```
 
 > **설계 방침**: 프론트엔드 명세 8.1과 동일합니다. 공통 항목은 컬럼, 유형별 추가 사양은 `specifications` JSONB에 저장합니다.
+> **asset_uid 규칙**: `등록경로(1자리) + 등록장비(2자리) + 숫자 5자리` 형식을 사용합니다.
+
+| 등록경로 | 코드 |
+|------|------|
+| Buy | `B` |
+| Rental | `R` |
+| Contact | `C` |
+| Lease | `L` |
+| Spot | `S` |
+
+| 등록장비 | 코드 |
+|------|------|
+| DeskTop (iMac 포함) | `DT` |
+| NoteBook | `NB` |
+| MoNitor | `MN` |
+| PRinter | `PR` |
+| TaBlet | `TB` |
+| SCanner | `SC` |
+| IP Phone | `IP` |
+| NetWork | `NW` |
+| SerVer | `SV` |
+| Wearable | `WR` |
+| SpecialDevice | `SD` |
 
 ### 4.4 specifications JSONB 구조 (유형별)
 > 프론트엔드 명세 8.2 그대로 사용 — category 값에 따라 JSONB 구조가 결정됩니다.
@@ -729,7 +775,7 @@ final data = response.data;         // 자산 목록
 > 프론트엔드 7.2 쿼리 파라미터 → PostgREST 필터 변환
 
 ```dart
-// GET /api/assets?category=데스크탑&supply_type=지급&building=본관&search=OA-2024
+// GET /api/assets?category=데스크탑&supply_type=지급&building=본관&search=BDT
 var query = supabase
   .from('assets')
   .select('*', const FetchOptions(count: CountOption.exact));
@@ -761,7 +807,7 @@ final response = await query
 ```dart
 // POST /api/assets (프론트엔드 7.2 자산 등록 요청 대응)
 final response = await supabase.from('assets').insert({
-  'asset_uid': 'OA-2024-001',
+  'asset_uid': 'BDT00001',
   'name': '개발팀 데스크탑',
   'assets_status': '사용',
   'supply_type': '지급',
@@ -932,24 +978,38 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.drawings
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 ```
 
-### 9.2 asset_uid 자동 생성 함수
+### 9.2 asset_uid 형식 검증/정규화 함수
 ```sql
--- 자산 UID 자동 생성: OA-{연도}-{3자리 시퀀스}
-CREATE SEQUENCE IF NOT EXISTS asset_uid_seq START 1;
+-- 자산 UID 검증: 등록경로(1자리)+등록장비(2자리)+숫자5자리
+-- 형식: ^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD)[0-9]{5}$
+-- (기존 자동 생성 로직 사용 중인 경우 정리)
+DROP TRIGGER IF EXISTS auto_asset_uid ON public.assets;
+DROP FUNCTION IF EXISTS public.generate_asset_uid();
+DROP SEQUENCE IF EXISTS asset_uid_seq;
+DROP TRIGGER IF EXISTS validate_asset_uid ON public.assets;
 
-CREATE OR REPLACE FUNCTION public.generate_asset_uid()
+CREATE OR REPLACE FUNCTION public.validate_asset_uid()
 RETURNS trigger AS $$
 BEGIN
-  IF NEW.asset_uid IS NULL OR NEW.asset_uid = '' THEN
-    NEW.asset_uid = 'OA-' || EXTRACT(YEAR FROM now())::text
-      || '-' || LPAD(nextval('asset_uid_seq')::text, 3, '0');
+  IF NEW.asset_uid IS NULL OR btrim(NEW.asset_uid) = '' THEN
+    RAISE EXCEPTION 'asset_uid is required';
   END IF;
+
+  -- 입력 편차 방지: 공백 제거 + 대문자 표준화
+  NEW.asset_uid = upper(btrim(NEW.asset_uid));
+
+  IF NEW.asset_uid !~ '^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD)[0-9]{5}$' THEN
+    RAISE EXCEPTION 'invalid asset_uid format: %', NEW.asset_uid
+      USING HINT = 'Expected format: [B|R|C|L|S][DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD][0-9]{5}';
+  END IF;
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER auto_asset_uid BEFORE INSERT ON public.assets
-  FOR EACH ROW EXECUTE FUNCTION public.generate_asset_uid();
+CREATE TRIGGER validate_asset_uid
+  BEFORE INSERT OR UPDATE ON public.assets
+  FOR EACH ROW EXECUTE FUNCTION public.validate_asset_uid();
 ```
 
 ### 9.3 실사 횟수 자동 증가
@@ -1183,31 +1243,31 @@ class AppConfig {
 ```sql
 -- 자산 등록 테스트
 INSERT INTO public.assets (asset_uid, name, category, assets_status, supply_type)
-VALUES ('OA-TEST-001', '테스트 자산', '데스크탑', '사용', '지급');
+VALUES ('BDT00001', '테스트 자산', '데스크탑', '사용', '지급');
 
--- asset_uid 자동 생성 테스트
-INSERT INTO public.assets (name, category) VALUES ('자동UID 테스트', '모니터');
-SELECT asset_uid FROM public.assets WHERE name = '자동UID 테스트';
--- 예상: OA-2024-xxx 형태
+-- asset_uid 형식 검증 테스트 (실패가 정상)
+INSERT INTO public.assets (asset_uid, name, category)
+VALUES ('OA-2024-001', '형식 오류 테스트', '모니터');
+-- 예상: CHECK 또는 validate_asset_uid 트리거 위반 오류
 
 -- updated_at 트리거 테스트
-UPDATE public.assets SET name = '수정됨' WHERE asset_uid = 'OA-TEST-001';
-SELECT updated_at FROM public.assets WHERE asset_uid = 'OA-TEST-001';
+UPDATE public.assets SET name = '수정됨' WHERE asset_uid = 'BDT00001';
+SELECT updated_at FROM public.assets WHERE asset_uid = 'BDT00001';
 -- 예상: updated_at이 현재 시각으로 갱신
 
 -- RLS 테스트 (실사 기록 있는 자산 삭제 거부)
 INSERT INTO public.asset_inspections (asset_id, asset_code, inspector_name)
-VALUES (1, 'OA-TEST-001', '테스트');
-DELETE FROM public.assets WHERE asset_uid = 'OA-TEST-001';
+VALUES (1, 'BDT00001', '테스트');
+DELETE FROM public.assets WHERE asset_uid = 'BDT00001';
 -- 예상: RLS 정책에 의해 삭제 거부
 
 -- 만료 임박 자산 조회 테스트
 INSERT INTO public.assets (asset_uid, name, category, supply_type, supply_end_date)
-VALUES ('OA-TEST-002', '렌탈 자산', '노트북', '렌탈', now() + INTERVAL '3 days');
+VALUES ('RNB00002', '렌탈 자산', '노트북', '렌탈', now() + INTERVAL '3 days');
 SELECT * FROM public.assets
 WHERE supply_type IN ('렌탈', '대여')
   AND supply_end_date <= CURRENT_DATE + INTERVAL '7 days';
--- 예상: OA-TEST-002 포함
+-- 예상: RNB00002 포함
 ```
 
 ### 13.2 Edge Function 테스트
@@ -1231,7 +1291,7 @@ curl -X POST http://localhost:54321/functions/v1/dashboard-stats \
 | 3 | 카카오 로그인 | Edge Function → JWT 발급, users 정보 매칭 |
 | 4 | 토큰 갱신 | 만료된 Access Token → Refresh → 새 토큰 발급 |
 | 5 | 로그아웃 | signOut → 세션 무효화 |
-| 6 | 자산 등록 | INSERT → asset_uid 자동 생성, specifications JSONB 저장 |
+| 6 | 자산 등록 | INSERT → asset_uid 형식 검증 후 저장, specifications JSONB 저장 |
 | 7 | 자산 목록 조회 | 필터/검색/페이지네이션 (30건 단위) |
 | 8 | 자산 수정 | UPDATE → updated_at 자동 갱신 |
 | 9 | 자산 삭제 | DELETE (실사 기록 없을 때), 삭제 거부 (실사 기록 있을 때) |
