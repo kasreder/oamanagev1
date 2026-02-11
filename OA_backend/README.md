@@ -137,7 +137,7 @@ Supabase Auth 내장 JWT 기반 인증을 사용합니다.
 | 인증 방식 | JWT (JSON Web Token) — Supabase Auth 자동 관리 |
 | 일반 로그인 | 사번(employee_id) + 비밀번호 → `signInWithPassword()` |
 | SNS 로그인 | 카카오 OAuth, 구글 OAuth → `signInWithOAuth()` |
-| Access Token 만료 | 3600초 (1시간, Supabase 기본값 또는 커스텀) |
+| Access Token 만료 | 1800초 (30분, 프론트엔드 명세 11.3 기준) |
 | Refresh Token 만료 | 7일 |
 | 토큰 자동 갱신 | `supabase_flutter` SDK 자동 처리 |
 
@@ -182,7 +182,7 @@ final res = await supabase.auth.signInWithPassword(
   "access_token": "eyJ...",
   "refresh_token": "eyJ...",
   "token_type": "Bearer",
-  "expires_in": 3600,
+  "expires_in": 1800,
   "user": {
     "id": 42,
     "employee_id": "EMP-2024-042",
@@ -236,7 +236,7 @@ await supabase.auth.signOut();
 ### 3.5 토큰 관리
 | 항목 | Supabase 기본 | 커스텀 설정 |
 |------|-------------|-----------|
-| Access Token 만료 | 3600초 (1시간) | Dashboard > Auth > Settings에서 변경 가능 |
+| Access Token 만료 | 1800초 (30분) | Dashboard > Auth > Settings에서 변경 (프론트엔드 11.3 기준) |
 | Refresh Token 만료 | 무제한 (기본) | 커스텀: 7일 권장 |
 | 자동 갱신 | `supabase_flutter` SDK 자동 처리 | `onAuthStateChange` 리스너 |
 | 강제 로그아웃 | Refresh Token 만료 시 | 앱에서 로그인 화면 이동 |
@@ -677,7 +677,6 @@ Supabase는 PostgREST를 통해 테이블별 REST API를 자동 생성합니다.
 | `DELETE /api/assets/:id` | `supabase.from('assets').delete().eq('id', id)` |
 | `GET /api/users` | `supabase.from('users').select()` |
 | `GET /api/users/:id` | `supabase.from('users').select().eq('id', id).single()` |
-| `PUT /api/users/:id` | `supabase.from('users').update(data).eq('id', id)` (본인만 수정 가능 — 5.2 RLS) |
 | `GET /api/inspections` | `supabase.from('asset_inspections').select().range(from, to)` |
 | `POST /api/inspections` | `supabase.from('asset_inspections').insert(data)` |
 | `PUT /api/inspections/:id` | `supabase.from('asset_inspections').update(data).eq('id', id)` |
