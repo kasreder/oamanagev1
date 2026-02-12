@@ -1,0 +1,70 @@
+name: oa_app
+description: "OA 자산 실사 관리 시스템"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.4 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+
+  # Supabase
+  supabase_flutter: ^2.5.0
+
+  # State Management
+  flutter_riverpod: ^2.5.0
+  riverpod_annotation: ^2.3.0
+
+  # Routing
+  go_router: ^14.0.0
+
+  # QR
+  mobile_scanner: ^5.0.0
+  qr_flutter: ^4.1.0
+
+  # Permissions
+  permission_handler: ^11.0.0
+
+  # Signature
+  signature: ^5.5.0
+
+  # HTTP (보조)
+  dio: ^5.4.0
+
+  # UI
+  grouped_list: ^5.1.2
+  flutter_slidable: ^3.0.0
+  photo_view: ^0.14.0
+  cached_network_image: ^3.3.0
+
+  # Image
+  image_picker: ^1.0.0
+
+  # Local Storage
+  path_provider: ^2.1.0
+  shared_preferences: ^2.2.0
+  sqflite: ^2.3.0
+  flutter_secure_storage: ^9.0.0
+
+  # Network
+  connectivity_plus: ^6.0.0
+
+  # SNS Login
+  kakao_flutter_sdk_user: ^1.9.0
+  google_sign_in: ^6.2.0
+
+  # Utils
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  build_runner: ^2.4.0
+  riverpod_generator: ^2.3.0
+
+flutter:
+  uses-material-design: true
