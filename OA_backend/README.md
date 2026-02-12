@@ -143,7 +143,7 @@ supabase db push
 -- 배포 후 legacy UID 점검
 SELECT id, asset_uid
 FROM public.assets
-WHERE asset_uid !~ '^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD)[0-9]{5}$';
+WHERE asset_uid !~ '^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD|SM)[0-9]{5}$';
 
 -- legacy 데이터 정리 완료 후 제약 검증
 ALTER TABLE public.assets VALIDATE CONSTRAINT chk_assets_asset_uid_format;
@@ -339,7 +339,7 @@ CREATE INDEX idx_users_employee_id ON public.users(employee_id);
 CREATE TABLE public.assets (
   id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   asset_uid     text UNIQUE NOT NULL                                 -- 자산 고유 코드 (QR 매칭 키)
-    CHECK (asset_uid ~ '^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD)[0-9]{5}$'),
+    CHECK (asset_uid ~ '^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD|SM)[0-9]{5}$'),
   name          text,                                                -- 자산 명칭
   assets_status text DEFAULT '가용'                                   -- 자산현재진행상태
     CHECK (assets_status IN ('사용', '가용', '이동', '점검필요', '고장')),
@@ -347,7 +347,7 @@ CREATE TABLE public.assets (
     CHECK (supply_type IN ('지급', '렌탈', '대여', '창고(대기)', '창고(점검)')),
   supply_end_date timestamptz,                                       -- 대여/렌탈 만료일
   category      text NOT NULL                                        -- 자산 분류
-    CHECK (category IN ('데스크탑', '모니터', '노트북', 'IP전화기', '스캐너', '프린터', '태블릿', '테스트폰')),
+    CHECK (category IN ('데스크탑', '모니터', '노트북', 'IP전화기', '스캐너', '프린터', '태블릿', '테스트폰', '네트워크장비', '서버', '웨어러블', '특수목적장비')),
   serial_number  text,                                               -- 시리얼 번호
   model_name     text,                                               -- 모델명
   vendor         text,                                               -- 제조사
@@ -416,6 +416,7 @@ CREATE INDEX idx_assets_specifications ON public.assets
 | SerVer | `SV` |
 | Wearable | `WR` |
 | SpecialDevice | `SD` |
+| SMartphone | `SM` |
 
 ### 4.4 specifications JSONB 구조 (유형별)
 > 프론트엔드 명세 8.2 그대로 사용 — category 값에 따라 JSONB 구조가 결정됩니다.
@@ -430,6 +431,10 @@ CREATE INDEX idx_assets_specifications ON public.assets
 | 프린터 | `{}` (빈 객체) |
 | 태블릿 | `ram_capacity`, `os_type`, `os_version`, `os_detail_version`, `supports_5g`, `has_keyboard`, `has_pen` |
 | 테스트폰 | `ram_capacity`, `os_type`, `os_version`, `os_detail_version`, `supports_5g` |
+| 네트워크장비 | `{}` (빈 객체) |
+| 서버 | `{}` (빈 객체) |
+| 웨어러블 | `{}` (빈 객체) |
+| 특수목적장비 | `{}` (빈 객체) |
 
 ### 4.5 asset_inspections (실사 기록)
 > 프론트엔드 명세 8.4 기반
@@ -1051,7 +1056,7 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.drawings
 ### 9.2 asset_uid 형식 검증/정규화 함수
 ```sql
 -- 자산 UID 검증: 등록경로(1자리)+등록장비(2자리)+숫자5자리
--- 형식: ^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD)[0-9]{5}$
+-- 형식: ^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD|SM)[0-9]{5}$
 -- (기존 자동 생성 로직 사용 중인 경우 정리)
 DROP TRIGGER IF EXISTS auto_asset_uid ON public.assets;
 DROP FUNCTION IF EXISTS public.generate_asset_uid();
@@ -1068,7 +1073,7 @@ BEGIN
   -- 입력 편차 방지: 공백 제거 + 대문자 표준화
   NEW.asset_uid = upper(btrim(NEW.asset_uid));
 
-  IF NEW.asset_uid !~ '^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD)[0-9]{5}$' THEN
+  IF NEW.asset_uid !~ '^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD|SM)[0-9]{5}$' THEN
     RAISE EXCEPTION 'invalid asset_uid format: %', NEW.asset_uid
       USING HINT = 'Expected format: [B|R|C|L|S][DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD][0-9]{5}';
   END IF;
