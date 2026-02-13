@@ -1,7 +1,22 @@
 {
   "permissions": {
     "allow": [
-      "Bash(flutter analyze:*)"
+      "Bash(flutter analyze:*)",
+      "Bash(npm install:*)",
+      "Bash(where:*)",
+      "Bash(winget install:*)",
+      "Bash(powershell -Command \"Invoke-WebRequest -Uri ''https://github.com/supabase/cli/releases/latest/download/supabase_windows_amd64.exe'' -OutFile ''C:\\\\Users\\\\kasre\\\\AppData\\\\Local\\\\Microsoft\\\\WindowsApps\\\\supabase.exe''\")",
+      "Bash(curl:*)",
+      "Bash(python:*)",
+      "Bash(powershell -Command \"Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force; Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression\")",
+      "Bash(C:Userskasrescoopshimsscoop.cmd bucket add:*)",
+      "Bash(C:Userskasrescoopshimsscoop.cmd install supabase)",
+      "Bash(tar:*)",
+      "Bash(\"C:\\\\Users\\\\kasre\\\\supabase-cli\\\\supabase.exe\" --version)",
+      "Bash(\"C:\\\\Users\\\\kasre\\\\supabase-cli\\\\supabase.exe\" stop --project-id board1)",
+      "Bash(\"C:\\\\Users\\\\kasre\\\\supabase-cli\\\\supabase.exe\" start)",
+      "Bash(\"C:\\\\Users\\\\kasre\\\\supabase-cli\\\\supabase.exe\" db reset)",
+      "Bash(\"C:\\\\Users\\\\kasre\\\\supabase-cli\\\\supabase.exe\" status)"
     ]
   }
 }

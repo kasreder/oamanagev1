@@ -25,11 +25,21 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       final isAuthenticated = authState.valueOrNull?.isAuthenticated ?? false;
       final isLoginPage = state.matchedLocation == '/login';
 
-      // 미인증 상태에서 로그인 페이지가 아니면 → /login 리다이렉트
-      if (!isAuthenticated && !isLoginPage) {
+      // 인증이 필요한 페이지 (등록/수정/서명)
+      const authRequiredPaths = [
+        '/asset/new',
+        '/signature',
+      ];
+      final location = state.matchedLocation;
+      // 정확히 일치하거나, /asset/:id (수정 화면)인 경우
+      final needsAuth = authRequiredPaths.contains(location) ||
+          RegExp(r'^/asset/\d+$').hasMatch(location);
+
+      // 미인증 상태에서 인증 필요 페이지 접근 시 → /login
+      if (!isAuthenticated && needsAuth) {
         return '/login';
       }
-      // 인증 상태에서 로그인 페이지면 → / 리다이렉트
+      // 인증 상태에서 로그인 페이지면 → /
       if (isAuthenticated && isLoginPage) {
         return '/';
       }
