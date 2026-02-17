@@ -1,4 +1,4 @@
-﻿-- OA Manager v1 development seed data
+-- OA Manager v1 development seed data
 -- Temporary test account (id: temp01, password: Temp1234!)
 --
 -- Usage:

@@ -21,7 +21,11 @@
       "Bash(npx supabase status:*)",
       "Bash(supabase.exe status:*)",
       "Bash(\"/c/Users/kasre/AppData/Local/Microsoft/WindowsApps/supabase.exe\" status:*)",
-      "Bash(cmd.exe /c \"supabase status:*)"
+      "Bash(cmd.exe /c \"supabase status:*)",
+      "Bash(npx supabase db reset:*)",
+      "Bash(xxd:*)",
+      "Bash(npx supabase db execute:*)",
+      "Bash(PGPASSWORD=postgres psql:*)"
     ]
   }
 }
