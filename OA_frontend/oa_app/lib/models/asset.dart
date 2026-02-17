@@ -30,6 +30,7 @@ class Asset {
   final String? locationDrawingFile;
   final int? userId;
   final Map<String, dynamic> specifications;
+  final DateTime? lastActiveAt;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -65,6 +66,7 @@ class Asset {
     this.locationDrawingFile,
     this.userId,
     this.specifications = const {},
+    this.lastActiveAt,
     this.createdAt,
     this.updatedAt,
   });
@@ -109,6 +111,9 @@ class Asset {
       userId: json['user_id'] as int?,
       specifications:
           (json['specifications'] as Map<String, dynamic>?) ?? const {},
+      lastActiveAt: json['last_active_at'] != null
+          ? DateTime.parse(json['last_active_at'] as String)
+          : null,
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
           : null,
@@ -188,6 +193,7 @@ class Asset {
     String? locationDrawingFile,
     int? userId,
     Map<String, dynamic>? specifications,
+    DateTime? lastActiveAt,
   }) {
     return Asset(
       id: id ?? this.id,
@@ -221,6 +227,7 @@ class Asset {
       locationDrawingFile: locationDrawingFile ?? this.locationDrawingFile,
       userId: userId ?? this.userId,
       specifications: specifications ?? this.specifications,
+      lastActiveAt: lastActiveAt ?? this.lastActiveAt,
       createdAt: createdAt,
       updatedAt: updatedAt,
     );

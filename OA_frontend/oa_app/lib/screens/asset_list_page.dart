@@ -74,6 +74,7 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
   static const double _colUserId = 80;
   static const double _colCreatedAt = 170;
   static const double _colUpdatedAt = 170;
+  static const double _colAccessStatus = 60;
 
   static const List<_AssetColumnMeta> _allColumns = [
     _AssetColumnMeta(label: 'ID', width: _colId, value: _assetId),
@@ -98,6 +99,7 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
     _AssetColumnMeta(label: '소유자', width: _colOwnerName, value: _assetOwnerName),
     _AssetColumnMeta(label: '소유부서', width: _colOwnerDept, value: _assetOwnerDepartment),
     _AssetColumnMeta(label: '사용자', width: _colUserName, value: _assetUserName),
+    _AssetColumnMeta(label: '접속현황', width: _colAccessStatus, value: _assetAccessStatusText, widgetBuilder: _accessStatusWidget),
     _AssetColumnMeta(label: '사용부서', width: _colUserDept, value: _assetUserDepartment),
     _AssetColumnMeta(label: '관리자', width: _colAdminName, value: _assetAdminName),
     _AssetColumnMeta(label: '관리부서', width: _colAdminDept, value: _assetAdminDepartment),
@@ -432,12 +434,20 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
         child: Row(
           children: [
             for (int i = 0; i < columns.length; i++)
-              _buildBodyCell(
-                columns[i].value(asset, _dateTimeFmt),
-                columns[i].width,
-                context,
-                isLast: i == columns.length - 1,
-              ),
+              if (columns[i].widgetBuilder != null)
+                _buildWidgetCell(
+                  columns[i].widgetBuilder!(asset, context),
+                  columns[i].width,
+                  context,
+                  isLast: i == columns.length - 1,
+                )
+              else
+                _buildBodyCell(
+                  columns[i].value(asset, _dateTimeFmt),
+                  columns[i].width,
+                  context,
+                  isLast: i == columns.length - 1,
+                ),
           ],
         ),
       ),
@@ -575,6 +585,28 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
     );
   }
 
+  Widget _buildWidgetCell(
+    Widget child,
+    double width,
+    BuildContext context, {
+    bool isLast = false,
+  }) {
+    final theme = Theme.of(context);
+
+    return Container(
+      width: width,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        border: Border(
+          right:
+              isLast ? BorderSide.none : BorderSide(color: theme.dividerColor),
+          bottom: BorderSide(color: theme.dividerColor.withOpacity(0.55)),
+        ),
+      ),
+      child: Center(child: child),
+    );
+  }
+
   static String _assetId(Asset asset, DateFormat _) => asset.id.toString();
 
   static String _assetUid(Asset asset, DateFormat _) => asset.assetUid;
@@ -665,6 +697,76 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
   static String _assetUpdatedAt(Asset asset, DateFormat dateFormat) =>
       _formatStaticDate(asset.updatedAt, dateFormat);
 
+  // ── 접속현황 (Access Status Indicator) ──────────────────────────────────
+
+  static String _assetAccessStatusText(Asset asset, DateFormat _) {
+    final lastActive = asset.lastActiveAt;
+    if (lastActive == null) return '미접속';
+    final diff = DateTime.now().difference(lastActive);
+    if (diff.inMinutes <= 60) return '접속중';
+    if (diff.inDays <= 31) return '${diff.inDays}일전';
+    return '장기미접속';
+  }
+
+  static Widget _accessStatusWidget(Asset asset, BuildContext context) {
+    final lastActive = asset.lastActiveAt;
+    Color color;
+    String? dayText;
+
+    if (lastActive == null) {
+      color = Colors.grey;
+    } else {
+      final diff = DateTime.now().difference(lastActive);
+      if (diff.inMinutes <= 60) {
+        color = Colors.green;
+      } else if (diff.inDays <= 31) {
+        color = Colors.lightGreen;
+        dayText = '${diff.inDays}';
+      } else {
+        color = Colors.red;
+      }
+    }
+
+    const double size = 16;
+
+    if (dayText != null) {
+      return SizedBox(
+        width: size,
+        height: size,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: size,
+              height: size,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+              ),
+            ),
+            Text(
+              dayText,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 8,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+
   static String _formatStaticDate(DateTime? value, DateFormat dateFormat) {
     if (value == null) return '[NULL]';
     return dateFormat.format(value);
@@ -721,9 +823,11 @@ class _AssetColumnMeta {
     required this.label,
     required this.width,
     required this.value,
+    this.widgetBuilder,
   });
 
   final String label;
   final double width;
   final String Function(Asset asset, DateFormat formatter) value;
+  final Widget Function(Asset asset, BuildContext context)? widgetBuilder;
 }
