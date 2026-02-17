@@ -50,6 +50,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Future<void> _loadData() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _error = null;
@@ -66,8 +67,7 @@ class _HomePageState extends ConsumerState<HomePage> {
       }
 
       _totalAssets = (stats['total_assets'] as num?)?.toInt() ?? 0;
-      _inspectionRate =
-          (stats['inspection_rate'] as num?)?.toDouble() ?? 0.0;
+      _inspectionRate = (stats['inspection_rate'] as num?)?.toDouble() ?? 0.0;
       _unverifiedCount = (stats['unverified_count'] as num?)?.toInt() ?? 0;
 
       // 최신 등록 자산 10건
@@ -82,10 +82,8 @@ class _HomePageState extends ConsumerState<HomePage> {
 
       // Edge Function 실패 시 총 자산 수 보정
       if (_totalAssets == 0 && _recentAssets.isNotEmpty) {
-        final countResult = await supabase
-            .from('assets')
-            .select('id')
-            .count(CountOption.exact);
+        final countResult =
+            await supabase.from('assets').select('id').count(CountOption.exact);
         _totalAssets = countResult.count;
       }
 
@@ -108,8 +106,10 @@ class _HomePageState extends ConsumerState<HomePage> {
             .toList();
       }
 
+      if (!mounted) return;
       setState(() => _isLoading = false);
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
         _error = e.toString();

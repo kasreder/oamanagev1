@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
 import '../models/auth_state.dart';
 import '../models/user.dart';
@@ -11,6 +12,48 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   @override
   Future<AuthState> build() async {
     _authService = AuthService();
+
+    final authStateSub = _authService.onAuthStateChange().listen((event) async {
+      if (event.event == supabase.AuthChangeEvent.signedOut) {
+        state = const AsyncData(AuthState.unauthenticated());
+        return;
+      }
+
+      final session = event.session;
+      if (session == null) {
+        return;
+      }
+
+      // 이미 인증된 상태면 loading으로 전환하지 않음 (GoRouter 재평가 방지)
+      final currentAuth = state.valueOrNull;
+      if (currentAuth != null && currentAuth.isAuthenticated) {
+        // 토큰만 갱신
+        final user = await _authService.fetchCurrentUser();
+        state = AsyncData(AuthState(
+          isAuthenticated: true,
+          accessToken: session.accessToken,
+          refreshToken: session.refreshToken,
+          user: user ?? currentAuth.user,
+        ));
+        return;
+      }
+
+      state = const AsyncValue.loading();
+      state = await AsyncValue.guard(() async {
+        final user = await _authService.fetchCurrentUser();
+        if (user == null) {
+          return const AuthState.unauthenticated();
+        }
+
+        return AuthState(
+          isAuthenticated: true,
+          accessToken: session.accessToken,
+          refreshToken: session.refreshToken,
+          user: user,
+        );
+      });
+    });
+    ref.onDispose(authStateSub.cancel);
 
     // 저장된 세션 확인
     final session = _authService.currentSession;
@@ -35,29 +78,33 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   /// 사번 + 비밀번호 로그인
   Future<void> login(String employeeId, String password) async {
     state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() async {
-      final authResponse = await _authService.signInWithPassword(
-        employeeId: employeeId,
-        password: password,
+
+    final authResponse = await _authService.signInWithPassword(
+      employeeId: employeeId,
+      password: password,
+    );
+
+    final session = authResponse.session;
+    if (session == null) {
+      state = const AsyncData(AuthState.unauthenticated());
+      throw Exception('로그인 실패: 세션을 생성할 수 없습니다.');
+    }
+
+    final user = await _authService.fetchCurrentUser();
+    if (user == null) {
+      state = const AsyncData(AuthState.unauthenticated());
+      throw Exception(
+        '로그인 실패: 사용자 정보를 찾을 수 없습니다. '
+        'public.users 테이블에 employee_id="$employeeId" 행이 있는지 확인하세요.',
       );
+    }
 
-      final session = authResponse.session;
-      if (session == null) {
-        throw Exception('로그인 실패: 세션을 생성할 수 없습니다.');
-      }
-
-      final user = await _authService.fetchCurrentUser();
-      if (user == null) {
-        throw Exception('로그인 실패: 사용자 정보를 찾을 수 없습니다.');
-      }
-
-      return AuthState(
-        isAuthenticated: true,
-        accessToken: session.accessToken,
-        refreshToken: session.refreshToken,
-        user: user,
-      );
-    });
+    state = AsyncData(AuthState(
+      isAuthenticated: true,
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      user: user,
+    ));
   }
 
   /// Google OAuth 로그인
@@ -78,34 +125,35 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   /// 카카오 로그인 (Edge Function)
   Future<void> loginWithKakao(String kakaoAccessToken) async {
     state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() async {
-      final authResponse =
-          await _authService.signInWithKakao(kakaoAccessToken);
 
-      final session = authResponse.session;
-      if (session == null) {
-        throw Exception('카카오 로그인 실패: 세션을 생성할 수 없습니다.');
-      }
+    final authResponse =
+        await _authService.signInWithKakao(kakaoAccessToken);
 
-      // auth_uid로 사용자 조회
-      final authUser = _authService.currentAuthUser;
-      User? user;
-      if (authUser != null) {
-        user = await _authService.fetchUserByAuthUid(authUser.id);
-      }
-      user ??= await _authService.fetchCurrentUser();
+    final session = authResponse.session;
+    if (session == null) {
+      state = const AsyncData(AuthState.unauthenticated());
+      throw Exception('카카오 로그인 실패: 세션을 생성할 수 없습니다.');
+    }
 
-      if (user == null) {
-        throw Exception('카카오 로그인 실패: 사용자 정보를 찾을 수 없습니다.');
-      }
+    // auth_uid로 사용자 조회
+    final authUser = _authService.currentAuthUser;
+    User? user;
+    if (authUser != null) {
+      user = await _authService.fetchUserByAuthUid(authUser.id);
+    }
+    user ??= await _authService.fetchCurrentUser();
 
-      return AuthState(
-        isAuthenticated: true,
-        accessToken: session.accessToken,
-        refreshToken: session.refreshToken,
-        user: user,
-      );
-    });
+    if (user == null) {
+      state = const AsyncData(AuthState.unauthenticated());
+      throw Exception('카카오 로그인 실패: 사용자 정보를 찾을 수 없습니다.');
+    }
+
+    state = AsyncData(AuthState(
+      isAuthenticated: true,
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      user: user,
+    ));
   }
 
   /// 로그아웃

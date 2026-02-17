@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -16,12 +17,23 @@ import 'screens/drawing_viewer_page.dart';
 import 'screens/unverified_page.dart';
 
 /// GoRouter Provider (Riverpod)
+/// GoRouter를 한 번만 생성하고, refreshListenable로 redirect만 재평가
 final goRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authNotifierProvider);
+  // auth 상태 변경 시 GoRouter redirect를 재평가하기 위한 notifier
+  final refreshNotifier = ValueNotifier<int>(0);
+  ref.listen(authNotifierProvider, (_, __) {
+    refreshNotifier.value++;
+  });
+  ref.onDispose(refreshNotifier.dispose);
 
   return GoRouter(
     initialLocation: '/',
+    refreshListenable: refreshNotifier,
     redirect: (BuildContext context, GoRouterState state) {
+      final authState = ref.read(authNotifierProvider);
+
+      if (authState.isLoading) return null;
+
       final isAuthenticated = authState.valueOrNull?.isAuthenticated ?? false;
       final isLoginPage = state.matchedLocation == '/login';
 

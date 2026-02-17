@@ -16,7 +16,12 @@
       "Bash(\"C:\\\\Users\\\\kasre\\\\supabase-cli\\\\supabase.exe\" stop --project-id board1)",
       "Bash(\"C:\\\\Users\\\\kasre\\\\supabase-cli\\\\supabase.exe\" start)",
       "Bash(\"C:\\\\Users\\\\kasre\\\\supabase-cli\\\\supabase.exe\" db reset)",
-      "Bash(\"C:\\\\Users\\\\kasre\\\\supabase-cli\\\\supabase.exe\" status)"
+      "Bash(\"C:\\\\Users\\\\kasre\\\\supabase-cli\\\\supabase.exe\" status)",
+      "Bash(supabase status:*)",
+      "Bash(npx supabase status:*)",
+      "Bash(supabase.exe status:*)",
+      "Bash(\"/c/Users/kasre/AppData/Local/Microsoft/WindowsApps/supabase.exe\" status:*)",
+      "Bash(cmd.exe /c \"supabase status:*)"
     ]
   }
 }
