@@ -747,7 +747,7 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
             Text(
               dayText,
               style: const TextStyle(
-                color: Colors.white,
+                color: Colors.black,
                 fontSize: 8,
                 fontWeight: FontWeight.bold,
               ),

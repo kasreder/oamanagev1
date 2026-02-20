@@ -25,7 +25,8 @@
       "Bash(npx supabase db reset:*)",
       "Bash(xxd:*)",
       "Bash(npx supabase db execute:*)",
-      "Bash(PGPASSWORD=postgres psql:*)"
+      "Bash(PGPASSWORD=postgres psql:*)",
+      "Bash(flutter config:*)"
     ]
   }
 }
