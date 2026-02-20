@@ -343,7 +343,7 @@ CREATE INDEX idx_users_employee_id ON public.users(employee_id);
 CREATE TABLE public.assets (
   id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   asset_uid     text UNIQUE NOT NULL                                 -- 자산 고유 코드 (QR 매칭 키)
-    CHECK (asset_uid ~ '^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD|SM)[0-9]{5}$'),
+    CHECK (asset_uid ~ '^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD)[0-9]{5}$'),
   name          text,                                                -- 자산 명칭
   assets_status text DEFAULT '가용'                                   -- 자산현재진행상태
     CHECK (assets_status IN ('사용', '가용', '이동', '점검필요', '고장')),
@@ -579,6 +579,7 @@ ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.asset_inspections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.drawings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.access_settings ENABLE ROW LEVEL SECURITY;
 ```
 
 ### 5.2 users 정책
@@ -858,7 +859,7 @@ final response = await supabase
   .from('assets')
   .select('*', const FetchOptions(count: CountOption.exact))  // total count 포함
   .range(from, to)
-  .order('asset_uid');
+  .order('id', ascending: false);
 
 final total = response.count;       // 전체 수
 final totalPages = (total / size).ceil();  // 전체 페이지 수
@@ -886,14 +887,14 @@ if (assetsStatus != null) query = query.eq('assets_status', assetsStatus);
 // 건물 필터
 if (building != null) query = query.eq('building', building);
 
-// 검색 (자산번호, 자산명, 시리얼번호)
+// 검색 (자산번호, 자산명, 시리얼번호, 사용자명)
 if (search != null) {
-  query = query.or('asset_uid.ilike.%$search%,name.ilike.%$search%,serial_number.ilike.%$search%');
+  query = query.or('asset_uid.ilike.%$search%,name.ilike.%$search%,serial_number.ilike.%$search%,user_name.ilike.%$search%');
 }
 
 // 페이지네이션 + 정렬
 final response = await query
-  .order('asset_uid')
+  .order('id', ascending: false)
   .range(from, to);
 ```
 
