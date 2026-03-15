@@ -291,6 +291,23 @@ class ApiService {
     return response.data as Map<String, dynamic>;
   }
 
+  /// 에이전트 푸시 알림 발송 (Edge Function)
+  Future<Map<String, dynamic>> sendNotification({
+    String? assetUid,
+    String type = 'general',
+    required String title,
+    String? body,
+  }) async {
+    final response = await _client.functions.invoke('send-notification',
+        body: {
+          'asset_uid': assetUid,
+          'type': type,
+          'title': title,
+          'body': body,
+        });
+    return response.data as Map<String, dynamic>;
+  }
+
   // ---------------------------------------------------------------------------
   // 도면에 배치된 자산 조회
   // ---------------------------------------------------------------------------

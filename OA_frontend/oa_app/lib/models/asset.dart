@@ -31,6 +31,10 @@ class Asset {
   final int? userId;
   final Map<String, dynamic> specifications;
   final DateTime? lastActiveAt;
+  final DateTime? lastVerifiedAt;
+  final String? verificationStatus;
+  final String? assignmentStatus;
+  final DateTime? assignmentConfirmedAt;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -67,6 +71,10 @@ class Asset {
     this.userId,
     this.specifications = const {},
     this.lastActiveAt,
+    this.lastVerifiedAt,
+    this.verificationStatus,
+    this.assignmentStatus,
+    this.assignmentConfirmedAt,
     this.createdAt,
     this.updatedAt,
   });
@@ -113,6 +121,14 @@ class Asset {
           (json['specifications'] as Map<String, dynamic>?) ?? const {},
       lastActiveAt: json['last_active_at'] != null
           ? DateTime.parse(json['last_active_at'] as String)
+          : null,
+      lastVerifiedAt: json['last_verified_at'] != null
+          ? DateTime.parse(json['last_verified_at'] as String)
+          : null,
+      verificationStatus: json['verification_status'] as String?,
+      assignmentStatus: json['assignment_status'] as String?,
+      assignmentConfirmedAt: json['assignment_confirmed_at'] != null
+          ? DateTime.parse(json['assignment_confirmed_at'] as String)
           : null,
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
@@ -194,6 +210,10 @@ class Asset {
     int? userId,
     Map<String, dynamic>? specifications,
     DateTime? lastActiveAt,
+    DateTime? lastVerifiedAt,
+    String? verificationStatus,
+    String? assignmentStatus,
+    DateTime? assignmentConfirmedAt,
   }) {
     return Asset(
       id: id ?? this.id,
@@ -228,6 +248,10 @@ class Asset {
       userId: userId ?? this.userId,
       specifications: specifications ?? this.specifications,
       lastActiveAt: lastActiveAt ?? this.lastActiveAt,
+      lastVerifiedAt: lastVerifiedAt ?? this.lastVerifiedAt,
+      verificationStatus: verificationStatus ?? this.verificationStatus,
+      assignmentStatus: assignmentStatus ?? this.assignmentStatus,
+      assignmentConfirmedAt: assignmentConfirmedAt ?? this.assignmentConfirmedAt,
       createdAt: createdAt,
       updatedAt: updatedAt,
     );

@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS public.access_settings (
 INSERT INTO public.access_settings (setting_key, setting_value, description)
 VALUES
   ('active_threshold_minutes', 60, '실시간 접속 판단 기준 (분). 이 시간 이내 활동 시 초록색 표시'),
-  ('warning_threshold_days', 31, '경과일 표시 최대 일수. 초과 시 빨간색(만료) 표시')
+  ('warning_threshold_days', 31, '경과일 표시 최대 일수. 초과 시 빨간색(만료) 표시'),
+  ('verification_interval_days', 30, '에이전트 사용자 확인 주기 (일). 이 주기마다 사용자 이름+사번 재확인')
 ON CONFLICT (setting_key) DO NOTHING;
 
 -- updated_at 자동 갱신 트리거

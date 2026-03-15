@@ -291,7 +291,8 @@ users (사원 정보)
 assets (자산 정보)
   ├── N:1 → users.id (user_id FK)
   ├── N:1 → drawings.id (location_drawing_id FK)
-  └── 1:N → asset_inspections.asset_id
+  ├── 1:N → asset_inspections.asset_id
+  └── 1:1 → device_tokens.asset_uid (에이전트 FCM 토큰)
 
 asset_inspections (실사 기록)
   ├── N:1 → assets.id (asset_id FK)
@@ -302,6 +303,15 @@ drawings (도면 정보)
 
 access_settings (접속 제한 설정)
   └── 단일 행 (시스템 전역 설정)
+
+device_tokens (에이전트 FCM 토큰)
+  └── N:1 → assets.asset_uid (UNIQUE, 1기기 1토큰)
+
+notifications (푸시 알림 이력)
+  └── 독립 (asset_uid 참조, FK 없음)
+
+agent_settings (에이전트 설정)
+  └── 독립 (시스템 전역 설정)
 ```
 
 ### 4.2 users (사원 정보)
@@ -379,6 +389,10 @@ CREATE TABLE public.assets (
     ON DELETE SET NULL,                                              -- 자산 담당 사용자 FK
   specifications jsonb DEFAULT '{}'::jsonb,                          -- 유형별 추가 사양 (하이브리드)
   last_active_at timestamptz,                                        -- 최종 접속 시각 (접속현황 인디케이터용)
+  last_verified_at timestamptz,                                      -- 마지막 사용자 확인 시각 (에이전트)
+  verification_status text,                                          -- 사용자 확인 상태 ('verified', 'mismatch', NULL=미확인)
+  assignment_status text,                                            -- 자산 배정 상태 ('pending', 'confirmed', NULL=배정 없음)
+  assignment_confirmed_at timestamptz,                               -- 자산 수령 확인 시각
   created_at     timestamptz DEFAULT now(),
   updated_at     timestamptz DEFAULT now()
 );
@@ -526,7 +540,8 @@ CREATE TABLE public.access_settings (
 INSERT INTO public.access_settings (setting_key, setting_value, description)
 VALUES
   ('active_threshold_minutes', 60, '실시간 접속 판단 기준 (분). 이 시간 이내 활동 시 초록색 표시'),
-  ('warning_threshold_days', 31, '경과일 표시 최대 일수. 초과 시 빨간색(만료) 표시');
+  ('warning_threshold_days', 31, '경과일 표시 최대 일수. 초과 시 빨간색(만료) 표시'),
+  ('verification_interval_days', 30, '에이전트 사용자 확인 주기 (일). 이 주기마다 사용자 이름+사번 재확인');
 ```
 
 > **접속현황 인디케이터 로직** (프론트엔드 연동):
@@ -564,6 +579,67 @@ FK 의존성을 고려한 생성 순서:
 3. `assets` (→ users, drawings 참조)
 4. `asset_inspections` (→ assets, users 참조)
 5. `access_settings` (의존 없음, 시스템 설정)
+6. `device_tokens` (→ assets 참조, 에이전트 FCM 토큰)
+7. `notifications` (에이전트 푸시 알림 이력)
+8. `agent_settings` (의존 없음, 에이전트 버전 관리)
+
+### 4.9 device_tokens (에이전트 FCM 토큰)
+> 에이전트 기기의 FCM 디바이스 토큰을 저장합니다. 푸시 알림 발송 시 대상 기기 토큰 조회에 사용됩니다.
+
+```sql
+CREATE TABLE public.device_tokens (
+  id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  asset_uid     text UNIQUE NOT NULL                                   -- 자산 고유 식별자 (1기기 1토큰)
+    REFERENCES public.assets(asset_uid) ON DELETE CASCADE,
+  fcm_token     text NOT NULL,                                         -- FCM 디바이스 토큰
+  platform      text NOT NULL DEFAULT 'android'                        -- 플랫폼
+    CHECK (platform IN ('android', 'ios', 'linux', 'windows')),
+  updated_at    timestamptz DEFAULT now()
+);
+
+-- 인덱스
+CREATE INDEX idx_device_tokens_asset_uid ON public.device_tokens(asset_uid);
+CREATE INDEX idx_device_tokens_platform ON public.device_tokens(platform);
+```
+
+### 4.10 notifications (푸시 알림 이력)
+> 관리자가 에이전트로 발송한 푸시 알림의 이력을 저장합니다.
+
+```sql
+CREATE TABLE public.notifications (
+  id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  asset_uid     text,                                                  -- 대상 자산 (NULL이면 전체 발송)
+  type          text NOT NULL DEFAULT 'general'                        -- 알림 유형
+    CHECK (type IN ('os_update', 'security_alert', 'general', 'agent_update')),
+  title         text NOT NULL,                                         -- 알림 제목
+  body          text,                                                  -- 알림 내용
+  sent_at       timestamptz DEFAULT now(),                             -- 발송 시각
+  read_at       timestamptz                                            -- 읽은 시각 (NULL=미읽음)
+);
+
+-- 인덱스
+CREATE INDEX idx_notifications_asset_uid ON public.notifications(asset_uid);
+CREATE INDEX idx_notifications_type ON public.notifications(type);
+CREATE INDEX idx_notifications_sent_at ON public.notifications(sent_at DESC);
+```
+
+### 4.11 agent_settings (에이전트 설정)
+> 에이전트 최신 버전 및 다운로드 URL 등 에이전트 전역 설정을 관리합니다.
+
+```sql
+CREATE TABLE public.agent_settings (
+  setting_key   text PRIMARY KEY,                                      -- 설정 키
+  setting_value text NOT NULL,                                         -- 설정 값
+  updated_at    timestamptz DEFAULT now()
+);
+
+-- 기본 데이터 삽입
+INSERT INTO public.agent_settings (setting_key, setting_value)
+VALUES
+  ('latest_agent_version', '1.0.0'),
+  ('min_agent_version', '1.0.0'),
+  ('agent_download_url', 'https://example.com/agent/latest.apk');
+```
 
 ---
 
@@ -580,6 +656,9 @@ ALTER TABLE public.assets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.asset_inspections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.drawings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.access_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.device_tokens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.agent_settings ENABLE ROW LEVEL SECURITY;
 ```
 
 ### 5.2 users 정책
@@ -691,6 +770,63 @@ CREATE POLICY "drawings_update" ON public.drawings
 CREATE POLICY "drawings_delete" ON public.drawings
   FOR DELETE TO authenticated
   USING (true);
+```
+
+### 5.6 device_tokens 정책
+```sql
+-- 인증된 사용자: FCM 토큰 조회 (에이전트 자신의 토큰만)
+CREATE POLICY "device_tokens_select" ON public.device_tokens
+  FOR SELECT TO authenticated
+  USING (true);
+
+-- 인증된 사용자: FCM 토큰 등록 (upsert)
+CREATE POLICY "device_tokens_insert" ON public.device_tokens
+  FOR INSERT TO authenticated
+  WITH CHECK (true);
+
+-- 인증된 사용자: FCM 토큰 갱신
+CREATE POLICY "device_tokens_update" ON public.device_tokens
+  FOR UPDATE TO authenticated
+  USING (true)
+  WITH CHECK (true);
+
+-- 인증된 사용자: FCM 토큰 삭제
+CREATE POLICY "device_tokens_delete" ON public.device_tokens
+  FOR DELETE TO authenticated
+  USING (true);
+```
+
+### 5.7 notifications 정책
+```sql
+-- 인증된 사용자: 알림 이력 조회
+CREATE POLICY "notifications_select" ON public.notifications
+  FOR SELECT TO authenticated
+  USING (true);
+
+-- 인증된 사용자(관리자): 알림 생성
+CREATE POLICY "notifications_insert" ON public.notifications
+  FOR INSERT TO authenticated
+  WITH CHECK (public.is_admin());
+
+-- 인증된 사용자: 읽음 처리 (read_at 업데이트)
+CREATE POLICY "notifications_update" ON public.notifications
+  FOR UPDATE TO authenticated
+  USING (true)
+  WITH CHECK (true);
+```
+
+### 5.8 agent_settings 정책
+```sql
+-- 비인증 포함: 에이전트 설정 조회 (버전 확인용)
+CREATE POLICY "agent_settings_select" ON public.agent_settings
+  FOR SELECT TO anon, authenticated
+  USING (true);
+
+-- 인증된 사용자(관리자): 에이전트 설정 수정
+CREATE POLICY "agent_settings_update" ON public.agent_settings
+  FOR UPDATE TO authenticated
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());
 ```
 
 ---
@@ -972,11 +1108,13 @@ PostgREST만으로 처리할 수 없는 비즈니스 로직에 사용합니다.
 supabase functions new auth-kakao
 supabase functions new dashboard-stats
 supabase functions new expiring-assets
+supabase functions new send-notification
 
 # 배포
 supabase functions deploy auth-kakao
 supabase functions deploy dashboard-stats
 supabase functions deploy expiring-assets
+supabase functions deploy send-notification
 ```
 
 ### 8.2 auth-kakao (카카오 로그인)
@@ -1080,6 +1218,81 @@ final expiring = await supabase.rpc('get_expiring_assets');
 final res = await supabase.functions.invoke('expiring-assets');
 ```
 
+### 8.5 send-notification (에이전트 푸시 알림)
+> 관리자가 프론트엔드에서 에이전트 기기로 FCM 푸시 알림을 발송합니다.
+
+```typescript
+// supabase/functions/send-notification/index.ts
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+serve(async (req) => {
+  const { asset_uid, type, title, body } = await req.json()
+  // asset_uid가 null이면 전체 발송
+
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  )
+
+  // 1. 대상 기기 FCM 토큰 조회
+  let query = supabase.from('device_tokens').select('fcm_token, asset_uid')
+  if (asset_uid) {
+    query = query.eq('asset_uid', asset_uid)
+  }
+  const { data: tokens } = await query
+
+  if (!tokens || tokens.length === 0) {
+    return new Response(JSON.stringify({ error: '대상 기기가 없습니다' }), { status: 404 })
+  }
+
+  // 2. Firebase Admin SDK로 FCM 발송
+  const firebaseKey = JSON.parse(Deno.env.get('FIREBASE_SERVICE_ACCOUNT_KEY')!)
+  // ... JWT 생성 → FCM v1 API 호출 ...
+  // POST https://fcm.googleapis.com/v1/projects/{project}/messages:send
+
+  // 3. 발송 이력 저장
+  await supabase.from('notifications').insert(
+    tokens.map((t: any) => ({
+      asset_uid: t.asset_uid,
+      type,
+      title,
+      body,
+    }))
+  )
+
+  return new Response(JSON.stringify({
+    success: true,
+    sent_count: tokens.length,
+  }))
+})
+```
+
+**환경 변수:**
+
+| 변수 | 설명 |
+|------|------|
+| `FIREBASE_SERVICE_ACCOUNT_KEY` | Firebase 서비스 계정 JSON 키 (Edge Function 시크릿) |
+
+```bash
+# Edge Function 생성 및 배포
+supabase functions new send-notification
+supabase functions deploy send-notification
+
+# 시크릿 설정
+supabase secrets set FIREBASE_SERVICE_ACCOUNT_KEY='{"type":"service_account",...}'
+```
+
+```dart
+// 프론트엔드 호출 (관리자)
+final res = await supabase.functions.invoke('send-notification', body: {
+  'asset_uid': 'BDT00001',  // null이면 전체 발송
+  'type': 'os_update',
+  'title': 'OS 업데이트 필요',
+  'body': 'Windows 11 24H2 보안 업데이트를 설치해주세요.',
+});
+```
+
 ---
 
 ## 9. Database Functions & Triggers
@@ -1106,6 +1319,12 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.asset_inspections
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.drawings
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.device_tokens
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.agent_settings
   FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 ```
 
@@ -1263,6 +1482,182 @@ REVOKE ALL ON FUNCTION public.reset_inspection(bigint, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.reset_inspection(bigint, text) TO authenticated;
 ```
 
+### 9.6 에이전트 Heartbeat RPC `update_heartbeat`
+> 에이전트가 주기적으로 호출하여 `last_active_at` 갱신 + 시스템 모니터링 정보를 `specifications.device_status`에 저장합니다.
+> 마이그레이션 파일: `20260314000002_add_agent_rpc_and_columns.sql`
+
+```sql
+CREATE OR REPLACE FUNCTION public.update_heartbeat(
+  p_asset_uid text,
+  p_system_info jsonb DEFAULT NULL
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  UPDATE public.assets
+  SET
+    last_active_at = now(),
+    specifications = CASE
+      WHEN p_system_info IS NOT NULL
+      THEN jsonb_set(COALESCE(specifications, '{}'), '{device_status}', p_system_info)
+      ELSE specifications
+    END
+  WHERE asset_uid = p_asset_uid;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'asset not found: %', p_asset_uid;
+  END IF;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.update_heartbeat(text, jsonb) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.update_heartbeat(text, jsonb) TO authenticated;
+```
+
+| 항목 | 설명 |
+|------|------|
+| 함수명 | `update_heartbeat` |
+| 파라미터 | `p_asset_uid` (text, 필수), `p_system_info` (jsonb, 필수) |
+| 반환 | void |
+| 보안 | `SECURITY DEFINER` (RLS 우회하여 직접 UPDATE) |
+| 동작 | `last_active_at = now()` 갱신 + `specifications.device_status` JSONB 병합 |
+
+### 9.7 사용자 확인 RPC `verify_user`
+> 에이전트에서 사용자 이름+사번을 입력받아 DB에 등록된 정보와 대조합니다.
+> 마이그레이션 파일: `20260314000002_add_agent_rpc_and_columns.sql`
+
+```sql
+CREATE OR REPLACE FUNCTION public.verify_user(
+  p_asset_uid text,
+  p_user_name text,
+  p_employee_id text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_db_user_name text;
+  v_db_employee_id text;
+  v_matched boolean;
+BEGIN
+  -- assets 테이블에서 사용자명 조회
+  SELECT user_name INTO v_db_user_name
+  FROM public.assets
+  WHERE asset_uid = p_asset_uid;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'asset not found: %', p_asset_uid;
+  END IF;
+
+  -- users 테이블에서 사번 조회 (user_name으로 매칭)
+  SELECT employee_id INTO v_db_employee_id
+  FROM public.users
+  WHERE employee_name = v_db_user_name;
+
+  -- 일치 여부 확인
+  v_matched := (v_db_user_name = p_user_name AND v_db_employee_id = p_employee_id);
+
+  -- 결과 업데이트
+  UPDATE public.assets
+  SET
+    last_verified_at = now(),
+    verification_status = CASE WHEN v_matched THEN 'verified' ELSE 'mismatch' END
+  WHERE asset_uid = p_asset_uid;
+
+  RETURN jsonb_build_object(
+    'matched', v_matched,
+    'message', CASE
+      WHEN v_matched THEN '사용자 확인 완료'
+      ELSE '기존 사용자와 다른 사용자입니다. OA관리부서에 문의하세요.'
+    END,
+    'verified_at', now()
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.verify_user(text, text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.verify_user(text, text, text) TO authenticated;
+```
+
+| 항목 | 설명 |
+|------|------|
+| 함수명 | `verify_user` |
+| 파라미터 | `p_asset_uid` (text), `p_user_name` (text), `p_employee_id` (text) |
+| 반환 | jsonb (`matched`, `message`, `verified_at`) |
+| 동작 | assets.user_name + users.employee_id 대조 → verification_status 갱신 |
+
+### 9.8 자산 수령 확인 RPC `confirm_assignment`
+> 자산 배정 후 실제 사용자가 이름을 입력하여 수령을 확인합니다.
+> 마이그레이션 파일: `20260314000002_add_agent_rpc_and_columns.sql`
+
+```sql
+CREATE OR REPLACE FUNCTION public.confirm_assignment(
+  p_asset_uid text,
+  p_user_name text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_db_user_name text;
+  v_assignment_status text;
+BEGIN
+  SELECT user_name, assignment_status
+  INTO v_db_user_name, v_assignment_status
+  FROM public.assets
+  WHERE asset_uid = p_asset_uid;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'asset not found: %', p_asset_uid;
+  END IF;
+
+  IF v_assignment_status != 'pending' THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'message', '수령 대기 중인 배정이 없습니다.'
+    );
+  END IF;
+
+  IF v_db_user_name != p_user_name THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'message', '배정된 사용자 이름과 일치하지 않습니다.'
+    );
+  END IF;
+
+  -- 수령 확인 완료
+  UPDATE public.assets
+  SET
+    assignment_status = 'confirmed',
+    assignment_confirmed_at = now()
+  WHERE asset_uid = p_asset_uid;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'message', '자산 수령이 확인되었습니다.',
+    'confirmed_at', now()
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.confirm_assignment(text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.confirm_assignment(text, text) TO authenticated;
+```
+
+| 항목 | 설명 |
+|------|------|
+| 함수명 | `confirm_assignment` |
+| 파라미터 | `p_asset_uid` (text), `p_user_name` (text) |
+| 반환 | jsonb (`success`, `message`, `confirmed_at`) |
+| 동작 | assignment_status='pending' 확인 → 이름 대조 → 'confirmed' 전환 |
+
 ---
 
 ## 10. 실시간 (Realtime)
@@ -1306,6 +1701,110 @@ final inspectionChannel = supabase.channel('inspections-changes')
   )
   .subscribe();
 ```
+
+### 10.3 Broadcast 채널
+
+Broadcast는 DB를 거치지 않는 **ephemeral 메시지** 채널입니다. 메시지는 실시간으로 전달되며 서버에 저장되지 않습니다.
+
+#### 10.3.1 관리자 명령 채널 (`agent-commands:{asset_uid}`)
+프론트엔드(관리자)에서 특정 기기 에이전트로 명령을 전송합니다.
+
+| 방향 | 프론트엔드 → 에이전트 |
+|------|----------------------|
+| 채널 | `agent-commands:{asset_uid}` (자산별 개별 채널) |
+| 이벤트 | `command` |
+
+**메시지 포맷:**
+```json
+{
+  "command": "request_heartbeat",
+  "requested_by": "admin@oamanager.internal",
+  "requested_at": "2026-03-14T09:05:00Z",
+  "params": {}
+}
+```
+
+| command | 설명 |
+|---------|------|
+| `request_heartbeat` | 에이전트가 즉시 Heartbeat 전송 |
+| `refresh_system_info` | 에이전트가 시스템 정보 즉시 수집 후 전송 |
+
+#### 10.3.2 에이전트 알림 채널 (`agent-alerts:global`)
+에이전트에서 프론트엔드(관리자)로 긴급 알림을 전송합니다.
+
+| 방향 | 에이전트 → 프론트엔드 |
+|------|----------------------|
+| 채널 | `agent-alerts:global` (전체 공유) |
+| 이벤트 | `alert` |
+
+**메시지 포맷:**
+```json
+{
+  "asset_uid": "BDT00001",
+  "alert_type": "battery_low",
+  "message": "배터리 15% 이하",
+  "data": { "battery_level": 12, "battery_charging": false },
+  "timestamp": "2026-03-14T09:10:00Z"
+}
+```
+
+| alert_type | 설명 | 트리거 조건 |
+|------------|------|-----------|
+| `battery_low` | 배터리 부족 | `battery_level` ≤ 15% |
+| `network_changed` | 네트워크 변경 | WIFI ↔ CELLULAR 전환 |
+| `agent_started` | 에이전트 시작 | 서비스 시작 시 |
+| `agent_stopped` | 에이전트 종료 | 서비스 종료 시 (best-effort) |
+
+### 10.4 Presence 채널
+
+Presence는 클라이언트의 **실시간 접속 상태**를 추적하는 기능입니다. 연결 해제 시 자동으로 상태가 제거됩니다.
+
+#### 채널: `agent-presence:global`
+
+| 방향 | 에이전트 → 프론트엔드 |
+|------|----------------------|
+| 용도 | 에이전트 실시간 접속 여부 추적 |
+| 이벤트 | `sync`, `join`, `leave` |
+
+**Presence 상태 스키마:**
+```json
+{
+  "asset_uid": "BDT00001",
+  "platform": "android",
+  "agent_version": "1.0.0",
+  "connected_at": "2026-03-14T09:00:00Z"
+}
+```
+
+| 이벤트 | 발생 시점 | 설명 |
+|--------|----------|------|
+| `join` | 에이전트 WebSocket 연결 + 채널 참여 | 프론트엔드에서 "실시간 연결됨" 표시 |
+| `leave` | 에이전트 WebSocket 끊김 (앱 종료, 네트워크 단절) | 프론트엔드에서 "연결 해제" 전환 |
+| `sync` | 프론트엔드 채널 참여 시 | 현재 접속 중인 전체 에이전트 목록 수신 |
+
+> **DB 저장 불필요**: Presence는 Supabase Realtime 서버 메모리에서만 관리되며 PostgreSQL에 저장되지 않습니다.
+
+### 10.5 Realtime 인증 및 보안
+
+| 항목 | 설명 |
+|------|------|
+| 인증 방식 | Supabase JWT (`access_token`) — 기존 인증 체계와 동일 |
+| 권한 | `authenticated` 역할로 모든 Realtime 채널 접근 가능 |
+| 에이전트 계정 | `agent@oamanager.internal` (기존 서비스 계정) |
+| RLS 적용 | Postgres Changes는 기존 `assets` SELECT 정책을 따름 |
+| Broadcast/Presence | RLS 미적용 (DB 거치지 않음) — JWT 인증만으로 접근 제어 |
+
+> **추가 마이그레이션 불필요**: Broadcast와 Presence는 ephemeral 기능으로 별도 테이블/RLS 설정이 필요하지 않습니다.
+
+### 10.6 채널 명명 규칙
+
+| 패턴 | 예시 | 설명 |
+|------|------|------|
+| `agent-presence:global` | `agent-presence:global` | 전체 에이전트 접속 상태 (단일 채널) |
+| `agent-commands:{asset_uid}` | `agent-commands:BDT00001` | 특정 기기 에이전트 명령 채널 |
+| `agent-alerts:global` | `agent-alerts:global` | 전체 에이전트 알림 수신 (단일 채널) |
+
+> **Postgres Changes 채널**: 기존 10.1에서 설정한 `assets`, `asset_inspections` 테이블의 Realtime 구독은 채널명 자유 지정 가능 (`assets-changes`, `inspections-changes` 등).
 
 ---
 
@@ -1388,14 +1887,19 @@ supabase/
 │   ├── 20260211000000_add_asset_party_fields.sql # 자산 담당정보 6개 필드 추가
 │   ├── 20260211000001_asset_uid_format_alignment.sql # asset_uid 규칙 정렬 (9.2)
 │   ├── 20260211000002_inspection_permissions_and_reset.sql # 실사 완료건 권한 + 초기화 RPC
-│   └── 20260211000003_add_access_status.sql # 접속현황: assets.last_active_at + access_settings
+│   ├── 20260211000003_add_access_status.sql # 접속현황: assets.last_active_at + access_settings
+│   ├── 20260314000000_add_agent_tables.sql        # 4.9~4.11 device_tokens, notifications, agent_settings
+│   ├── 20260314000001_add_agent_rls_policies.sql  # 5.6~5.8 에이전트 테이블 RLS 정책
+│   └── 20260314000002_add_agent_rpc_and_columns.sql # assets 확인/배정 컬럼 + 9.6 update_heartbeat + 9.7 verify_user + 9.8 confirm_assignment
 ├── functions/
 │   ├── auth-kakao/
 │   │   └── index.ts                              # 8.2 카카오 로그인
 │   ├── dashboard-stats/
 │   │   └── index.ts                              # 8.3 대시보드 통계
-│   └── expiring-assets/
-│       └── index.ts                              # 8.4 만료 임박 자산 (RPC 래퍼)
+│   ├── expiring-assets/
+│   │   └── index.ts                              # 8.4 만료 임박 자산 (RPC 래퍼)
+│   └── send-notification/
+│       └── index.ts                              # 8.5 에이전트 푸시 알림 발송
 ├── seed.sql                                      # 테스트 시드 데이터 (temp01 계정)
 └── config.toml
 ```
@@ -1516,6 +2020,12 @@ curl -X POST http://localhost:54321/functions/v1/dashboard-stats \
 | 19 | 만료 임박 자산 | supply_end_date D-7 이내 조회 |
 | 20 | RLS 접근 제어 | `GET` 조회 API는 토큰 없이 허용, `POST/PUT/DELETE`는 토큰 없이 401/403 거부 |
 | 21 | Realtime 구독 | 자산 상태 변경 → WebSocket 이벤트 수신 |
+| 22 | Heartbeat RPC | `update_heartbeat('BDT00001', '{"cpu_usage":45.2,...}')` → last_active_at + specifications.device_status 갱신 |
+| 23 | 사용자 확인 RPC | `verify_user('BDT00001', '김개발', 'EMP20001')` → 일치/불일치 응답, verification_status 갱신 |
+| 24 | 자산 수령 확인 RPC | `confirm_assignment('BDT00001', '김개발')` → assignment_status='confirmed' 전환 |
+| 25 | FCM 토큰 등록 | device_tokens upsert → 토큰 저장/갱신 |
+| 26 | 푸시 알림 발송 | send-notification Edge Function → FCM 발송 + notifications 이력 저장 |
+| 27 | 에이전트 버전 조회 | agent_settings 테이블에서 latest/min 버전 조회 |
 
 ---
 

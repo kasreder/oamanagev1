@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../constants.dart';
 import '../models/asset.dart';
 import '../services/api_service.dart';
+import '../notifiers/agent_presence_notifier.dart';
 import '../widgets/common/app_scaffold.dart';
 import '../widgets/common/loading_widget.dart';
 import '../widgets/common/error_widget.dart';
@@ -75,6 +76,8 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
   static const double _colCreatedAt = 170;
   static const double _colUpdatedAt = 170;
   static const double _colAccessStatus = 60;
+  static const double _colVerificationStatus = 80;
+  static const double _colAssignmentStatus = 100;
 
   static const List<_AssetColumnMeta> _allColumns = [
     _AssetColumnMeta(label: 'ID', width: _colId, value: _assetId),
@@ -110,6 +113,8 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
     _AssetColumnMeta(label: '등록자ID', width: _colUserId, value: _assetUserId),
     _AssetColumnMeta(label: '등록일', width: _colCreatedAt, value: _assetCreatedAt),
     _AssetColumnMeta(label: '수정일', width: _colUpdatedAt, value: _assetUpdatedAt),
+    _AssetColumnMeta(label: '사용자확인', width: _colVerificationStatus, value: _assetVerificationStatusText, widgetBuilder: _verificationStatusWidget),
+    _AssetColumnMeta(label: '배정상태', width: _colAssignmentStatus, value: _assetAssignmentStatusText, widgetBuilder: _assignmentStatusWidget),
   ];
 
   late List<_AssetColumnMeta> _orderedColumns;
@@ -708,12 +713,21 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
     return '장기미접속';
   }
 
-  static Widget _accessStatusWidget(Asset asset, BuildContext context) {
+  /// 접속현황 인디케이터 (Presence 우선 → Heartbeat 기반)
+  ///
+  /// Presence 연결 시 파란색, 그 외 기존 Heartbeat 기반 인디케이터
+  Widget _accessStatusWidgetWithPresence(Asset asset, BuildContext context) {
+    final presenceState = ref.watch(agentPresenceNotifierProvider);
+    final isPresenceConnected = presenceState.containsKey(asset.assetUid);
+
     final lastActive = asset.lastActiveAt;
     Color color;
     String? dayText;
 
-    if (lastActive == null) {
+    if (isPresenceConnected) {
+      // Presence 연결됨 — 파란색
+      color = Colors.blue;
+    } else if (lastActive == null) {
       color = Colors.grey;
     } else {
       final diff = DateTime.now().difference(lastActive);
@@ -765,6 +779,105 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
         shape: BoxShape.circle,
       ),
     );
+  }
+
+  static Widget _accessStatusWidget(Asset asset, BuildContext context) {
+    // static 호환용 fallback (실제로는 _accessStatusWidgetWithPresence 사용)
+    final lastActive = asset.lastActiveAt;
+    Color color;
+    String? dayText;
+
+    if (lastActive == null) {
+      color = Colors.grey;
+    } else {
+      final diff = DateTime.now().difference(lastActive);
+      if (diff.inMinutes <= 60) {
+        color = Colors.green;
+      } else if (diff.inDays <= 31) {
+        color = Colors.lightGreen;
+        dayText = '${diff.inDays}';
+      } else {
+        color = Colors.red;
+      }
+    }
+
+    const double size = 16;
+
+    if (dayText != null) {
+      return SizedBox(
+        width: size,
+        height: size,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(width: size, height: size, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+            Text(dayText, style: const TextStyle(color: Colors.black, fontSize: 8, fontWeight: FontWeight.bold)),
+          ],
+        ),
+      );
+    }
+
+    return Container(width: size, height: size, decoration: BoxDecoration(color: color, shape: BoxShape.circle));
+  }
+
+  // ── 사용자 확인 상태 (Verification Status) ──────────────────────────────
+
+  static String _assetVerificationStatusText(Asset asset, DateFormat _) {
+    switch (asset.verificationStatus) {
+      case 'verified':
+        return '확인완료';
+      case 'mismatch':
+        return '불일치';
+      default:
+        return '미확인';
+    }
+  }
+
+  static Widget _verificationStatusWidget(Asset asset, BuildContext context) {
+    final status = asset.verificationStatus;
+    if (status == 'verified') {
+      return const Icon(Icons.check_circle, color: Colors.green, size: 16);
+    } else if (status == 'mismatch') {
+      return const Icon(Icons.warning, color: Colors.red, size: 16);
+    }
+    return const Icon(Icons.remove_circle_outline, color: Colors.grey, size: 16);
+  }
+
+  // ── 배정 수령 상태 (Assignment Status) ──────────────────────────────────
+
+  static String _assetAssignmentStatusText(Asset asset, DateFormat _) {
+    switch (asset.assignmentStatus) {
+      case 'pending':
+        return '수령 대기';
+      case 'confirmed':
+        return '수령 완료';
+      default:
+        return '';
+    }
+  }
+
+  static Widget _assignmentStatusWidget(Asset asset, BuildContext context) {
+    final status = asset.assignmentStatus;
+    if (status == 'pending') {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.orange.withValues(alpha: 0.2),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: const Text('수령 대기', style: TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold)),
+      );
+    } else if (status == 'confirmed') {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.green.withValues(alpha: 0.2),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: const Text('수령 완료', style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold)),
+      );
+    }
+    return const SizedBox.shrink();
   }
 
   static String _formatStaticDate(DateTime? value, DateFormat dateFormat) {

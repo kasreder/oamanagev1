@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import '../models/auth_state.dart';
 import '../models/user.dart';
 import '../services/auth_service.dart';
+import '../services/realtime_service.dart';
 
 /// 인증 상태 관리 Notifier
 class AuthNotifier extends AsyncNotifier<AuthState> {
@@ -67,6 +68,9 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       return const AuthState.unauthenticated();
     }
 
+    // 세션 복원 성공 시 Realtime 구독 시작
+    ref.read(realtimeServiceProvider).subscribeAll();
+
     return AuthState(
       isAuthenticated: true,
       accessToken: session.accessToken,
@@ -105,6 +109,9 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       refreshToken: session.refreshToken,
       user: user,
     ));
+
+    // Realtime 구독 시작
+    ref.read(realtimeServiceProvider).subscribeAll();
   }
 
   /// Google OAuth 로그인
@@ -158,6 +165,8 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
 
   /// 로그아웃
   Future<void> logout() async {
+    // Realtime 구독 해제
+    await ref.read(realtimeServiceProvider).unsubscribeAll();
     await _authService.signOut();
     state = const AsyncData(AuthState.unauthenticated());
   }
