@@ -102,6 +102,14 @@ class AssetNotifier extends Notifier<AssetListState> {
     await _apiService.deleteAsset(id);
     await fetchAssets(page: state.page);
   }
+
+  /// Realtime Postgres Changes로 수신된 자산 데이터를 로컬 목록에 반영
+  void updateLocal(Asset updated) {
+    final assets = state.assets.map((a) {
+      return a.assetUid == updated.assetUid ? updated : a;
+    }).toList();
+    state = state.copyWith(assets: assets);
+  }
 }
 
 /// 자산 목록 Provider

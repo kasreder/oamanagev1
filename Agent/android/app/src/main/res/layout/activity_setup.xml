@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- 자산 번호 입력 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="자산 번호 (asset_uid)"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/et_asset_uid"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="BDT00001"
+            android:inputType="textCapCharacters"
+            android:maxLength="10"
+            android:layout_marginTop="4dp" />
+
+        <TextView
+            android:id="@+id/tv_asset_uid_error"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="형식: [B|R|C|L|S][유형코드][5자리 숫자]"
+            android:textColor="#F44336"
+            android:textSize="12sp"
+            android:visibility="gone" />
+
+        <!-- 전송 주기 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="전송 주기"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginTop="16dp" />
+
+        <Spinner
+            android:id="@+id/spinner_interval"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp" />
+
+        <!-- 버튼 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="16dp">
+
+            <Button
+                android:id="@+id/btn_start"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="시작"
+                android:enabled="false"
+                android:layout_marginEnd="8dp" />
+
+            <Button
+                android:id="@+id/btn_send_now"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="즉시 전송"
+                android:enabled="false" />
+        </LinearLayout>
+
+        <!-- 로딩 -->
+        <ProgressBar
+            android:id="@+id/progress_bar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:visibility="gone" />
+
+        <!-- 구분선: 상태 정보 -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#E0E0E0"
+            android:layout_marginTop="24dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="상태 정보"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginTop="12dp" />
+
+        <TextView
+            android:id="@+id/tv_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="연결 상태: -"
+            android:layout_marginTop="8dp" />
+
+        <TextView
+            android:id="@+id/tv_asset_uid_display"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="자산 번호: -"
+            android:layout_marginTop="4dp" />
+
+        <TextView
+            android:id="@+id/tv_interval"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="전송 주기: -"
+            android:layout_marginTop="4dp" />
+
+        <TextView
+            android:id="@+id/tv_last_heartbeat"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="마지막 전송: -"
+            android:layout_marginTop="4dp" />
+
+        <TextView
+            android:id="@+id/tv_send_result"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp" />
+
+        <TextView
+            android:id="@+id/tv_agent_version"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="에이전트 버전: -"
+            android:layout_marginTop="4dp" />
+
+        <!-- 구분선: 사용자 확인 -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#E0E0E0"
+            android:layout_marginTop="24dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="사용자 확인"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginTop="12dp" />
+
+        <TextView
+            android:id="@+id/tv_last_verified"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="마지막 확인: -"
+            android:layout_marginTop="8dp" />
+
+        <TextView
+            android:id="@+id/tv_verification_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="상태: 미확인"
+            android:layout_marginTop="4dp" />
+
+        <Button
+            android:id="@+id/btn_verify"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="사용자 확인하기"
+            android:enabled="false"
+            android:layout_marginTop="8dp" />
+
+    </LinearLayout>
+</ScrollView>

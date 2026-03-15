@@ -7,6 +7,8 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../constants.dart';
 import '../models/asset.dart';
 import '../services/api_service.dart';
+import '../services/realtime_service.dart';
+import '../notifiers/agent_presence_notifier.dart';
 import '../widgets/common/app_scaffold.dart';
 import '../widgets/common/loading_widget.dart';
 import '../widgets/common/error_widget.dart';
@@ -709,12 +711,227 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
           ),
           const SizedBox(height: 32),
 
+          // ── 에이전트 상태 (상세 모드만) ──
+          if (!widget.isCreateMode && _asset != null) ...[
+            _buildAgentStatusSection(context),
+            const SizedBox(height: 24),
+          ],
+
           // ── 액션 버튼 ──
           _buildActionButtons(context),
           const SizedBox(height: 32),
         ],
       ),
     );
+  }
+
+  // ── 에이전트 상태 섹션 ──────────────────────────────────────────────────
+  Widget _buildAgentStatusSection(BuildContext context) {
+    final asset = _asset!;
+    final theme = Theme.of(context);
+    final presenceState = ref.watch(agentPresenceNotifierProvider);
+    final isPresenceConnected = presenceState.containsKey(asset.assetUid);
+    final dateFmt = DateFormat('yyyy-MM-dd HH:mm');
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 접속 상태
+            Row(
+              children: [
+                Icon(Icons.wifi, size: 20, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text('접속 상태', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isPresenceConnected
+                        ? Colors.blue
+                        : (asset.lastActiveAt != null &&
+                                DateTime.now().difference(asset.lastActiveAt!).inMinutes <= 60)
+                            ? Colors.green
+                            : Colors.grey,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  isPresenceConnected
+                      ? '실시간 연결됨'
+                      : (asset.lastActiveAt != null
+                          ? '마지막 접속: ${dateFmt.format(asset.lastActiveAt!)}'
+                          : '접속 기록 없음'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // 사용자 확인 현황
+            Row(
+              children: [
+                Icon(Icons.verified_user, size: 20, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text('사용자 확인 현황', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                _buildVerificationIcon(asset.verificationStatus),
+                const SizedBox(width: 8),
+                Text(_verificationLabel(asset.verificationStatus)),
+              ],
+            ),
+            if (asset.lastVerifiedAt != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  '마지막 확인: ${dateFmt.format(asset.lastVerifiedAt!)}',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+            if (asset.verificationStatus == 'mismatch')
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Card(
+                  color: Colors.red.shade50,
+                  child: const Padding(
+                    padding: EdgeInsets.all(8),
+                    child: Row(
+                      children: [
+                        Icon(Icons.warning, color: Colors.red, size: 16),
+                        SizedBox(width: 8),
+                        Expanded(child: Text('기존 사용자와 다른 사용자입니다. 확인이 필요합니다.', style: TextStyle(color: Colors.red))),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 16),
+
+            // 배정 수령 상태
+            Row(
+              children: [
+                Icon(Icons.assignment_turned_in, size: 20, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text('배정 수령 상태', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                _buildAssignmentBadge(asset.assignmentStatus),
+                if (asset.assignmentConfirmedAt != null) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    '확인: ${dateFmt.format(asset.assignmentConfirmedAt!)}',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // 관리자 명령 버튼
+            const Divider(),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _sendAgentCommand('request_heartbeat'),
+                    icon: const Icon(Icons.sync, size: 18),
+                    label: const Text('즉시 Heartbeat'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _sendAgentCommand('refresh_system_info'),
+                    icon: const Icon(Icons.info_outline, size: 18),
+                    label: const Text('시스템 정보 갱신'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVerificationIcon(String? status) {
+    switch (status) {
+      case 'verified':
+        return const Icon(Icons.check_circle, color: Colors.green, size: 20);
+      case 'mismatch':
+        return const Icon(Icons.warning, color: Colors.red, size: 20);
+      default:
+        return const Icon(Icons.remove_circle_outline, color: Colors.grey, size: 20);
+    }
+  }
+
+  String _verificationLabel(String? status) {
+    switch (status) {
+      case 'verified':
+        return '확인 완료';
+      case 'mismatch':
+        return '불일치';
+      default:
+        return '미확인';
+    }
+  }
+
+  Widget _buildAssignmentBadge(String? status) {
+    switch (status) {
+      case 'pending':
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.orange.withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: const Text('수령 대기', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+        );
+      case 'confirmed':
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.green.withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: const Text('수령 완료', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+        );
+      default:
+        return const Text('배정 없음', style: TextStyle(color: Colors.grey));
+    }
+  }
+
+  Future<void> _sendAgentCommand(String command) async {
+    if (_asset == null) return;
+    try {
+      await ref.read(realtimeServiceProvider).sendCommand(_asset!.assetUid, command);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('명령 전송 완료: $command')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('명령 전송 실패: $e')),
+        );
+      }
+    }
   }
 
   Widget _buildSectionTitle(String title) {
