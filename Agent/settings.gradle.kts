@@ -16,3 +16,4 @@ dependencyResolution {
 rootProject.name = "OAAgent"
 include(":shared")
 include(":android:app")
+include(":windows")

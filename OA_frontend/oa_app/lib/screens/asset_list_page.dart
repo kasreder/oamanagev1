@@ -862,7 +862,7 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
-          color: Colors.orange.withValues(alpha: 0.2),
+          color: Colors.orange.withOpacity(0.2),
           borderRadius: BorderRadius.circular(4),
         ),
         child: const Text('수령 대기', style: TextStyle(color: Colors.orange, fontSize: 10, fontWeight: FontWeight.bold)),
@@ -871,7 +871,7 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(
-          color: Colors.green.withValues(alpha: 0.2),
+          color: Colors.green.withOpacity(0.2),
           borderRadius: BorderRadius.circular(4),
         ),
         child: const Text('수령 완료', style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold)),
