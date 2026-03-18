@@ -436,18 +436,22 @@ final channel = supabase.channel('assets-realtime')
 final presenceChannel = supabase.channel('agent-presence:global');
 presenceChannel
   .onPresenceSync((payload) {
-    // 전체 접속 목록 갱신
+    // 전체 접속 목록 갱신 — presenceState()는 List<SinglePresenceState> 반환
     final presences = presenceChannel.presenceState();
     ref.read(agentPresenceNotifierProvider.notifier).syncAll(presences);
   })
   .onPresenceJoin((payload) {
-    ref.read(agentPresenceNotifierProvider.notifier).addAgent(payload.newPresences);
+    // payload.newPresences: List<Presence> — 각 Presence.payload에서 데이터 추출
+    ref.read(agentPresenceNotifierProvider.notifier).addAgents(payload.newPresences);
   })
   .onPresenceLeave((payload) {
-    ref.read(agentPresenceNotifierProvider.notifier).removeAgent(payload.leftPresences);
+    // payload.leftPresences: List<Presence>
+    ref.read(agentPresenceNotifierProvider.notifier).removeAgents(payload.leftPresences);
   })
   .subscribe();
 ```
+
+> **참고**: `realtime_client 2.7.0`부터 `presenceState()`의 반환 타입이 `Map<String, List<dynamic>>`에서 `List<SinglePresenceState>`로 변경되었습니다. 각 `SinglePresenceState`는 `key`(문자열)와 `presences`(`List<Presence>`)를 가지며, `Presence.payload`에서 실제 데이터를 추출합니다.
 
 #### 4.6.4 이중 접속 상태 인디케이터
 
@@ -548,8 +552,8 @@ final alertChannel = supabase.channel('agent-alerts:global')
 | assignment_status | 표시 | 색상 | 설명 |
 |-------------------|------|------|------|
 | `NULL` | — | — | 배정 없음 |
-| `pending` | 주황색 "수령 대기" 배지 | `#FF9800` (Orange) | 배정됨, 사용자 수령 미확인 |
-| `confirmed` | 초록색 "수령 완료" + 확인 일시 | `#4CAF50` (Green) | 사용자 수령 확인 완료 (`assignment_confirmed_at` 표시) |
+| `pending` | 주황색 "수령 대기" 배지 | `Colors.orange.withOpacity(0.2)` 배경 + `Colors.orange` 텍스트 | 배정됨, 사용자 수령 미확인 |
+| `confirmed` | 초록색 "수령 완료" 배지 + 확인 일시 | `Colors.green.withOpacity(0.2)` 배경 + `Colors.green` 텍스트 | 사용자 수령 확인 완료 (`assignment_confirmed_at` 표시) |
 
 - 자산 목록에서 `pending` 자산 필터링 가능 ("수령 미확인" 필터)
 - 자산 상세 페이지에 "배정 수령 상태" 섹션 추가
@@ -650,6 +654,8 @@ final alertChannel = supabase.channel('agent-alerts:global')
 | 상단 | 자산번호(asset_uid) + 상태 뱃지 + 편집/삭제 버튼 |
 | 공통 정보 | 자산명, 유형, 시리얼번호, 모델명, 제조사, 건물/층, 지급형태, 소유자명/부서, 사용자명/부서, 관리자명/부서 |
 | 유형별 사양 | category에 따른 specifications 상세 (8.2 참고) |
+| **배정 수령 상태** | `assignment_status` 기반 배지 표시 — `pending`: 주황색 "수령 대기" (`Colors.orange.withOpacity(0.2)`), `confirmed`: 초록색 "수령 완료" (`Colors.green.withOpacity(0.2)`) + `assignment_confirmed_at` 일시 (4.6.8 참고) |
+| **사용자 확인 현황** | `verification_status` 기반 — `verified`: ✓ 아이콘, `mismatch`: ⚠ 경고 카드. `last_verified_at` + `verification_interval_days`로 다음 확인 예정일 표시 (4.6.7 참고) |
 | 상단 액션 | **자산수정** 버튼, **실사등록** 버튼 |
 | **실사 사진** | 실사 촬영 사진 이미지 표시 (있을 경우) |
 | **친필 서명** | 서명 이미지 표시 (있을 경우) |
@@ -1552,23 +1558,49 @@ class DrawingNotifier extends _$DrawingNotifier {
 
 ### 9.7 AgentPresenceNotifier
 ```dart
+import 'package:realtime_client/realtime_client.dart' show Presence, SinglePresenceState;
+
 // 에이전트 Presence 상태 관리 Notifier
-@riverpod
-class AgentPresenceNotifier extends _$AgentPresenceNotifier {
+// key: asset_uid, value: AgentPresence
+class AgentPresenceNotifier extends Notifier<Map<String, AgentPresence>> {
   @override
-  Map<String, PresenceState> build() => {};
+  Map<String, AgentPresence> build() => {};
 
   // Presence sync 이벤트 — 전체 접속 목록 교체
-  void syncAll(List<Presence> presences) { ... }
+  // presenceState()는 List<SinglePresenceState> 반환 (realtime_client 2.7.0+)
+  void syncAll(List<SinglePresenceState> presences) {
+    final map = <String, AgentPresence>{};
+    for (final sps in presences) {
+      for (final presence in sps.presences) {
+        final p = AgentPresence.fromPresence(presence.payload);
+        if (p.assetUid.isNotEmpty) map[p.assetUid] = p;
+      }
+    }
+    state = map;
+  }
 
   // Presence join 이벤트 — 에이전트 접속 추가
-  void addAgent(List<Presence> newPresences) { ... }
+  void addAgents(List<Presence> newPresences) {
+    final updated = Map<String, AgentPresence>.from(state);
+    for (final presence in newPresences) {
+      final p = AgentPresence.fromPresence(presence.payload);
+      if (p.assetUid.isNotEmpty) updated[p.assetUid] = p;
+    }
+    state = updated;
+  }
 
   // Presence leave 이벤트 — 에이전트 접속 제거
-  void removeAgent(List<Presence> leftPresences) { ... }
+  void removeAgents(List<Presence> leftPresences) {
+    final updated = Map<String, AgentPresence>.from(state);
+    for (final presence in leftPresences) {
+      final assetUid = presence.payload['asset_uid'] as String? ?? '';
+      updated.remove(assetUid);
+    }
+    state = updated;
+  }
 
   // 특정 asset_uid의 Presence 연결 여부 확인
-  bool isConnected(String assetUid) { ... }
+  bool isConnected(String assetUid) => state.containsKey(assetUid);
 }
 ```
 

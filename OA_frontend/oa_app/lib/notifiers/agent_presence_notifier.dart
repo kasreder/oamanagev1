@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:realtime_client/realtime_client.dart' show Presence, SinglePresenceState;
 
 /// 에이전트 Presence 상태 항목
 class AgentPresence {
@@ -36,15 +37,14 @@ class AgentPresenceNotifier extends Notifier<Map<String, AgentPresence>> {
   Map<String, AgentPresence> build() => {};
 
   /// sync 이벤트 — 전체 접속 목록 교체
-  void syncAll(Map<String, List<dynamic>> presences) {
+  void syncAll(List<SinglePresenceState> presences) {
     final map = <String, AgentPresence>{};
-    for (final entry in presences.entries) {
-      for (final presence in entry.value) {
-        if (presence is Map<String, dynamic>) {
-          final p = AgentPresence.fromPresence(presence);
-          if (p.assetUid.isNotEmpty) {
-            map[p.assetUid] = p;
-          }
+    for (final sps in presences) {
+      for (final presence in sps.presences) {
+        final data = presence.payload;
+        final p = AgentPresence.fromPresence(data);
+        if (p.assetUid.isNotEmpty) {
+          map[p.assetUid] = p;
         }
       }
     }
@@ -52,27 +52,23 @@ class AgentPresenceNotifier extends Notifier<Map<String, AgentPresence>> {
   }
 
   /// join 이벤트 — 새 에이전트 접속 추가
-  void addAgents(List<dynamic> newPresences) {
+  void addAgents(List<Presence> newPresences) {
     final updated = Map<String, AgentPresence>.from(state);
     for (final presence in newPresences) {
-      if (presence is Map<String, dynamic>) {
-        final p = AgentPresence.fromPresence(presence);
-        if (p.assetUid.isNotEmpty) {
-          updated[p.assetUid] = p;
-        }
+      final p = AgentPresence.fromPresence(presence.payload);
+      if (p.assetUid.isNotEmpty) {
+        updated[p.assetUid] = p;
       }
     }
     state = updated;
   }
 
   /// leave 이벤트 — 에이전트 접속 제거
-  void removeAgents(List<dynamic> leftPresences) {
+  void removeAgents(List<Presence> leftPresences) {
     final updated = Map<String, AgentPresence>.from(state);
     for (final presence in leftPresences) {
-      if (presence is Map<String, dynamic>) {
-        final assetUid = presence['asset_uid'] as String? ?? '';
-        updated.remove(assetUid);
-      }
+      final assetUid = presence.payload['asset_uid'] as String? ?? '';
+      updated.remove(assetUid);
     }
     state = updated;
   }
