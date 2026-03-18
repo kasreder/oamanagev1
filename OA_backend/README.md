@@ -166,12 +166,22 @@ Supabase Auth 내장 JWT 기반 인증을 사용합니다.
 | Refresh Token 만료 | 7일 |
 | 토큰 자동 갱신 | `supabase_flutter` SDK 자동 처리 |
 
+### 3.1.1 테스트 계정
+
+`supabase db reset` 실행 시 시드(`seed.sql`)로 자동 생성됩니다.
+
+| 항목 | 값 |
+|------|-----|
+| 사번(ID) | `temp01` |
+| 비밀번호 | `Temp1234!` |
+| 로그인 이메일(내부 변환) | `temp01@oamanager.internal` |
+
 ### 3.2 일반 로그인 (사번 + 비밀번호)
 
 Supabase Auth는 기본적으로 이메일 로그인을 사용합니다. 사번 기반 로그인을 구현하기 위해 **사번을 이메일 형태로 변환**합니다.
 
 ```
-사번: EMP-2024-042 → 이메일: EMP-2024-042@oamanager.internal
+사번: temp01 → 이메일: temp01@oamanager.internal
 ```
 
 #### 회원가입 (관리자 또는 초기 데이터 투입 시)
@@ -210,7 +220,7 @@ final res = await supabase.auth.signInWithPassword(
   "expires_in": 1800,
   "user": {
     "id": 42,
-    "employee_id": "EMP-2024-042",
+    "employee_id": "temp01",
     "employee_name": "홍길동",
     "employment_type": "정규직",
     "organization_hq": "IT본부",

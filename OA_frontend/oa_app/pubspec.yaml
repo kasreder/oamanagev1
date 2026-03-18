@@ -40,8 +40,9 @@ dependencies:
   photo_view: ^0.14.0
   cached_network_image: ^3.3.0
 
-  # Image
+  # Image & OCR
   image_picker: ^1.0.0
+  google_mlkit_text_recognition: ^0.13.0
 
   # Local Storage
   path_provider: ^2.1.0
