@@ -595,6 +595,14 @@ final alertChannel = supabase.channel('agent-alerts:global')
 - SNS 로그인: OAuth 2.0 기반 (카카오 SDK, Google Sign-In)
 - 로그인 성공 → Access/Refresh Token 발급 → 홈(`/`) 이동
 
+**테스트 계정** (`supabase db reset` 시 시드로 자동 생성):
+
+| 항목 | 값 |
+|------|-----|
+| 사번(ID) | `temp01` |
+| 비밀번호 | `Temp1234!` |
+| 로그인 이메일(내부 변환) | `temp01@oamanager.internal` |
+
 #### 5.1.2 홈 (`/`)
 > 대시보드 — 주요 현황을 한눈에 파악
 
@@ -1003,7 +1011,7 @@ final alertChannel = supabase.channel('agent-alerts:global')
 // POST /api/auth/login
 // 사번 + 비밀번호로 인증 → Access/Refresh Token 발급
 {
-  "employee_id": "EMP-2024-042",       // 사번 (8.3 users.employee_id와 매칭)
+  "employee_id": "temp01",              // 사번 (8.3 users.employee_id와 매칭)
   "password": "********"               // 비밀번호 (평문 전송, HTTPS 필수)
 }
 ```
@@ -1030,7 +1038,7 @@ final alertChannel = supabase.channel('agent-alerts:global')
   "expires_in": 1800,                            // Access Token 만료 시간 (초, 30분)
   "user": {                                      // 로그인 사용자 정보 (8.3 users 스키마 기반)
     "id": 42,                                    // 사용자 PK
-    "employee_id": "EMP-2024-042",               // 사번
+    "employee_id": "temp01",                      // 사번
     "employee_name": "홍길동",                     // 사원 이름
     "employment_type": "정규직",                   // 고용형태 (정규직/계약직/도급직)
     "organization_hq": "IT본부",                   // 소속 본부

@@ -1,7 +1,10 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../constants.dart';
@@ -11,6 +14,7 @@ import '../services/realtime_service.dart';
 import '../notifiers/agent_presence_notifier.dart';
 import '../widgets/common/app_scaffold.dart';
 import '../widgets/common/loading_widget.dart';
+import '../utils/label_ocr.dart';
 import '../widgets/common/error_widget.dart';
 
 /// 5.1.5 자산 상세/등록 화면 (/asset/:id, /asset/new)
@@ -391,10 +395,13 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
           // 자산번호
           TextFormField(
             controller: _assetUidCtrl,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: '자산번호 *',
               hintText: 'BDT00001 형태',
-              border: OutlineInputBorder(),
+              border: const OutlineInputBorder(),
+              suffixIcon: _isEditing && widget.isCreateMode
+                  ? _buildQrScanSuffix(_assetUidCtrl)
+                  : null,
             ),
             readOnly: readOnly || !widget.isCreateMode,
             validator: (v) {
@@ -457,7 +464,20 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
           const SizedBox(height: 20),
 
           // ── 제조/모델 정보 ──
-          _buildSectionTitle('제조/모델 정보'),
+          Row(
+            children: [
+              Expanded(child: _buildSectionTitle('제조/모델 정보')),
+              if (_isEditing)
+                Tooltip(
+                  message: '라벨 촬영으로 자동 입력',
+                  child: IconButton(
+                    icon: const Icon(Icons.photo_camera, size: 22),
+                    onPressed: _captureAndExtractDeviceInfo,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+            ],
+          ),
           const SizedBox(height: 8),
 
           Row(
@@ -492,9 +512,10 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
               Expanded(
                 child: TextFormField(
                   controller: _serialNumberCtrl,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: '시리얼번호',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: _buildQrScanSuffix(_serialNumberCtrl),
                   ),
                   readOnly: readOnly,
                 ),
@@ -503,9 +524,10 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
               Expanded(
                 child: TextFormField(
                   controller: _macAddressCtrl,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'MAC 주소',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: _buildQrScanSuffix(_macAddressCtrl),
                   ),
                   readOnly: readOnly,
                 ),
@@ -934,6 +956,152 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
     }
   }
 
+  // ── QR 스캔 → 특정 필드에 값 입력 ────────────────────────────────────────
+  Future<void> _scanQrForField(TextEditingController controller) async {
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => _QrScanDialog(),
+    );
+    if (result != null && result.isNotEmpty && mounted) {
+      setState(() => controller.text = result);
+    }
+  }
+
+  // ── 라벨 촬영 → OCR로 제조사/모델/시리얼/MAC 자동 입력 ──────────────────
+  Future<void> _captureAndExtractDeviceInfo() async {
+    final picker = ImagePicker();
+    final photo = await picker.pickImage(source: ImageSource.camera);
+    if (photo == null) return;
+
+    // ML Kit는 모바일만 지원, Web은 수동 입력 안내
+    if (!LabelOcr.isSupported) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('웹에서는 OCR이 지원되지 않습니다. 모바일 기기에서 사용해주세요.')),
+        );
+      }
+      return;
+    }
+
+    // 모바일: ML Kit OCR
+    try {
+      final lines = await LabelOcr.recognizeFromFile(photo.path);
+
+      if (lines.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('텍스트를 인식하지 못했습니다. 다시 촬영해주세요.')),
+          );
+        }
+        return;
+      }
+
+      // 인식된 텍스트에서 패턴 매칭
+      final extracted = _parseDeviceLabel(lines);
+
+      if (mounted) {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('인식 결과 확인'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildExtractedRow('제조사', extracted['vendor']),
+                _buildExtractedRow('모델명', extracted['model']),
+                _buildExtractedRow('시리얼번호', extracted['serial']),
+                _buildExtractedRow('MAC 주소', extracted['mac']),
+                const SizedBox(height: 12),
+                Text(
+                  '인식된 전체 텍스트:\n${lines.join('\n')}',
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('적용')),
+            ],
+          ),
+        );
+
+        if (confirmed == true && mounted) {
+          setState(() {
+            if (extracted['vendor'] != null) _vendorCtrl.text = extracted['vendor']!;
+            if (extracted['model'] != null) _modelNameCtrl.text = extracted['model']!;
+            if (extracted['serial'] != null) _serialNumberCtrl.text = extracted['serial']!;
+            if (extracted['mac'] != null) _macAddressCtrl.text = extracted['mac']!;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('OCR 처리 실패: $e')),
+        );
+      }
+    }
+  }
+
+  /// 인식된 텍스트에서 제조사/모델/시리얼/MAC 패턴 추출
+  Map<String, String?> _parseDeviceLabel(List<String> lines) {
+    String? vendor, model, serial, mac;
+    final fullText = lines.join(' ');
+
+    // MAC 주소 패턴: XX:XX:XX:XX:XX:XX 또는 XX-XX-XX-XX-XX-XX
+    final macRegex = RegExp(r'([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}');
+    final macMatch = macRegex.firstMatch(fullText);
+    if (macMatch != null) mac = macMatch.group(0)!.toUpperCase();
+
+    // 시리얼번호: S/N, Serial, SN: 뒤의 값
+    final serialRegex = RegExp(r'(?:S/?N|Serial(?:\s*No)?|SN)\s*[:\.]?\s*([A-Za-z0-9\-]+)', caseSensitive: false);
+    final serialMatch = serialRegex.firstMatch(fullText);
+    if (serialMatch != null) serial = serialMatch.group(1);
+
+    // 모델명: Model, P/N, Part 뒤의 값
+    final modelRegex = RegExp(r'(?:Model|P/?N|Part(?:\s*No)?)\s*[:\.]?\s*([A-Za-z0-9\-\s]+)', caseSensitive: false);
+    final modelMatch = modelRegex.firstMatch(fullText);
+    if (modelMatch != null) model = modelMatch.group(1)?.trim();
+
+    // 제조사: 알려진 제조사명 매칭
+    final knownVendors = [
+      'Apple', 'Dell', 'HP', 'Lenovo', 'Samsung', 'LG', 'Cisco', 'Aruba',
+      'Fortinet', 'Fujitsu', 'Epson', 'Canon', 'BenQ', 'Yealink', 'ASUS',
+      'Acer', 'MSI', 'Intel', 'Microsoft', 'Sony', 'Toshiba', 'Panasonic',
+    ];
+    for (final v in knownVendors) {
+      if (fullText.toUpperCase().contains(v.toUpperCase())) {
+        vendor = v;
+        break;
+      }
+    }
+
+    return {'vendor': vendor, 'model': model, 'serial': serial, 'mac': mac};
+  }
+
+  Widget _buildExtractedRow(String label, String? value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          SizedBox(width: 80, child: Text('$label:', style: const TextStyle(fontWeight: FontWeight.bold))),
+          Expanded(child: Text(value ?? '(인식 안됨)', style: TextStyle(color: value != null ? Colors.black : Colors.grey))),
+        ],
+      ),
+    );
+  }
+
+  /// QR 스캔 버튼 위젯 (편집 모드일 때만 표시)
+  Widget _buildQrScanSuffix(TextEditingController controller) {
+    if (!_isEditing) return const SizedBox.shrink();
+    return IconButton(
+      icon: const Icon(Icons.qr_code_scanner, size: 22),
+      tooltip: 'QR 스캔',
+      onPressed: () => _scanQrForField(controller),
+    );
+  }
+
   Widget _buildSectionTitle(String title) {
     return Text(
       title,
@@ -1037,6 +1205,59 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
             icon: const Icon(Icons.fact_check),
             label: const Text('실사 등록'),
           ),
+        ),
+      ],
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// QR 스캔 다이얼로그 (MobileScanner)
+// ═══════════════════════════════════════════════════════════════════════════
+class _QrScanDialog extends StatefulWidget {
+  @override
+  State<_QrScanDialog> createState() => _QrScanDialogState();
+}
+
+class _QrScanDialogState extends State<_QrScanDialog> {
+  final MobileScannerController _controller = MobileScannerController(
+    detectionSpeed: DetectionSpeed.normal,
+    facing: CameraFacing.back,
+  );
+  bool _scanned = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('QR / 바코드 스캔'),
+      contentPadding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
+      content: SizedBox(
+        width: 320,
+        height: 320,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: MobileScanner(
+            controller: _controller,
+            onDetect: (capture) {
+              if (_scanned) return;
+              final barcode = capture.barcodes.firstOrNull;
+              if (barcode == null || barcode.rawValue == null) return;
+              _scanned = true;
+              Navigator.pop(context, barcode.rawValue!.trim());
+            },
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, null),
+          child: const Text('취소'),
         ),
       ],
     );
