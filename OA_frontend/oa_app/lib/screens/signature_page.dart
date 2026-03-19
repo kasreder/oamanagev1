@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:signature/signature.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
-import '../constants.dart';
 import '../main.dart';
 import '../services/api_service.dart';
 
@@ -59,10 +58,8 @@ class _SignaturePageState extends ConsumerState<SignaturePage> {
 
     try {
       // 서명 이미지를 PNG로 내보내기
-      final data = await _signatureCtrl.toPngBytes(
-        height: signaturePadSize.toInt(),
-        width: signaturePadSize.toInt(),
-      );
+      // width/height 생략 → 실제 서명 영역 크기로 export (가장 작은 용량)
+      final data = await _signatureCtrl.toPngBytes();
 
       if (data == null) {
         throw Exception('서명 이미지 생성 실패');
