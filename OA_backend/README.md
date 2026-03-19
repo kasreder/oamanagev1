@@ -125,18 +125,23 @@ supabase db reset
 supabase db push
 ```
 
-### 2.5 이번 변경 적용 (asset_uid 규칙 + 자산 담당정보 필드)
+### 2.5 마이그레이션 파일 목록
 ```bash
-# 1) 마이그레이션 파일 위치
+# 기존 마이그레이션
 # OA_backend/supabase/migrations/20260211000000_add_asset_party_fields.sql
 # OA_backend/supabase/migrations/20260211000001_asset_uid_format_alignment.sql
 # OA_backend/supabase/migrations/20260211000002_inspection_permissions_and_reset.sql
 # OA_backend/supabase/migrations/20260211000003_add_access_status.sql
 
-# 2) 로컬 반영
+# 에이전트 관련 마이그레이션 (2026-03-14 추가)
+# OA_backend/supabase/migrations/20260314000000_add_agent_tables.sql
+# OA_backend/supabase/migrations/20260314000001_add_agent_rls_policies.sql
+# OA_backend/supabase/migrations/20260314000002_add_agent_rpc_and_columns.sql
+
+# 로컬 반영
 supabase db reset
 
-# 3) 원격 반영
+# 원격 반영
 supabase db push
 ```
 
