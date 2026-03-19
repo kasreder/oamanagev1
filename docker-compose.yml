@@ -1,0 +1,351 @@
+name: oamanager
+
+# ================================================================
+# 기존 COSMOSX Traefik 네트워크를 외부 네트워크로 참조
+# → 기존 서비스에 영향 없이 Traefik 리버스 프록시 공유
+# ================================================================
+networks:
+  traefik-public:
+    external: true
+    name: cosmosx_traefik-public
+  oa-internal:
+    driver: bridge
+
+volumes:
+  oa-db-data:
+  oa-storage-data:
+
+services:
+
+  # ================================================================
+  # FRONTEND - Flutter 웹 앱 (nginx)
+  # terraforming.into → oa-frontend:80
+  # ================================================================
+  oa-frontend:
+    build:
+      context: ./OA_frontend/oa_app
+      dockerfile: Dockerfile
+      args:
+        SUPABASE_URL: ${OA_SUPABASE_PUBLIC_URL}
+        SUPABASE_ANON_KEY: ${OA_ANON_KEY}
+    container_name: oa-frontend
+    restart: unless-stopped
+    ports:
+      - "3080:80"
+    networks:
+      - traefik-public
+      - oa-internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=cosmosx_traefik-public"
+      - "traefik.http.routers.oa-frontend.rule=Host(`${OA_DOMAIN}`)"
+      - "traefik.http.routers.oa-frontend.entrypoints=websecure"
+      - "traefik.http.routers.oa-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.oa-frontend.loadbalancer.server.port=80"
+
+  # ================================================================
+  # KONG - API Gateway
+  # api.terraforming.into → oa-kong:8000
+  # ================================================================
+  oa-kong:
+    image: kong:2.8.1
+    container_name: oa-kong
+    restart: unless-stopped
+    entrypoint: bash -c 'eval "echo \"$$(cat ~/temp.yml)\"" > ~/kong.yml && /docker-entrypoint.sh kong docker-start'
+    networks:
+      - traefik-public
+      - oa-internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=cosmosx_traefik-public"
+      - "traefik.http.routers.oa-kong.rule=Host(`api.${OA_DOMAIN}`)"
+      - "traefik.http.routers.oa-kong.entrypoints=websecure"
+      - "traefik.http.routers.oa-kong.tls.certresolver=letsencrypt"
+      - "traefik.http.services.oa-kong.loadbalancer.server.port=8000"
+    volumes:
+      - ./volumes/api/kong.yml:/home/kong/temp.yml:ro
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /home/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+      KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+      SUPABASE_ANON_KEY: ${OA_ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${OA_SERVICE_ROLE_KEY}
+      DASHBOARD_USERNAME: ${OA_DASHBOARD_USERNAME}
+      DASHBOARD_PASSWORD: ${OA_DASHBOARD_PASSWORD}
+    depends_on:
+      oa-auth:
+        condition: service_healthy
+
+  # ================================================================
+  # AUTH - GoTrue 인증 서버
+  # ================================================================
+  oa-auth:
+    image: supabase/gotrue:v2.170.0
+    container_name: oa-auth
+    restart: unless-stopped
+    networks:
+      - oa-internal
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:9999/health"
+        ]
+      timeout: 5s
+      interval: 5s
+      retries: 3
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: ${OA_SUPABASE_PUBLIC_URL}
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgresql://supabase_auth_admin:${OA_POSTGRES_PASSWORD}@oa-db:5432/postgres
+      GOTRUE_SITE_URL: ${OA_SITE_URL}
+      GOTRUE_URI_ALLOW_LIST: ${OA_ADDITIONAL_REDIRECT_URLS}
+      GOTRUE_DISABLE_SIGNUP: ${OA_DISABLE_SIGNUP:-false}
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: ${OA_JWT_EXPIRY:-3600}
+      GOTRUE_JWT_SECRET: ${OA_JWT_SECRET}
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: ${OA_ENABLE_EMAIL_SIGNUP:-true}
+      GOTRUE_MAILER_AUTOCONFIRM: ${OA_ENABLE_EMAIL_AUTOCONFIRM:-true}
+      GOTRUE_SMTP_ADMIN_EMAIL: ${OA_SMTP_ADMIN_EMAIL:-}
+      GOTRUE_SMTP_HOST: ${OA_SMTP_HOST:-}
+      GOTRUE_SMTP_PORT: ${OA_SMTP_PORT:-587}
+      GOTRUE_SMTP_USER: ${OA_SMTP_USER:-}
+      GOTRUE_SMTP_PASS: ${OA_SMTP_PASS:-}
+      GOTRUE_SMTP_SENDER_NAME: ${OA_SMTP_SENDER_NAME:-OAManager}
+      GOTRUE_EXTERNAL_PHONE_ENABLED: "false"
+      GOTRUE_SMS_AUTOCONFIRM: "false"
+    depends_on:
+      oa-db:
+        condition: service_healthy
+
+  # ================================================================
+  # REST - PostgREST
+  # ================================================================
+  oa-rest:
+    image: postgrest/postgrest:v12.2.3
+    container_name: oa-rest
+    restart: unless-stopped
+    networks:
+      - oa-internal
+    environment:
+      PGRST_DB_URI: postgresql://authenticator:${OA_POSTGRES_PASSWORD}@oa-db:5432/postgres
+      PGRST_DB_SCHEMAS: ${OA_PGRST_DB_SCHEMAS:-public}
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${OA_JWT_SECRET}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_APP_SETTINGS_JWT_SECRET: ${OA_JWT_SECRET}
+      PGRST_APP_SETTINGS_JWT_EXP: ${OA_JWT_EXPIRY:-3600}
+    command: postgrest
+    depends_on:
+      oa-db:
+        condition: service_healthy
+
+  # ================================================================
+  # REALTIME - 실시간 구독
+  # ================================================================
+  oa-realtime:
+    image: supabase/realtime:v2.34.47
+    container_name: oa-realtime
+    restart: unless-stopped
+    networks:
+      oa-internal:
+        aliases:
+          - oa-realtime-dev
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-sSfL",
+          "--head",
+          "-o",
+          "/dev/null",
+          "-H",
+          "Authorization: Bearer ${OA_ANON_KEY}",
+          "http://localhost:4000/api/tenants/realtime-dev/health"
+        ]
+      timeout: 5s
+      interval: 5s
+      retries: 3
+    environment:
+      PORT: 4000
+      DB_HOST: oa-db
+      DB_PORT: 5432
+      DB_USER: supabase_admin
+      DB_PASSWORD: ${OA_POSTGRES_PASSWORD}
+      DB_NAME: postgres
+      DB_AFTER_CONNECT_QUERY: "SET search_path TO _realtime"
+      DB_ENC_KEY: supabaserealtime
+      API_JWT_SECRET: ${OA_JWT_SECRET}
+      SECRET_KEY_BASE: ${OA_SECRET_KEY_BASE}
+      APP_NAME: realtime
+      FLY_ALLOC_ID: fly123
+      FLY_APP_NAME: realtime
+      ERL_AFLAGS: -proto_dist inet_tcp
+      ENABLE_TAILSCALE: "false"
+      DNS_NODES: "''"
+      RLIMIT_NOFILE: ""
+    command: >
+      sh -c "/app/bin/migrate && /app/bin/realtime eval 'Realtime.Release.seeds(Realtime.Repo)' && /app/bin/server"
+    depends_on:
+      oa-db:
+        condition: service_healthy
+
+  # ================================================================
+  # STORAGE - 파일 스토리지
+  # ================================================================
+  oa-storage:
+    image: supabase/storage-api:v1.13.3
+    container_name: oa-storage
+    restart: unless-stopped
+    networks:
+      - oa-internal
+    volumes:
+      - oa-storage-data:/var/lib/storage
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://localhost:5000/status', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))"
+        ]
+      timeout: 5s
+      interval: 5s
+      retries: 3
+    environment:
+      ANON_KEY: ${OA_ANON_KEY}
+      SERVICE_KEY: ${OA_SERVICE_ROLE_KEY}
+      POSTGREST_URL: http://oa-rest:3000
+      PGRST_JWT_SECRET: ${OA_JWT_SECRET}
+      DATABASE_URL: postgresql://supabase_storage_admin:${OA_POSTGRES_PASSWORD}@oa-db:5432/postgres
+      FILE_SIZE_LIMIT: "52428800"
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: stub
+      REGION: ap-northeast-2
+      GLOBAL_S3_BUCKET: stub
+      ENABLE_IMAGE_TRANSFORMATION: "true"
+      IMGPROXY_URL: http://oa-imgproxy:5001
+    depends_on:
+      oa-db:
+        condition: service_healthy
+      oa-rest:
+        condition: service_started
+      oa-imgproxy:
+        condition: service_started
+
+  # ================================================================
+  # IMGPROXY - 이미지 변환
+  # ================================================================
+  oa-imgproxy:
+    image: darthsim/imgproxy:v3.8.0
+    container_name: oa-imgproxy
+    restart: unless-stopped
+    networks:
+      - oa-internal
+    healthcheck:
+      test: ["CMD", "imgproxy", "health"]
+      timeout: 5s
+      interval: 5s
+      retries: 3
+    environment:
+      IMGPROXY_BIND: ":5001"
+      IMGPROXY_LOCAL_FILESYSTEM_ROOT: "/"
+      IMGPROXY_USE_ETAG: "true"
+      IMGPROXY_ENABLE_WEBP_DETECTION: "true"
+
+  # ================================================================
+  # META - postgres-meta (DB 관리)
+  # ================================================================
+  oa-meta:
+    image: supabase/postgres-meta:v0.86.0
+    container_name: oa-meta
+    restart: unless-stopped
+    networks:
+      - oa-internal
+    environment:
+      PG_META_PORT: 8080
+      PG_META_DB_HOST: oa-db
+      PG_META_DB_PORT: 5432
+      PG_META_DB_USER: supabase
+      PG_META_DB_PASSWORD: ${OA_POSTGRES_PASSWORD}
+      PG_META_DB_NAME: postgres
+      PG_META_CRYPTO_KEY: ${OA_PG_META_CRYPTO_KEY:-your-crypto-key}
+    depends_on:
+      oa-db:
+        condition: service_healthy
+
+  # ================================================================
+  # FUNCTIONS - Edge Runtime (Deno)
+  # ================================================================
+  oa-functions:
+    image: supabase/edge-runtime:v1.67.4
+    container_name: oa-edge-functions
+    restart: unless-stopped
+    networks:
+      - oa-internal
+    volumes:
+      - ./OA_backend/supabase/functions:/home/deno/functions:ro
+    environment:
+      JWT_SECRET: ${OA_JWT_SECRET}
+      SUPABASE_URL: http://oa-kong:8000
+      SUPABASE_ANON_KEY: ${OA_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${OA_SERVICE_ROLE_KEY}
+      SUPABASE_DB_URL: postgresql://postgres:${OA_POSTGRES_PASSWORD}@oa-db:5432/postgres
+      VERIFY_JWT: "${OA_FUNCTIONS_VERIFY_JWT:-false}"
+    command:
+      - start
+      - --main-service
+      - /home/deno/functions/main
+    depends_on:
+      oa-auth:
+        condition: service_healthy
+
+  # ================================================================
+  # DB - PostgreSQL 15 (포트 5433으로 기존 5432와 충돌 방지)
+  # ================================================================
+  oa-db:
+    image: supabase/postgres:15.8.1.060
+    container_name: oa-db
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    networks:
+      - oa-internal
+    volumes:
+      - oa-db-data:/var/lib/postgresql/data
+      - ./volumes/db/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ./volumes/db/init/00-schemas.sql:/docker-entrypoint-initdb.d/zz-schemas.sql:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    environment:
+      POSTGRES_HOST: /var/run/postgresql
+      PGPORT: 5432
+      POSTGRES_PORT: 5432
+      PGPASSWORD: ${OA_POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${OA_POSTGRES_PASSWORD}
+      PGDATABASE: postgres
+      POSTGRES_DB: postgres
+      JWT_SECRET: ${OA_JWT_SECRET}
+      JWT_EXP: ${OA_JWT_EXPIRY:-3600}
+    command:
+      - postgres
+      - -c
+      - config_file=/etc/postgresql/postgresql.conf
+      - -c
+      - log_min_messages=fatal

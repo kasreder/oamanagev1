@@ -399,7 +399,7 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
               labelText: '자산번호 *',
               hintText: 'BDT00001 형태',
               border: const OutlineInputBorder(),
-              suffixIcon: _isEditing && widget.isCreateMode
+              suffixIcon: _isEditing
                   ? _buildQrScanSuffix(_assetUidCtrl)
                   : null,
             ),
