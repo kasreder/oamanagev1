@@ -10,7 +10,7 @@
 ## 테스트/실행 가이드 (상위 공통)
 
 ### 0. 사전 준비
-- Flutter 3.22.x+, Dart 3.4.4+
+- Flutter 3.41.x+, Dart 3.11.x+
 - Node.js 18+
 - Supabase CLI
 - Docker Desktop (Supabase 로컬 실행)
