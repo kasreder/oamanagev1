@@ -83,7 +83,7 @@ final ThemeData lightTheme = ThemeData(
     color: AppColorsLight.divider,
     thickness: 1,
   ),
-  cardTheme: const CardTheme(
+  cardTheme: const CardThemeData(
     elevation: 1,
     margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
   ),
@@ -103,7 +103,7 @@ final ThemeData darkTheme = ThemeData(
     color: AppColorsDark.divider,
     thickness: 1,
   ),
-  cardTheme: const CardTheme(
+  cardTheme: const CardThemeData(
     elevation: 1,
     margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
   ),

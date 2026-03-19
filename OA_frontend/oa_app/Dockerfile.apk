@@ -1,0 +1,26 @@
+# Flutter Android APK 빌드용 Dockerfile
+FROM ghcr.io/cirruslabs/flutter:stable
+
+WORKDIR /app
+
+# 의존성 먼저 복사 (레이어 캐시)
+COPY pubspec.yaml pubspec.lock ./
+RUN flutter pub get
+
+# 소스 코드 복사
+COPY . .
+
+# 코드 생성
+RUN dart run build_runner build --delete-conflicting-outputs
+
+# 빌드 인자
+ARG SUPABASE_URL
+ARG SUPABASE_ANON_KEY
+
+# APK 빌드
+RUN flutter build apk --release \
+    --dart-define=SUPABASE_URL=${SUPABASE_URL} \
+    --dart-define=SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+
+# 빌드 결과물을 /output에 복사
+RUN mkdir -p /output && cp build/app/outputs/flutter-apk/app-release.apk /output/oamanager-v1.apk
