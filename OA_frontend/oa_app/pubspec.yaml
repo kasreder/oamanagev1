@@ -1,4 +1,4 @@
-name: oa_app
+name: oa_manager
 description: "OA 자산 실사 관리 시스템"
 publish_to: 'none'
 version: 1.0.0+1

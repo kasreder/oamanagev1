@@ -1,6 +1,7 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -15,6 +16,7 @@ import '../notifiers/agent_presence_notifier.dart';
 import '../widgets/common/app_scaffold.dart';
 import '../widgets/common/loading_widget.dart';
 import '../utils/label_ocr.dart';
+import '../utils/temp_file_cleaner.dart';
 import '../widgets/common/error_widget.dart';
 
 /// 5.1.5 자산 상세/등록 화면 (/asset/:id, /asset/new)
@@ -309,12 +311,55 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
 
   /// 실사 등록 (자산 상세 모드에서)
   Future<void> _createInspection() async {
+    // 사진 촬영
+    final picker = ImagePicker();
+    final photo = await picker.pickImage(
+      source: ImageSource.camera,
+      maxWidth: 1280,
+      maxHeight: 960,
+      imageQuality: 70,
+    );
+
+    if (photo == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('사진 촬영이 취소되었습니다.')),
+        );
+      }
+      return;
+    }
+
     try {
+      // 파일명: 자산번호_날짜_시간분.jpg
+      final now = DateTime.now();
+      final assetCode = _asset?.assetUid ?? 'UNKNOWN';
+      final timestamp = DateFormat('yyyyMMdd_HHmm').format(now);
+      final fileName = '${assetCode}_$timestamp.jpg';
+      final storagePath = 'photos/$fileName';
+
+      // Supabase Storage에 업로드
+      final bytes = await photo.readAsBytes();
+      final client = Supabase.instance.client;
+      await client.storage.from('inspection-photos').uploadBinary(
+        storagePath,
+        bytes,
+        fileOptions: const FileOptions(
+          contentType: 'image/jpeg',
+          upsert: true,
+        ),
+      );
+
+      // 임시 파일 삭제
+      await TempFileCleaner.delete(photo.path);
+
+      // 실사 등록
       final inspection = await _api.createInspection({
         'asset_id': widget.assetId,
-        'asset_code': _asset?.assetUid,
+        'asset_code': assetCode,
         'asset_type': _asset?.category,
+        'inspection_photo': storagePath,
       });
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('실사가 등록되었습니다.')),
@@ -467,7 +512,15 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
           Row(
             children: [
               Expanded(child: _buildSectionTitle('제조/모델 정보')),
-              if (_isEditing)
+              if (_isEditing) ...[
+                Tooltip(
+                  message: '사진 추가로 자동 입력',
+                  child: IconButton(
+                    icon: const Icon(Icons.photo_library, size: 22),
+                    onPressed: _pickAndExtractDeviceInfo,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
                 Tooltip(
                   message: '라벨 촬영으로 자동 입력',
                   child: IconButton(
@@ -476,6 +529,7 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
                     color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
+              ],
             ],
           ),
           const SizedBox(height: 8),
@@ -967,30 +1021,34 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
     }
   }
 
+  // ── 갤러리에서 사진 선택 → OCR ──────────────────────────────────────────
+  Future<void> _pickAndExtractDeviceInfo() async {
+    final picker = ImagePicker();
+    final photo = await picker.pickImage(source: ImageSource.gallery);
+    if (photo == null) return;
+    await _processOcrFromXFile(photo);
+  }
+
   // ── 라벨 촬영 → OCR로 제조사/모델/시리얼/MAC 자동 입력 ──────────────────
   Future<void> _captureAndExtractDeviceInfo() async {
     final picker = ImagePicker();
     final photo = await picker.pickImage(source: ImageSource.camera);
     if (photo == null) return;
+    await _processOcrFromXFile(photo);
+  }
 
-    // ML Kit는 모바일만 지원, Web은 수동 입력 안내
-    if (!LabelOcr.isSupported) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('웹에서는 OCR이 지원되지 않습니다. 모바일 기기에서 사용해주세요.')),
-        );
-      }
-      return;
-    }
-
-    // 모바일: ML Kit OCR
+  // ── 공통 OCR 처리 ─────────────────────────────────────────────────────
+  Future<void> _processOcrFromXFile(XFile file) async {
     try {
-      final lines = await LabelOcr.recognizeFromFile(photo.path);
+      final lines = await LabelOcr.recognizeFromXFile(file);
+
+      // OCR 완료 후 임시 이미지 파일 삭제
+      await TempFileCleaner.delete(file.path);
 
       if (lines.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('텍스트를 인식하지 못했습니다. 다시 촬영해주세요.')),
+            const SnackBar(content: Text('텍스트를 인식하지 못했습니다. 다시 시도해주세요.')),
           );
         }
         return;
@@ -1000,38 +1058,20 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
       final extracted = _parseDeviceLabel(lines);
 
       if (mounted) {
-        final confirmed = await showDialog<bool>(
+        final result = await showDialog<Map<String, String>>(
           context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('인식 결과 확인'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildExtractedRow('제조사', extracted['vendor']),
-                _buildExtractedRow('모델명', extracted['model']),
-                _buildExtractedRow('시리얼번호', extracted['serial']),
-                _buildExtractedRow('MAC 주소', extracted['mac']),
-                const SizedBox(height: 12),
-                Text(
-                  '인식된 전체 텍스트:\n${lines.join('\n')}',
-                  style: const TextStyle(fontSize: 11, color: Colors.grey),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
-              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('적용')),
-            ],
+          builder: (ctx) => _OcrResultEditDialog(
+            extracted: extracted,
+            ocrLines: lines,
           ),
         );
 
-        if (confirmed == true && mounted) {
+        if (result != null && mounted) {
           setState(() {
-            if (extracted['vendor'] != null) _vendorCtrl.text = extracted['vendor']!;
-            if (extracted['model'] != null) _modelNameCtrl.text = extracted['model']!;
-            if (extracted['serial'] != null) _serialNumberCtrl.text = extracted['serial']!;
-            if (extracted['mac'] != null) _macAddressCtrl.text = extracted['mac']!;
+            if (result['vendor']?.isNotEmpty == true) _vendorCtrl.text = result['vendor']!;
+            if (result['model']?.isNotEmpty == true) _modelNameCtrl.text = result['model']!;
+            if (result['serial']?.isNotEmpty == true) _serialNumberCtrl.text = result['serial']!;
+            if (result['mac']?.isNotEmpty == true) _macAddressCtrl.text = result['mac']!;
           });
         }
       }
@@ -1078,18 +1118,6 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
     }
 
     return {'vendor': vendor, 'model': model, 'serial': serial, 'mac': mac};
-  }
-
-  Widget _buildExtractedRow(String label, String? value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          SizedBox(width: 80, child: Text('$label:', style: const TextStyle(fontWeight: FontWeight.bold))),
-          Expanded(child: Text(value ?? '(인식 안됨)', style: TextStyle(color: value != null ? Colors.black : Colors.grey))),
-        ],
-      ),
-    );
   }
 
   /// QR 스캔 버튼 위젯 (편집 모드일 때만 표시)
@@ -1260,6 +1288,176 @@ class _QrScanDialogState extends State<_QrScanDialog> {
           child: const Text('취소'),
         ),
       ],
+    );
+  }
+}
+
+// ── OCR 결과 편집 다이얼로그 ─────────────────────────────────────────────
+class _OcrResultEditDialog extends StatefulWidget {
+  final Map<String, String?> extracted;
+  final List<String> ocrLines;
+
+  const _OcrResultEditDialog({
+    required this.extracted,
+    required this.ocrLines,
+  });
+
+  @override
+  State<_OcrResultEditDialog> createState() => _OcrResultEditDialogState();
+}
+
+class _OcrResultEditDialogState extends State<_OcrResultEditDialog> {
+  late final TextEditingController _vendorCtrl;
+  late final TextEditingController _modelCtrl;
+  late final TextEditingController _serialCtrl;
+  late final TextEditingController _macCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _vendorCtrl = TextEditingController(text: widget.extracted['vendor'] ?? '');
+    _modelCtrl = TextEditingController(text: widget.extracted['model'] ?? '');
+    _serialCtrl = TextEditingController(text: widget.extracted['serial'] ?? '');
+    _macCtrl = TextEditingController(text: widget.extracted['mac'] ?? '');
+  }
+
+  @override
+  void dispose() {
+    _vendorCtrl.dispose();
+    _modelCtrl.dispose();
+    _serialCtrl.dispose();
+    _macCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('인식 결과 확인'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('매칭되지 않은 항목은 직접 입력하세요.',
+                style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 12),
+            _buildEditableField('제조사', _vendorCtrl, widget.extracted['vendor'] != null),
+            _buildEditableField('모델명', _modelCtrl, widget.extracted['model'] != null),
+            _buildEditableField('시리얼번호', _serialCtrl, widget.extracted['serial'] != null),
+            _buildEditableField('MAC 주소', _macCtrl, widget.extracted['mac'] != null),
+            const SizedBox(height: 16),
+            ExpansionTile(
+              title: const Text('인식된 전체 텍스트 (탭하여 복사)', style: TextStyle(fontSize: 13)),
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: const EdgeInsets.only(bottom: 8),
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2D2D2D),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: widget.ocrLines.map((line) {
+                      final words = line.split(RegExp(r'\s+'))
+                          .where((w) => w.isNotEmpty)
+                          .toList();
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Wrap(
+                          spacing: 5,
+                          runSpacing: 4,
+                          children: words.map((word) => _WordChip(
+                            word: word,
+                            onCopied: (text) {
+                              ScaffoldMessenger.of(context)
+                                ..clearSnackBars()
+                                ..showSnackBar(SnackBar(
+                                  content: Text("'$text' 복사됨"),
+                                  duration: const Duration(seconds: 1),
+                                ));
+                            },
+                          )).toList(),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, null),
+          child: const Text('취소'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, {
+            'vendor': _vendorCtrl.text.trim(),
+            'model': _modelCtrl.text.trim(),
+            'serial': _serialCtrl.text.trim(),
+            'mac': _macCtrl.text.trim(),
+          }),
+          child: const Text('적용'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEditableField(String label, TextEditingController ctrl, bool matched) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: TextFormField(
+        controller: ctrl,
+        decoration: InputDecoration(
+          labelText: label,
+          isDense: true,
+          suffixIcon: matched
+              ? const Icon(Icons.check_circle, color: Colors.green, size: 18)
+              : const Icon(Icons.edit, color: Colors.orange, size: 18),
+          helperText: matched ? null : '자동 인식 실패 — 직접 입력하세요',
+          helperStyle: const TextStyle(fontSize: 10, color: Colors.orange),
+        ),
+      ),
+    );
+  }
+}
+
+// ── 단어 칩 (탭하면 클립보드 복사) ──────────────────────────────────────
+class _WordChip extends StatelessWidget {
+  final String word;
+  final ValueChanged<String> onCopied;
+
+  const _WordChip({required this.word, required this.onCopied});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(4),
+      onTap: () {
+        Clipboard.setData(ClipboardData(text: word));
+        onCopied(word);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        decoration: BoxDecoration(
+          color: const Color(0xFF424242),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(
+          word,
+          style: const TextStyle(
+            fontSize: 12,
+            fontFamily: 'monospace',
+            color: Color(0xFFE0E0E0),
+          ),
+        ),
+      ),
     );
   }
 }

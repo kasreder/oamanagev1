@@ -1,6 +1,6 @@
 {
-    "name": "oa_app",
-    "short_name": "oa_app",
+    "name": "OAManager",
+    "short_name": "OAManager",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

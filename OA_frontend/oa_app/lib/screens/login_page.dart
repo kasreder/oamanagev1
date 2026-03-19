@@ -156,12 +156,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     // ── 사번(ID) 입력란 ──
                     TextFormField(
                       controller: _employeeIdController,
+                      style: const TextStyle(fontFamily: 'Roboto'),
                       decoration: const InputDecoration(
                         labelText: '사번',
                         hintText: '사번을 입력하세요',
                         prefixIcon: Icon(Icons.badge),
                         border: OutlineInputBorder(),
                       ),
+                      keyboardType: TextInputType.text,
                       textInputAction: TextInputAction.next,
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
@@ -175,6 +177,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     // ── 비밀번호(PW) 입력란 ──
                     TextFormField(
                       controller: _passwordController,
+                      style: const TextStyle(fontFamily: 'Roboto'),
                       decoration: InputDecoration(
                         labelText: '비밀번호',
                         hintText: '비밀번호를 입력하세요',
