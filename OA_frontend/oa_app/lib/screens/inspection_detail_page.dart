@@ -137,7 +137,7 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
     final path = _inspection?.inspectionPhoto;
     if (path == null) return null;
     if (path.startsWith('http')) return path;
-    return supabase.storage.from('inspections').getPublicUrl(path);
+    return supabase.storage.from('inspection-photos').getPublicUrl(path);
   }
 
   /// 서명 URL 취득
@@ -307,111 +307,136 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
         ),
         const SizedBox(height: 20),
 
-        // ── 사진 섹션 ──
-        _buildSectionTitle('실사 사진'),
-        const SizedBox(height: 8),
-        if (_photoUrl != null)
-          Card(
-            clipBehavior: Clip.antiAlias,
-            child: CachedNetworkImage(
-              imageUrl: _photoUrl!,
-              height: 200,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              placeholder: (_, __) => const SizedBox(
-                height: 200,
-                child: Center(child: CircularProgressIndicator()),
+        // ── 사진 섹션 (펼치기) ──
+        Card(
+          clipBehavior: Clip.antiAlias,
+          child: ExpansionTile(
+            leading: Icon(
+              _photoUrl != null ? Icons.photo : Icons.photo_camera,
+              color: _photoUrl != null
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.outline,
+            ),
+            title: Text('실사 사진',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                )),
+            subtitle: Text(
+              _photoUrl != null ? '등록됨' : '미등록',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: _photoUrl != null ? Colors.green : theme.colorScheme.outline,
               ),
-              errorWidget: (_, __, ___) => SizedBox(
-                height: 200,
-                child: Center(
+            ),
+            children: [
+              if (_photoUrl != null)
+                CachedNetworkImage(
+                  imageUrl: _photoUrl!,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => const SizedBox(
+                    height: 200,
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                  errorWidget: (_, __, ___) => SizedBox(
+                    height: 200,
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.broken_image,
+                              color: theme.colorScheme.outline, size: 32),
+                          const SizedBox(height: 4),
+                          Text('이미지를 불러올 수 없습니다.',
+                              style: theme.textTheme.bodySmall),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.all(24),
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.broken_image,
-                          color: theme.colorScheme.outline, size: 32),
-                      const SizedBox(height: 4),
-                      Text('이미지를 불러올 수 없습니다.',
+                      Icon(Icons.photo_camera,
+                          size: 32, color: theme.colorScheme.outline),
+                      const SizedBox(height: 8),
+                      Text('사진이 등록되지 않았습니다.',
                           style: theme.textTheme.bodySmall),
                     ],
                   ),
                 ),
-              ),
-            ),
-          )
-        else
-          Card(
-            child: Container(
-              height: 120,
-              width: double.infinity,
-              alignment: Alignment.center,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.photo_camera,
-                      size: 32, color: theme.colorScheme.outline),
-                  const SizedBox(height: 8),
-                  Text('사진이 등록되지 않았습니다.',
-                      style: theme.textTheme.bodySmall),
-                ],
-              ),
-            ),
+            ],
           ),
-        const SizedBox(height: 20),
+        ),
+        const SizedBox(height: 12),
 
-        // ── 서명 섹션 ──
-        _buildSectionTitle('서명'),
-        const SizedBox(height: 8),
-        if (_signatureUrl != null)
-          Card(
-            clipBehavior: Clip.antiAlias,
-            child: Container(
-              color: Colors.white,
-              child: CachedNetworkImage(
-                imageUrl: _signatureUrl!,
-                height: 160,
-                width: double.infinity,
-                fit: BoxFit.contain,
-                placeholder: (_, __) => const SizedBox(
-                  height: 160,
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-                errorWidget: (_, __, ___) => SizedBox(
-                  height: 160,
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.broken_image,
-                            color: theme.colorScheme.outline, size: 32),
-                        const SizedBox(height: 4),
-                        Text('서명을 불러올 수 없습니다.',
-                            style: theme.textTheme.bodySmall),
-                      ],
+        // ── 서명 섹션 (펼치기) ──
+        Card(
+          clipBehavior: Clip.antiAlias,
+          child: ExpansionTile(
+            leading: Icon(
+              _signatureUrl != null ? Icons.draw : Icons.draw_outlined,
+              color: _signatureUrl != null
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.outline,
+            ),
+            title: Text('서명',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                )),
+            subtitle: Text(
+              _signatureUrl != null ? '등록됨' : '미등록',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: _signatureUrl != null ? Colors.green : theme.colorScheme.outline,
+              ),
+            ),
+            children: [
+              if (_signatureUrl != null)
+                Container(
+                  color: Colors.white,
+                  child: CachedNetworkImage(
+                    imageUrl: _signatureUrl!,
+                    height: 160,
+                    width: double.infinity,
+                    fit: BoxFit.contain,
+                    placeholder: (_, __) => const SizedBox(
+                      height: 160,
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                    errorWidget: (_, __, ___) => SizedBox(
+                      height: 160,
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.broken_image,
+                                color: theme.colorScheme.outline, size: 32),
+                            const SizedBox(height: 4),
+                            Text('서명을 불러올 수 없습니다.',
+                                style: theme.textTheme.bodySmall),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      Icon(Icons.draw,
+                          size: 32, color: theme.colorScheme.outline),
+                      const SizedBox(height: 8),
+                      Text('서명이 등록되지 않았습니다.',
+                          style: theme.textTheme.bodySmall),
+                    ],
+                  ),
                 ),
-              ),
-            ),
-          )
-        else
-          Card(
-            child: Container(
-              height: 100,
-              width: double.infinity,
-              alignment: Alignment.center,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.draw,
-                      size: 32, color: theme.colorScheme.outline),
-                  const SizedBox(height: 8),
-                  Text('서명이 등록되지 않았습니다.',
-                      style: theme.textTheme.bodySmall),
-                ],
-              ),
-            ),
+            ],
           ),
+        ),
         const SizedBox(height: 32),
 
         // ── 액션 버튼 ──
