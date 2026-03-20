@@ -37,12 +37,14 @@ class AppScaffold extends ConsumerWidget {
   final String title;
   final Widget body;
   final int currentIndex;
+  final List<Widget>? actions;
 
   const AppScaffold({
     super.key,
     required this.title,
     required this.body,
     this.currentIndex = 0,
+    this.actions,
   });
 
   @override
@@ -56,6 +58,7 @@ class AppScaffold extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(title),
+        actions: actions,
       ),
       drawer: _buildDrawer(context, ref, isDarkMode, user),
       body: isNarrow

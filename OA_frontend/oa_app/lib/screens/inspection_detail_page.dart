@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../main.dart';
 import '../models/asset_inspection.dart';
@@ -15,7 +17,7 @@ import '../widgets/common/error_widget.dart';
 ///
 /// - 자산 정보 (자산번호, 사용자, 부서)
 /// - 실사 정보 (건물, 층, 위치, 상태, 메모)
-/// - 사진 표시 + 서명 표시
+/// - 사진 촬영/표시 + 서명 표시
 /// - 완료건 (completed=true): 읽기 전용
 /// - [사인하기] 버튼 -> /signature (extra: inspectionId)
 class InspectionDetailPage extends ConsumerStatefulWidget {
@@ -38,7 +40,12 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
   AssetInspection? _inspection;
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _isUploadingPhoto = false;
   String? _error;
+
+  // Signed URL 캐시
+  String? _photoSignedUrl;
+  String? _signatureSignedUrl;
 
   // 편집 가능한 필드 컨트롤러
   late TextEditingController _buildingCtrl;
@@ -89,10 +96,52 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
         _isLoading = false;
       });
       _populateForm(inspection);
+      await _loadSignedUrls(inspection);
     } catch (e) {
       setState(() {
         _isLoading = false;
         _error = e.toString();
+      });
+    }
+  }
+
+  /// 사진/서명 Signed URL 로드 (private 버킷용)
+  Future<void> _loadSignedUrls(AssetInspection ins) async {
+    String? photoUrl;
+    String? sigUrl;
+
+    // 사진 URL
+    final photoPath = ins.inspectionPhoto;
+    if (photoPath != null) {
+      if (photoPath.startsWith('http')) {
+        photoUrl = photoPath;
+      } else {
+        try {
+          photoUrl = await supabase.storage
+              .from('inspection-photos')
+              .createSignedUrl(photoPath, 3600);
+        } catch (_) {}
+      }
+    }
+
+    // 서명 URL
+    final sigPath = ins.signatureImage;
+    if (sigPath != null) {
+      if (sigPath.startsWith('http')) {
+        sigUrl = sigPath;
+      } else {
+        try {
+          sigUrl = await supabase.storage
+              .from('inspection-signatures')
+              .createSignedUrl(sigPath, 3600);
+        } catch (_) {}
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _photoSignedUrl = photoUrl;
+        _signatureSignedUrl = sigUrl;
       });
     }
   }
@@ -132,20 +181,62 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
     }
   }
 
-  /// 사진 URL 취득
-  String? get _photoUrl {
-    final path = _inspection?.inspectionPhoto;
-    if (path == null) return null;
-    if (path.startsWith('http')) return path;
-    return supabase.storage.from('inspection-photos').getPublicUrl(path);
-  }
+  /// 사진 촬영 및 업로드
+  Future<void> _captureAndUploadPhoto() async {
+    final picker = ImagePicker();
+    final photo = await picker.pickImage(
+      source: ImageSource.camera,
+      maxWidth: 1280,
+      maxHeight: 960,
+      imageQuality: 70,
+    );
+    if (photo == null) return;
 
-  /// 서명 URL 취득
-  String? get _signatureUrl {
-    final path = _inspection?.signatureImage;
-    if (path == null) return null;
-    if (path.startsWith('http')) return path;
-    return supabase.storage.from('signatures').getPublicUrl(path);
+    setState(() => _isUploadingPhoto = true);
+
+    try {
+      final now = DateTime.now();
+      final assetCode = _inspection?.assetCode ?? 'UNKNOWN';
+      final timestamp = DateFormat('yyyyMMdd_HHmm').format(now);
+      final fileName = '${assetCode}_$timestamp.jpg';
+      final storagePath = 'photos/$fileName';
+
+      final bytes = await photo.readAsBytes();
+
+      await supabase.storage.from('inspection-photos').uploadBinary(
+            storagePath,
+            bytes,
+            fileOptions: const FileOptions(
+              contentType: 'image/jpeg',
+              upsert: true,
+            ),
+          );
+
+      // inspection 레코드에 사진 경로 업데이트
+      await _api.updateInspection(widget.inspectionId, {
+        'inspection_photo': storagePath,
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('사진이 저장되었습니다.')),
+        );
+        _loadInspection();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('사진 저장 실패: ${e.toString()}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUploadingPhoto = false);
+      }
+    }
   }
 
   @override
@@ -312,8 +403,8 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
           clipBehavior: Clip.antiAlias,
           child: ExpansionTile(
             leading: Icon(
-              _photoUrl != null ? Icons.photo : Icons.photo_camera,
-              color: _photoUrl != null
+              _photoSignedUrl != null ? Icons.photo : Icons.photo_camera,
+              color: _photoSignedUrl != null
                   ? theme.colorScheme.primary
                   : theme.colorScheme.outline,
             ),
@@ -322,15 +413,17 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
                   fontWeight: FontWeight.bold,
                 )),
             subtitle: Text(
-              _photoUrl != null ? '등록됨' : '미등록',
+              _photoSignedUrl != null ? '등록됨' : '미등록',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: _photoUrl != null ? Colors.green : theme.colorScheme.outline,
+                color: _photoSignedUrl != null
+                    ? Colors.green
+                    : theme.colorScheme.outline,
               ),
             ),
             children: [
-              if (_photoUrl != null)
+              if (_photoSignedUrl != null)
                 CachedNetworkImage(
-                  imageUrl: _photoUrl!,
+                  imageUrl: _photoSignedUrl!,
                   width: double.infinity,
                   fit: BoxFit.cover,
                   placeholder: (_, __) => const SizedBox(
@@ -366,6 +459,29 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
                     ],
                   ),
                 ),
+              // 사진 촬영 버튼
+              if (!isCompleted)
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed:
+                          _isUploadingPhoto ? null : _captureAndUploadPhoto,
+                      icon: _isUploadingPhoto
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child:
+                                  CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.camera_alt),
+                      label: Text(_photoSignedUrl != null
+                          ? '사진 다시 촬영'
+                          : '사진 촬영'),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -376,8 +492,8 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
           clipBehavior: Clip.antiAlias,
           child: ExpansionTile(
             leading: Icon(
-              _signatureUrl != null ? Icons.draw : Icons.draw_outlined,
-              color: _signatureUrl != null
+              _signatureSignedUrl != null ? Icons.draw : Icons.draw_outlined,
+              color: _signatureSignedUrl != null
                   ? theme.colorScheme.primary
                   : theme.colorScheme.outline,
             ),
@@ -386,17 +502,19 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
                   fontWeight: FontWeight.bold,
                 )),
             subtitle: Text(
-              _signatureUrl != null ? '등록됨' : '미등록',
+              _signatureSignedUrl != null ? '등록됨' : '미등록',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: _signatureUrl != null ? Colors.green : theme.colorScheme.outline,
+                color: _signatureSignedUrl != null
+                    ? Colors.green
+                    : theme.colorScheme.outline,
               ),
             ),
             children: [
-              if (_signatureUrl != null)
+              if (_signatureSignedUrl != null)
                 Container(
                   color: Colors.white,
                   child: CachedNetworkImage(
-                    imageUrl: _signatureUrl!,
+                    imageUrl: _signatureSignedUrl!,
                     height: 160,
                     width: double.infinity,
                     fit: BoxFit.contain,
