@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,7 +10,8 @@ import '../widgets/common/app_scaffold.dart';
 
 /// 5.1.6 QR 스캔 화면 (/scan)
 ///
-/// - MobileScanner 위젯 (mobile_scanner 패키지)
+/// - 모바일: MobileScanner 위젯 (카메라 QR 인식)
+/// - 웹: 자산번호 직접 입력 방식 (웹 브라우저 BarcodeDetector 미지원 대응)
 /// - 스캔 결과: asset_uid 추출 -> assets 테이블 조회
 ///   - 등록된 자산: /asset/:id 이동
 ///   - 미등록: "등록하시겠습니까?" 다이얼로그 -> /asset/new (asset_uid 전달)
@@ -22,22 +24,32 @@ class ScanPage extends ConsumerStatefulWidget {
 }
 
 class _ScanPageState extends ConsumerState<ScanPage> {
-  final MobileScannerController _scannerController = MobileScannerController(
-    detectionSpeed: DetectionSpeed.normal,
-    facing: CameraFacing.back,
-  );
+  MobileScannerController? _scannerController;
+  final TextEditingController _manualInputCtrl = TextEditingController();
 
   int _scanCount = 0;
   bool _isProcessing = false;
   final List<String> _scannedCodes = [];
 
   @override
+  void initState() {
+    super.initState();
+    if (!kIsWeb) {
+      _scannerController = MobileScannerController(
+        detectionSpeed: DetectionSpeed.normal,
+        facing: CameraFacing.back,
+      );
+    }
+  }
+
+  @override
   void dispose() {
-    _scannerController.dispose();
+    _scannerController?.dispose();
+    _manualInputCtrl.dispose();
     super.dispose();
   }
 
-  /// QR 코드 감지 콜백
+  /// QR 코드 감지 콜백 (모바일 전용)
   Future<void> _onDetect(BarcodeCapture capture) async {
     if (_isProcessing) return;
     if (_scanCount >= maxScanCount) {
@@ -49,8 +61,6 @@ class _ScanPageState extends ConsumerState<ScanPage> {
     if (barcode == null || barcode.rawValue == null) return;
 
     final code = barcode.rawValue!.trim();
-
-    // 이미 스캔한 코드 중복 방지
     if (_scannedCodes.contains(code)) return;
 
     setState(() => _isProcessing = true);
@@ -66,10 +76,40 @@ class _ScanPageState extends ConsumerState<ScanPage> {
     }
   }
 
+  /// 수동 입력 처리 (웹용)
+  Future<void> _onManualSubmit() async {
+    final code = _manualInputCtrl.text.trim();
+    if (code.isEmpty) return;
+
+    if (_scanCount >= maxScanCount) {
+      _showMaxScanReached();
+      return;
+    }
+
+    if (_scannedCodes.contains(code)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('이미 조회한 자산번호입니다.')),
+      );
+      return;
+    }
+
+    setState(() => _isProcessing = true);
+    _scannedCodes.add(code);
+    _scanCount++;
+    _manualInputCtrl.clear();
+
+    try {
+      await _processScannedCode(code);
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
+    }
+  }
+
   /// 스캔된 코드 처리
   Future<void> _processScannedCode(String assetUid) async {
     try {
-      // asset_uid로 자산 조회
       final result = await supabase
           .from('assets')
           .select('id')
@@ -79,11 +119,9 @@ class _ScanPageState extends ConsumerState<ScanPage> {
       if (!mounted) return;
 
       if (result != null) {
-        // 등록된 자산 -> 상세 이동
         final assetId = result['id'] as int;
         context.go('/asset/$assetId');
       } else {
-        // 미등록 자산 -> 다이얼로그
         _showRegisterDialog(assetUid);
       }
     } catch (e) {
@@ -149,7 +187,7 @@ class _ScanPageState extends ConsumerState<ScanPage> {
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      title: 'QR 스캔',
+      title: kIsWeb ? '자산 조회' : 'QR 스캔',
       currentIndex: 1,
       body: _buildBody(context),
     );
@@ -168,7 +206,7 @@ class _ScanPageState extends ConsumerState<ScanPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '스캔 횟수: $_scanCount / $maxScanCount',
+                '조회 횟수: $_scanCount / $maxScanCount',
                 style: theme.textTheme.bodyMedium,
               ),
               Row(
@@ -193,58 +231,9 @@ class _ScanPageState extends ConsumerState<ScanPage> {
           ),
         ),
 
-        // ── 스캐너 뷰 ──
+        // ── 메인 영역: 웹=입력폼, 모바일=카메라 ──
         Expanded(
-          child: Stack(
-            children: [
-              MobileScanner(
-                controller: _scannerController,
-                onDetect: _onDetect,
-              ),
-
-              // 스캔 가이드 오버레이
-              Center(
-                child: Container(
-                  width: 250,
-                  height: 250,
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: theme.colorScheme.primary.withOpacity(0.7),
-                      width: 2,
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-              ),
-
-              // 하단 안내 문구
-              Positioned(
-                bottom: 40,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Text(
-                      'QR 코드를 사각형 안에 맞춰주세요',
-                      style: TextStyle(color: Colors.white, fontSize: 14),
-                    ),
-                  ),
-                ),
-              ),
-
-              // 처리 중 인디케이터
-              if (_isProcessing)
-                const Center(
-                  child: CircularProgressIndicator(),
-                ),
-            ],
-          ),
+          child: kIsWeb ? _buildWebInput(context) : _buildMobileScanner(context),
         ),
 
         // ── 최근 스캔 이력 ──
@@ -263,7 +252,7 @@ class _ScanPageState extends ConsumerState<ScanPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  '최근 스캔',
+                  '최근 조회',
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: theme.colorScheme.outline,
                   ),
@@ -287,6 +276,128 @@ class _ScanPageState extends ConsumerState<ScanPage> {
                 ),
               ],
             ),
+          ),
+      ],
+    );
+  }
+
+  /// 웹용: 자산번호 직접 입력 UI
+  Widget _buildWebInput(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.qr_code_2,
+              size: 64,
+              color: theme.colorScheme.outline,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '웹에서는 카메라 QR 스캔이 지원되지 않습니다.\n자산번호를 직접 입력해 주세요.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: 360,
+              child: TextField(
+                controller: _manualInputCtrl,
+                decoration: InputDecoration(
+                  labelText: '자산번호',
+                  hintText: '예) BDT00001, D00123',
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.arrow_forward),
+                    onPressed: _isProcessing ? null : _onManualSubmit,
+                  ),
+                ),
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) => _onManualSubmit(),
+                enabled: !_isProcessing,
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: 360,
+              height: 48,
+              child: FilledButton.icon(
+                onPressed: _isProcessing ? null : _onManualSubmit,
+                icon: _isProcessing
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.search),
+                label: const Text('조회'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 모바일용: 카메라 QR 스캔
+  Widget _buildMobileScanner(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Stack(
+      children: [
+        MobileScanner(
+          controller: _scannerController!,
+          onDetect: _onDetect,
+        ),
+
+        // 스캔 가이드 오버레이
+        Center(
+          child: Container(
+            width: 250,
+            height: 250,
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: theme.colorScheme.primary.withOpacity(0.7),
+                width: 2,
+              ),
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+        ),
+
+        // 하단 안내 문구
+        Positioned(
+          bottom: 40,
+          left: 0,
+          right: 0,
+          child: Center(
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text(
+                'QR 코드를 사각형 안에 맞춰주세요',
+                style: TextStyle(color: Colors.white, fontSize: 14),
+              ),
+            ),
+          ),
+        ),
+
+        // 처리 중 인디케이터
+        if (_isProcessing)
+          const Center(
+            child: CircularProgressIndicator(),
           ),
       ],
     );

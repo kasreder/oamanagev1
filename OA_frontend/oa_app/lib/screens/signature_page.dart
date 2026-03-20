@@ -69,7 +69,7 @@ class _SignaturePageState extends ConsumerState<SignaturePage> {
       final fileName =
           'signatures/${widget.inspectionId ?? 'temp'}_${DateTime.now().millisecondsSinceEpoch}.png';
 
-      await supabase.storage.from('signatures').uploadBinary(
+      await supabase.storage.from('inspection-signatures').uploadBinary(
             fileName,
             data,
             fileOptions: const FileOptions(

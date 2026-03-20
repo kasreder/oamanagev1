@@ -14,11 +14,11 @@ import '../widgets/common/empty_state_widget.dart';
 
 /// 5.1.3 자산 목록 화면 (/assets)
 ///
-/// - 상단: FilterBar (카테고리, 상태, 검색)
+/// - 상단: FilterBar (카테고리, 상태, 검색, 자산등록) 한 줄
 /// - 컬럼을 선택/순서 변경 가능한 표 형태 자산 목록
 /// - 30건 페이지네이션
 /// - 행 클릭 -> /asset/:id
-/// - FAB -> /asset/new
+/// - 앱바 ? 아이콘 -> 자산번호 부여 기준 안내
 class AssetListPage extends ConsumerStatefulWidget {
   const AssetListPage({super.key});
 
@@ -201,11 +201,26 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
     _loadAssets();
   }
 
+  /// 자산번호 부여 기준 안내 다이얼로그
+  void _showAssetUidGuide(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => const _AssetUidGuideDialog(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
       title: '자산 목록',
       currentIndex: 2,
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.help_outline),
+          tooltip: '자산번호 부여 기준',
+          onPressed: () => _showAssetUidGuide(context),
+        ),
+      ],
       body: Column(
         children: [
           _buildFilterBar(context),
@@ -228,35 +243,34 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
     );
   }
 
-  /// 필터 바 (카테고리, 상태, 검색)
+  /// 필터 바 (카테고리, 상태, 검색, 자산등록) - 한 줄 컴팩트
   Widget _buildFilterBar(BuildContext context) {
     final theme = Theme.of(context);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: Border(
           bottom: BorderSide(color: theme.dividerColor),
         ),
       ),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        crossAxisAlignment: WrapCrossAlignment.center,
+      child: Row(
         children: [
           // 카테고리 드롭다운
           SizedBox(
-            width: 140,
+            width: 110,
+            height: 36,
             child: DropdownButtonFormField<String>(
               value: _selectedCategory,
               decoration: const InputDecoration(
                 labelText: '카테고리',
                 isDense: true,
                 contentPadding:
-                    EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 border: OutlineInputBorder(),
               ),
+              style: theme.textTheme.bodySmall,
               isExpanded: true,
               items: [
                 const DropdownMenuItem(value: null, child: Text('전체')),
@@ -267,19 +281,22 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
               onChanged: _onCategoryChanged,
             ),
           ),
+          const SizedBox(width: 6),
 
           // 상태 드롭다운
           SizedBox(
-            width: 120,
+            width: 90,
+            height: 36,
             child: DropdownButtonFormField<String>(
               value: _selectedStatus,
               decoration: const InputDecoration(
                 labelText: '상태',
                 isDense: true,
                 contentPadding:
-                    EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 border: OutlineInputBorder(),
               ),
+              style: theme.textTheme.bodySmall,
               isExpanded: true,
               items: [
                 const DropdownMenuItem(value: null, child: Text('전체')),
@@ -290,25 +307,47 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
               onChanged: _onStatusChanged,
             ),
           ),
+          const SizedBox(width: 6),
 
           // 검색 입력 필드
-          SizedBox(
-            width: 200,
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: '자산번호/자산명/사용자',
-                isDense: true,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.search, size: 20),
-                  onPressed: () => _onSearch(_searchController.text),
+          Expanded(
+            child: SizedBox(
+              height: 36,
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: '자산번호/자산명/사용자',
+                  hintStyle: theme.textTheme.bodySmall,
+                  isDense: true,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.search, size: 18),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(maxWidth: 32),
+                    onPressed: () => _onSearch(_searchController.text),
+                  ),
                 ),
+                style: theme.textTheme.bodySmall,
+                textInputAction: TextInputAction.search,
+                onSubmitted: _onSearch,
               ),
-              textInputAction: TextInputAction.search,
-              onSubmitted: _onSearch,
+            ),
+          ),
+          const SizedBox(width: 6),
+
+          // 자산등록 버튼
+          SizedBox(
+            height: 36,
+            child: FilledButton.icon(
+              onPressed: () => context.go('/asset/new'),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('등록'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                textStyle: theme.textTheme.labelMedium,
+              ),
             ),
           ),
         ],
@@ -328,76 +367,61 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
       return const EmptyStateWidget(
         icon: Icons.inventory_2,
         message: '자산이 없습니다.',
-        subMessage: '우측 하단 버튼으로 새 자산을 등록하세요.',
+        subMessage: '상단 등록 버튼으로 새 자산을 등록하세요.',
       );
     }
 
     final theme = Theme.of(context);
 
-    return Stack(
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 8, left: 16, right: 16),
-          child: Scrollbar(
-            controller: _horizontalScrollController,
-            thumbVisibility: true,
-            child: SingleChildScrollView(
-              controller: _horizontalScrollController,
-              scrollDirection: Axis.horizontal,
-              child: SizedBox(
-                width: _tableWidth,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: theme.dividerColor),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Column(
-                      children: [
-                        // ── 헤더 (고정) ──
-                        _buildTableHeader(context),
-                        // ── 본문 행 (세로 스크롤) ──
-                        Expanded(
-                          child: RefreshIndicator(
-                            onRefresh: _loadAssets,
-                            child: SingleChildScrollView(
-                              physics: const AlwaysScrollableScrollPhysics(),
-                              padding: const EdgeInsets.only(bottom: 80),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  for (int i = 0; i < _assets.length; i++)
-                                    _buildTableRow(
-                                      context: context,
-                                      asset: _assets[i],
-                                      rowIndex: i,
-                                    ),
-                                ],
-                              ),
-                            ),
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, left: 16, right: 16),
+      child: Scrollbar(
+        controller: _horizontalScrollController,
+        thumbVisibility: true,
+        child: SingleChildScrollView(
+          controller: _horizontalScrollController,
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            width: _tableWidth,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border.all(color: theme.dividerColor),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Column(
+                  children: [
+                    // ── 헤더 (고정) ──
+                    _buildTableHeader(context),
+                    // ── 본문 행 (세로 스크롤) ──
+                    Expanded(
+                      child: RefreshIndicator(
+                        onRefresh: _loadAssets,
+                        child: SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              for (int i = 0; i < _assets.length; i++)
+                                _buildTableRow(
+                                  context: context,
+                                  asset: _assets[i],
+                                  rowIndex: i,
+                                ),
+                            ],
                           ),
                         ),
-                      ],
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),
           ),
         ),
-
-        // ── FAB: 새 자산 등록 ──
-        Positioned(
-          right: 16,
-          bottom: 16,
-          child: FloatingActionButton(
-            heroTag: 'asset_new',
-            onPressed: () => context.go('/asset/new'),
-            child: const Icon(Icons.add),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
@@ -714,8 +738,6 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
   }
 
   /// 접속현황 인디케이터 (Presence 우선 → Heartbeat 기반)
-  ///
-  /// Presence 연결 시 파란색, 그 외 기존 Heartbeat 기반 인디케이터
   Widget _accessStatusWidgetWithPresence(Asset asset, BuildContext context) {
     final presenceState = ref.watch(agentPresenceNotifierProvider);
     final isPresenceConnected = presenceState.containsKey(asset.assetUid);
@@ -725,7 +747,6 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
     String? dayText;
 
     if (isPresenceConnected) {
-      // Presence 연결됨 — 파란색
       color = Colors.blue;
     } else if (lastActive == null) {
       color = Colors.grey;
@@ -782,7 +803,6 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
   }
 
   static Widget _accessStatusWidget(Asset asset, BuildContext context) {
-    // static 호환용 fallback (실제로는 _accessStatusWidgetWithPresence 사용)
     final lastActive = asset.lastActiveAt;
     Color color;
     String? dayText;
@@ -943,4 +963,194 @@ class _AssetColumnMeta {
   final double width;
   final String Function(Asset asset, DateFormat formatter) value;
   final Widget Function(Asset asset, BuildContext context)? widgetBuilder;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 자산번호 부여 기준 안내 다이얼로그 (2페이지: 현재기준 / 변경후)
+// ═══════════════════════════════════════════════════════════════════════════
+class _AssetUidGuideDialog extends StatefulWidget {
+  const _AssetUidGuideDialog();
+
+  @override
+  State<_AssetUidGuideDialog> createState() => _AssetUidGuideDialogState();
+}
+
+class _AssetUidGuideDialogState extends State<_AssetUidGuideDialog> {
+  int _pageIndex = 0; // 0: 현재기준, 1: 변경후
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return AlertDialog(
+      title: Row(
+        children: [
+          const Icon(Icons.help_outline, size: 22),
+          const SizedBox(width: 8),
+          const Expanded(child: Text('자산번호 부여 기준')),
+          // 페이지 토글
+          ToggleButtons(
+            isSelected: [_pageIndex == 0, _pageIndex == 1],
+            onPressed: (index) => setState(() => _pageIndex = index),
+            borderRadius: BorderRadius.circular(8),
+            constraints: const BoxConstraints(minHeight: 32, minWidth: 72),
+            textStyle: theme.textTheme.labelSmall,
+            children: const [
+              Text('현재기준'),
+              Text('변경후'),
+            ],
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: _pageIndex == 0 ? _buildCurrentStandard(theme) : _buildNewStandard(theme),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('닫기'),
+        ),
+      ],
+    );
+  }
+
+  /// 현재기준: 문자1+숫자5자리 또는 문자2+숫자4자리
+  Widget _buildCurrentStandard(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primaryContainer.withOpacity(0.3),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            '형식: 문자1자리 + 숫자5자리  또는  문자2자리 + 숫자4자리',
+            style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text('코드 목록', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        _guideTable(theme, [
+          ['D', '데스크탑', 'D00001'],
+          ['N', '노트북', 'N00001'],
+          ['T', '태블릿', 'T00001'],
+          ['M', '모니터', 'M00001'],
+          ['S', '스캐너', 'S00001'],
+          ['P', '프린터', 'P00001'],
+          ['C', 'IP전화기', 'C00001'],
+          ['TP', 'Test폰', 'TP0001'],
+          ['EH', '법인폰, 테스트폰', 'EH0001'],
+          ['ET', '현장업무 태블릿', 'ET0001'],
+        ]),
+        const SizedBox(height: 12),
+        Text(
+          '예시: D00123, N00045, TP0012, EH0003',
+          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+        ),
+      ],
+    );
+  }
+
+  /// 변경후: 등록경로(1) + 장비코드(2) + 일련번호(5)
+  Widget _buildNewStandard(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.tertiaryContainer.withOpacity(0.3),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            '형식: 등록경로(1자리) + 장비코드(2자리) + 일련번호(5자리)\n총 8자리  예) BDT00001',
+            style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text('등록경로 코드', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        _guideTable(theme, [
+          ['B', 'Buy (구매)', ''],
+          ['R', 'Rental (렌탈)', ''],
+          ['C', 'Contact (도급)', ''],
+          ['L', 'Lease (리스)', ''],
+          ['S', 'Spot (현장)', ''],
+        ]),
+        const SizedBox(height: 16),
+        Text('장비코드', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        _guideTable(theme, [
+          ['DT', '데스크탑', 'BDT00001'],
+          ['NB', '노트북', 'BNB00001'],
+          ['MN', '모니터', 'BMN00001'],
+          ['PR', '프린터', 'BPR00001'],
+          ['TB', '태블릿', 'BTB00001'],
+          ['SC', '스캐너', 'BSC00001'],
+          ['IP', 'IP전화기', 'BIP00001'],
+          ['NW', '네트워크장비', 'BNW00001'],
+          ['SV', '서버', 'BSV00001'],
+          ['WR', '웨어러블', 'BWR00001'],
+          ['SD', '특수목적장비', 'BSD00001'],
+          ['SM', '테스트폰', 'BSM00001'],
+        ]),
+      ],
+    );
+  }
+
+  Widget _guideTable(ThemeData theme, List<List<String>> rows) {
+    return Table(
+      columnWidths: const {
+        0: FixedColumnWidth(50),
+        1: FlexColumnWidth(),
+        2: FixedColumnWidth(90),
+      },
+      border: TableBorder.all(
+        color: theme.dividerColor,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      children: [
+        TableRow(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest,
+          ),
+          children: [
+            _tableCell('코드', theme, isHeader: true),
+            _tableCell('설명', theme, isHeader: true),
+            _tableCell('예시', theme, isHeader: true),
+          ],
+        ),
+        for (final row in rows)
+          TableRow(
+            children: [
+              _tableCell(row[0], theme, isBold: true),
+              _tableCell(row[1], theme),
+              _tableCell(row[2], theme, color: theme.colorScheme.primary),
+            ],
+          ),
+      ],
+    );
+  }
+
+  Widget _tableCell(String text, ThemeData theme,
+      {bool isHeader = false, bool isBold = false, Color? color}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      child: Text(
+        text,
+        style: theme.textTheme.bodySmall?.copyWith(
+          fontWeight: (isHeader || isBold) ? FontWeight.w600 : null,
+          color: color,
+        ),
+      ),
+    );
+  }
 }
