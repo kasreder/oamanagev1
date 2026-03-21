@@ -75,7 +75,14 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/asset/new',
-        builder: (context, state) => const AssetDetailPage(isCreateMode: true),
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          final initialAssetUid = extra?['initialAssetUid'] as String?;
+          return AssetDetailPage(
+            isCreateMode: true,
+            initialAssetUid: initialAssetUid,
+          );
+        },
       ),
       GoRoute(
         path: '/asset/:id',

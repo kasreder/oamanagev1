@@ -13,6 +13,7 @@ class User {
   final String? workFloor;
   final String? authProvider;
   final String? snsId;
+  final String role;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -31,9 +32,16 @@ class User {
     this.workFloor,
     this.authProvider,
     this.snsId,
+    this.role = 'user',
     this.createdAt,
     this.updatedAt,
   });
+
+  /// 관리자 그룹 여부 (admin, operator1, operator2)
+  bool get isAdminGroup => const ['admin', 'operator1', 'operator2'].contains(role);
+
+  /// 관리자 여부
+  bool get isAdmin => role == 'admin';
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
@@ -51,6 +59,7 @@ class User {
       workFloor: json['work_floor'] as String?,
       authProvider: json['auth_provider'] as String?,
       snsId: json['sns_id'] as String?,
+      role: json['role'] as String? ?? 'user',
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
           : null,
@@ -74,6 +83,7 @@ class User {
       'work_floor': workFloor,
       'auth_provider': authProvider,
       'sns_id': snsId,
+      'role': role,
     };
   }
 
@@ -92,6 +102,7 @@ class User {
     String? workFloor,
     String? authProvider,
     String? snsId,
+    String? role,
   }) {
     return User(
       id: id ?? this.id,
@@ -108,6 +119,7 @@ class User {
       workFloor: workFloor ?? this.workFloor,
       authProvider: authProvider ?? this.authProvider,
       snsId: snsId ?? this.snsId,
+      role: role ?? this.role,
       createdAt: createdAt,
       updatedAt: updatedAt,
     );

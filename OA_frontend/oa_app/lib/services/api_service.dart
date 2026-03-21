@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import '../models/asset.dart';
 import '../models/asset_inspection.dart';
 import '../models/drawing.dart';
+import '../models/inspection_round.dart';
 import '../models/user.dart';
 import '../constants.dart';
 
@@ -322,5 +323,58 @@ class ApiService {
     return (response as List<dynamic>)
         .map((e) => Asset.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  // ---------------------------------------------------------------------------
+  // 실사 라운드 (Inspection Rounds)
+  // ---------------------------------------------------------------------------
+
+  /// 라운드 목록 조회
+  Future<List<InspectionRound>> fetchRounds() async {
+    final response = await _client
+        .from('inspection_rounds')
+        .select()
+        .order('year', ascending: false)
+        .order('round', ascending: false);
+    return (response as List)
+        .map((e) => InspectionRound.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// 현재 활성 라운드 조회 (1개 또는 null)
+  Future<InspectionRound?> fetchActiveRound() async {
+    final response = await _client
+        .from('inspection_rounds')
+        .select()
+        .eq('status', 'active')
+        .maybeSingle();
+    if (response == null) return null;
+    return InspectionRound.fromJson(response);
+  }
+
+  /// 라운드 생성
+  Future<InspectionRound> createRound(Map<String, dynamic> data) async {
+    final response = await _client
+        .from('inspection_rounds')
+        .insert(data)
+        .select()
+        .single();
+    return InspectionRound.fromJson(response);
+  }
+
+  /// 라운드 시작 (draft → active)
+  Future<InspectionRound> startRound(int roundId) async {
+    final response = await _client.rpc('start_inspection_round', params: {
+      'p_round_id': roundId,
+    });
+    return InspectionRound.fromJson(response as Map<String, dynamic>);
+  }
+
+  /// 라운드 종료 (active → closed)
+  Future<InspectionRound> closeRound(int roundId) async {
+    final response = await _client.rpc('close_inspection_round', params: {
+      'p_round_id': roundId,
+    });
+    return InspectionRound.fromJson(response as Map<String, dynamic>);
   }
 }

@@ -57,12 +57,24 @@ flutter run -d <device-id> --dart-define=SUPABASE_URL=http://localhost:54321 --d
 
 `supabase db reset` 실행 시 시드(`OA_backend/supabase/seed.sql`)로 자동 생성됩니다.
 
-| 항목 | 값 |
-|------|-----|
-| 사번(ID) | `temp01` |
-| 비밀번호 | `Temp1234!` |
-| 로그인 이메일(내부 변환) | `temp01@oamanager.internal` |
+#### 관리자 그룹
+| 사번(ID) | 이름 | 역할 | 비밀번호 |
+|----------|------|------|---------|
+| `temp01` | Test User | admin | `Temp1234!` |
+| `admin01` | 관리자 | admin | `Admin1234!` |
+| `oper01` | 운영자1 | operator1 | `Oper1234!` |
+| `oper02` | 운영자2 | operator2 | `Oper1234!` |
 
+#### 사용자 그룹
+| 사번(ID) | 이름 | 역할 | 비밀번호 |
+|----------|------|------|---------|
+| `user01` | 사용자1 | user | `User1234!` |
+| `user02` | 사용자2 | user | `User1234!` |
+| `user03` | 사용자3 | user | `User1234!` |
+| `user04` | 사용자4 | user | `User1234!` |
+| `user05` | 사용자5 | user | `User1234!` |
+
+> 로그인 이메일은 `{사번}@oamanager.internal` 형식으로 내부 변환됩니다.
 > Auth 계정 생성 SQL은 `seed.sql`에 포함되어 있으며, `auth.users` INSERT + `public.users` 동기화 트리거로 자동 반영됩니다.
 
 ### 4) 기본 동작 체크리스트
@@ -97,11 +109,11 @@ supabase functions serve
 
 ## 구현 현황 (Implementation Status)
 
-> 최종 업데이트: 2026-03-20
+> 최종 업데이트: 2026-03-21
 
 ### 백엔드 (Supabase)
 
-#### DB 마이그레이션 (16건 완료)
+#### DB 마이그레이션 (20건 완료)
 | # | 파일명 | 내용 | 상태 |
 |---|--------|------|------|
 | 1 | `20240201000000_create_users.sql` | users 테이블 생성 | ✅ 완료 |
@@ -120,6 +132,10 @@ supabase functions serve
 | 14 | `20260314000000_add_agent_tables.sql` | 에이전트 테이블 생성 (agent_heartbeats, agent_system_info) | ✅ 완료 |
 | 15 | `20260314000001_add_agent_rls_policies.sql` | 에이전트 테이블 RLS 정책 | ✅ 완료 |
 | 16 | `20260314000002_add_agent_rpc_and_columns.sql` | 에이전트 RPC 함수 및 컬럼 추가 | ✅ 완료 |
+| 17 | `20260321000000_fix_inspection_update_rls.sql` | 실사 완료 전환 시 WITH CHECK 수정 | ✅ 완료 |
+| 18 | `20260321000001_add_user_role.sql` | users role 컬럼 + is_admin_group() 함수 | ✅ 완료 |
+| 19 | `20260321000002_create_inspection_rounds.sql` | 전사 실사 라운드(차수) 테이블 + RPC | ✅ 완료 |
+| 20 | `20260321000003_add_round_to_inspections.sql` | asset_inspections round_id + RLS 수정 | ✅ 완료 |
 
 #### Edge Functions (3건 완료)
 | 함수명 | 용도 | 상태 |
@@ -131,21 +147,24 @@ supabase functions serve
 #### 기타 백엔드
 | 항목 | 상태 |
 |------|------|
-| RLS 정책 (users, assets, inspections, drawings, storage) | ✅ 완료 |
+| RLS 정책 (users, assets, inspections, drawings, storage, inspection_rounds) | ✅ 완료 |
 | Storage 버킷 3개 (inspection-photos, inspection-signatures, drawing-images) | ✅ 완료 |
 | Realtime 구독 (assets, asset_inspections) | ✅ 완료 |
-| 테스트 시드 데이터 (seed.sql) | ✅ 완료 |
+| 사용자 역할 체계 (admin, operator1, operator2, user) | ✅ 완료 |
+| 전사 실사 라운드(차수) 관리 (생성/시작/종료 RPC) | ✅ 완료 |
+| 테스트 시드 데이터 (seed.sql — 9개 계정, 역할별) | ✅ 완료 |
 
 ---
 
 ### 프론트엔드 (Flutter)
 
-#### 데이터 모델 (5건 완료)
+#### 데이터 모델 (6건 완료)
 | 파일 | 내용 | 상태 |
 |------|------|------|
 | `models/asset.dart` | 자산 모델 (12개 카테고리, specifications JSONB) | ✅ 완료 |
-| `models/user.dart` | 사용자 모델 (조직 정보, 인증 정보) | ✅ 완료 |
-| `models/asset_inspection.dart` | 실사 기록 모델 (사진/서명/위치) | ✅ 완료 |
+| `models/user.dart` | 사용자 모델 (조직 정보, 역할 role, isAdminGroup) | ✅ 완료 |
+| `models/asset_inspection.dart` | 실사 기록 모델 (사진/서명/위치/roundId) | ✅ 완료 |
+| `models/inspection_round.dart` | 전사 실사 라운드(차수) 모델 | ✅ 완료 |
 | `models/drawing.dart` | 도면 모델 (건물/층/격자) | ✅ 완료 |
 | `models/auth_state.dart` | 인증 상태 모델 (토큰, 세션) | ✅ 완료 |
 
@@ -153,7 +172,7 @@ supabase functions serve
 | 파일 | 내용 | 상태 |
 |------|------|------|
 | `services/auth_service.dart` | 인증 서비스 (사번 로그인, Google/Kakao OAuth, 로그아웃) | ✅ 완료 |
-| `services/api_service.dart` | 자산/실사/통계 REST API 호출 | ✅ 완료 |
+| `services/api_service.dart` | 자산/실사/라운드/통계 REST API 호출 | ✅ 완료 |
 | `services/drawing_service.dart` | 도면 CRUD + Storage 이미지 업로드 | ✅ 완료 |
 | `services/signature_service.dart` | 서명 이미지 저장/로드 (Storage) | ✅ 완료 |
 | `services/realtime_service.dart` | Realtime 구독 (에이전트 Presence/Broadcast) | ✅ 완료 |
@@ -173,11 +192,11 @@ supabase functions serve
 |------|------|------|------|
 | `/login` | `login_page.dart` | 사번+비밀번호, Google OAuth, Kakao OAuth 로그인 | ✅ 완료 |
 | `/` | `home_page.dart` | 대시보드 (통계 카드 3종, 최신 자산 10건, 만료 임박 목록) | ✅ 완료 |
-| `/scan` | `scan_page.dart` | QR 코드 스캔 (최대 5회 연속), 자산 조회/신규 등록 연결 | ✅ 완료 |
-| `/assets` | `asset_list_page.dart` | 자산 목록 (필터/검색/컬럼 커스터마이징/30건 페이지네이션) | ✅ 완료 |
-| `/asset/:id` | `asset_detail_page.dart` | 자산 상세/등록/수정 (카테고리별 specifications 동적 폼) | ✅ 완료 |
-| `/inspections` | `inspection_list_page.dart` | 실사 기록 목록 (상태 필터/검색/페이지네이션) | ✅ 완료 |
-| `/inspection/:id` | `inspection_detail_page.dart` | 실사 상세 (사진/서명 표시, 관리자 초기화) | ✅ 완료 |
+| `/scan` | `scan_page.dart` | QR 코드 스캔 (모바일: 카메라, 웹: 카메라+수동입력 폴백) | ✅ 완료 |
+| `/assets` | `asset_list_page.dart` | 자산 목록 (컴팩트 필터바, 인라인 등록 버튼, 컬럼 설정) | ✅ 완료 |
+| `/asset/:id` | `asset_detail_page.dart` | 자산 상세/등록/수정 (OCR 실시간 스캔, QR 스캔 자산번호 자동입력) | ✅ 완료 |
+| `/inspections` | `inspection_list_page.dart` | 실사 목록 (라운드 배너, 차수 관리, 상태 필터) | ✅ 완료 |
+| `/inspection/:id` | `inspection_detail_page.dart` | 실사 상세 (사진촬영, 서명, 라운드 권한 제어) | ✅ 완료 |
 | `/signature` | `signature_page.dart` | 친필 서명 캡처 (인증 필요) | ✅ 완료 |
 | `/drawings` | `drawing_manager_page.dart` | 도면 관리 (건물별 그룹, 이미지 업로드) | ✅ 완료 |
 | `/drawing/:id` | `drawing_viewer_page.dart` | 도면 뷰어 (줌/팬, 격자 오버레이, 자산 마커) | ✅ 완료 |
@@ -186,7 +205,8 @@ supabase functions serve
 #### 재사용 위젯 (10건 완료)
 | 파일 | 내용 | 상태 |
 |------|------|------|
-| `widgets/common/app_scaffold.dart` | 앱 공통 레이아웃 (하단 네비게이션 4탭: 홈/스캔/자산/실사) | ✅ 완료 |
+| `widgets/common/app_scaffold.dart` | 앱 공통 레이아웃 (네비게이션 5탭, 앱바 ? 자산번호 부여 기준) | ✅ 완료 |
+| `widgets/common/asset_uid_guide_dialog.dart` | 자산번호 부여 기준 안내 (현재기준/변경후 토글) | ✅ 완료 |
 | `widgets/common/loading_widget.dart` | 로딩 스피너 | ✅ 완료 |
 | `widgets/common/error_widget.dart` | 에러 표시 + 재시도 버튼 | ✅ 완료 |
 | `widgets/common/empty_state_widget.dart` | 빈 상태 UI | ✅ 완료 |
@@ -219,11 +239,11 @@ supabase functions serve
 
 | 영역 | 파일 수 |
 |------|---------|
-| 백엔드 마이그레이션 (SQL) | 16 |
+| 백엔드 마이그레이션 (SQL) | 20 |
 | Edge Functions (TypeScript) | 3 |
-| 프론트엔드 Dart 소스 | 45+ |
+| 프론트엔드 Dart 소스 | 48+ |
 | 웹 OCR 번들 (Tesseract.js) | 5 |
-| **총 소스 파일** | **70+** |
+| **총 소스 파일** | **76+** |
 
 ---
 
@@ -231,11 +251,11 @@ supabase functions serve
 
 1. **인증 시스템**: 사번+비밀번호 로그인, Google OAuth, Kakao OAuth (Edge Function), JWT 기반 세션 관리
 2. **자산 관리**: 12개 카테고리별 CRUD, QR 코드 기반 식별, asset_uid 정규식 검증, specifications JSONB 관리
-3. **실사 관리**: 실사 기록 CRUD, 사진 촬영 (용량 최적화 1280x960/70%), 친필 서명 캡처, 위치 검증, 완료건 수정 제한 (관리자 전용), 사진/서명 레이지 로딩
+3. **실사 관리**: 실사 기록 CRUD, 전사 실사 라운드(차수) 관리, 사진 촬영 (용량 최적화 1280x960/70%), 친필 서명 캡처, 위치 검증, 완료건 수정 제한, 고아파일 자동 삭제, 사진/서명 레이지 로딩
 4. **도면 관리**: 건물별 층별 도면 업로드, 격자 기반 좌표 시스템, 자산 마커 시각화, 줌/팬 뷰어
 5. **대시보드**: 총 자산 수, 실사 완료율, 미검증 자산, 만료 임박 자산 (D-7) 실시간 통계
-6. **QR 스캔**: 모바일 카메라 QR 스캔 → 자산 조회/신규 등록 (최대 5회 연속 스캔)
-7. **보안**: RLS 정책 (테이블 4개 + Storage 3개), 관리자 JWT claim 기반 권한 분리
+6. **QR 스캔**: 모바일/웹 카메라 QR 스캔 → 자산 조회/신규 등록 (최대 5회 연속 스캔, 웹 카메라 실패 시 수동 입력 폴백)
+7. **보안**: RLS 정책 (테이블 5개 + Storage 3개), 역할 기반 권한 분리 (admin/operator1/operator2/user), 라운드 활성 시에만 실사 수정 허용
 8. **Realtime**: 자산/실사 변경 실시간 WebSocket 구독, 에이전트 Presence/Broadcast
 9. **OCR**: 디바이스 라벨 자동 인식 (모바일: Google ML Kit, 웹: Tesseract.js 로컬 번들), 사진촬영/갤러리 선택, 매칭 실패 시 직접 편집, 단어별 탭 복사
 10. **에이전트 연동**: Heartbeat 수신, 시스템 정보 실시간 동기화, Presence 상태 모니터링
@@ -249,6 +269,7 @@ supabase functions serve
 
 ### 변경 이력
 
+- `2026-03-21` : 역할 체계 추가 (admin/operator1/operator2/user), 전사 실사 라운드(차수) 관리 기능, 사진 저장 경로 라운드 기반 변경, 고아파일 자동 삭제, 에러 메시지 SelectableText, 앱바 자산번호 부여 기준 전체 적용, QR 웹 카메라 지원, 실시간 OCR 스캔, 테스트 시드 9개 계정 (역할별)
 - `2026-03-20` : 앱 이름 변경 (oa_app → OAManager), OCR 웹 지원 (Tesseract.js 로컬 번들), 실사 사진 촬영 기능 추가, 사진/서명 레이지 로딩, 서명 export 에러 수정, 임시 파일 자동 삭제, Docker Desktop → Colima(macOS)/Docker Engine(Linux), 에이전트 테이블 마이그레이션 4건 추가
 - `2026-02-17` : 구현 현황 섹션 추가 (백엔드 12건 마이그레이션, Edge Function 3건, 프론트엔드 40개 Dart 파일 현황 기록)
 - `2026-02-17` : README 통합 정비(테스트/실행 가이드 중심으로 정리), 코드 기준 버전/환경 변수/인증 예시 정합화
