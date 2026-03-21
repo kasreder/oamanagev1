@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:signature/signature.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
@@ -65,24 +66,38 @@ class _SignaturePageState extends ConsumerState<SignaturePage> {
         throw Exception('서명 이미지 생성 실패');
       }
 
-      // Supabase Storage에 업로드
-      final fileName =
-          'signatures/${widget.inspectionId ?? 'temp'}_${DateTime.now().millisecondsSinceEpoch}.png';
+      // 활성 라운드 조회
+      final activeRound = await _api.fetchActiveRound();
+      final roundNum = activeRound?.round ?? 0;
+      final timestamp = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
+      final inspId = widget.inspectionId ?? 'temp';
+      final storagePath = '$roundNum/signatures/${inspId}_sig_${timestamp}_$roundNum.png';
+
+      String? uploadedPath;
 
       await supabase.storage.from('inspection-signatures').uploadBinary(
-            fileName,
+            storagePath,
             data,
             fileOptions: const FileOptions(
               contentType: 'image/png',
               upsert: true,
             ),
           );
+      uploadedPath = storagePath;
 
       // inspection 레코드 업데이트
       if (widget.inspectionId != null) {
-        await _api.updateInspection(widget.inspectionId!, {
-          'signature_image': fileName,
-        });
+        try {
+          await _api.updateInspection(widget.inspectionId!, {
+            'signature_image': storagePath,
+          });
+        } catch (e) {
+          // 고아파일 삭제
+          try {
+            await supabase.storage.from('inspection-signatures').remove([storagePath]);
+          } catch (_) {}
+          rethrow;
+        }
       }
 
       if (mounted) {
@@ -101,7 +116,7 @@ class _SignaturePageState extends ConsumerState<SignaturePage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('서명 저장 실패: ${e.toString()}'),
+            content: SelectableText('서명 저장 실패: ${e.toString()}'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );

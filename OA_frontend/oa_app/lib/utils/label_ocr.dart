@@ -28,4 +28,13 @@ class LabelOcr {
     final bytes = await file.readAsBytes();
     return platform_ocr.recognizeFromBytes(bytes);
   }
+
+  /// XFile에서 단어 단위 인식 (모바일: ML Kit element 단위, 웹: Tesseract.js 단어 분리)
+  static Future<List<String>> recognizeWordsFromXFile(XFile file) async {
+    if (!kIsWeb) {
+      return platform_ocr.recognizeWordsFromFile(file.path);
+    }
+    final bytes = await file.readAsBytes();
+    return platform_ocr.recognizeWordsFromBytes(bytes);
+  }
 }

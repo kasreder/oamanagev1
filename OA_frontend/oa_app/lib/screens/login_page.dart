@@ -49,7 +49,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('로그인 실패: ${e.toString()}'),
+            content: SelectableText('로그인 실패: ${e.toString()}'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -76,7 +76,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('카카오 로그인 실패: ${e.toString()}'),
+            content: SelectableText('카카오 로그인 실패: ${e.toString()}'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -102,7 +102,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('구글 로그인 실패: ${e.toString()}'),
+            content: SelectableText('구글 로그인 실패: ${e.toString()}'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );

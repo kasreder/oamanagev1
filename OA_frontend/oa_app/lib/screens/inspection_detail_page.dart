@@ -8,7 +8,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../main.dart';
 import '../models/asset_inspection.dart';
+import '../models/inspection_round.dart';
+import '../notifiers/auth_notifier.dart';
 import '../services/api_service.dart';
+import '../utils/temp_file_cleaner.dart';
 import '../widgets/common/app_scaffold.dart';
 import '../widgets/common/loading_widget.dart';
 import '../widgets/common/error_widget.dart';
@@ -38,6 +41,7 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
   final DateFormat _dateFmt = DateFormat('yyyy-MM-dd HH:mm');
 
   AssetInspection? _inspection;
+  InspectionRound? _activeRound;
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isUploadingPhoto = false;
@@ -91,8 +95,10 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
 
     try {
       final inspection = await _api.fetchInspection(widget.inspectionId);
+      final activeRound = await _api.fetchActiveRound();
       setState(() {
         _inspection = inspection;
+        _activeRound = activeRound;
         _isLoading = false;
       });
       _populateForm(inspection);
@@ -169,7 +175,7 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('수정 실패: ${e.toString()}'),
+            content: SelectableText('수정 실패: ${e.toString()}'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -194,12 +200,13 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
 
     setState(() => _isUploadingPhoto = true);
 
+    String? uploadedPath;
     try {
       final now = DateTime.now();
       final assetCode = _inspection?.assetCode ?? 'UNKNOWN';
+      final roundNum = _inspection?.roundId ?? 0;
       final timestamp = DateFormat('yyyyMMdd_HHmm').format(now);
-      final fileName = '${assetCode}_$timestamp.jpg';
-      final storagePath = 'photos/$fileName';
+      final storagePath = '$roundNum/photos/${assetCode}_detail_${timestamp}_$roundNum.jpg';
 
       final bytes = await photo.readAsBytes();
 
@@ -211,6 +218,10 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
               upsert: true,
             ),
           );
+      uploadedPath = storagePath;
+
+      // 임시 파일 삭제
+      await TempFileCleaner.delete(photo.path);
 
       // inspection 레코드에 사진 경로 업데이트
       await _api.updateInspection(widget.inspectionId, {
@@ -224,10 +235,16 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
         _loadInspection();
       }
     } catch (e) {
+      // 고아파일 삭제: Storage 업로드 성공 후 DB 실패 시
+      if (uploadedPath != null) {
+        try {
+          await supabase.storage.from('inspection-photos').remove([uploadedPath]);
+        } catch (_) {}
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('사진 저장 실패: ${e.toString()}'),
+            content: SelectableText('사진 저장 실패: ${e.toString()}'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -263,9 +280,63 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
     final isCompleted = ins.completed;
     final readOnly = isCompleted;
 
+    // 촬영 권한: 관리자 그룹이거나 활성 라운드가 있을 때
+    final authState = ref.read(authNotifierProvider);
+    final currentUser = authState.valueOrNull?.user;
+    final isAdminGroup = currentUser?.isAdminGroup ?? false;
+    final canCapture = isAdminGroup || _activeRound != null;
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // ── 라운드 정보 배너 ──
+        if (_activeRound != null)
+          Container(
+            padding: const EdgeInsets.all(10),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue.withOpacity(0.2)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.calendar_today, color: Colors.blue, size: 16),
+                const SizedBox(width: 8),
+                Text(
+                  '${_activeRound!.title}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.blue,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        if (!canCapture && !isCompleted)
+          Container(
+            padding: const EdgeInsets.all(10),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.orange.withOpacity(0.2)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.warning_amber, color: Colors.orange, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '진행 중인 실사가 없어 사진/서명을 등록할 수 없습니다.',
+                    style: theme.textTheme.bodySmall?.copyWith(color: Colors.orange),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
         // ── 완료 상태 배너 ──
         if (isCompleted)
           Container(
@@ -459,8 +530,8 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
                     ],
                   ),
                 ),
-              // 사진 촬영 버튼
-              if (!isCompleted)
+              // 사진 촬영 버튼 (관리자 그룹이거나 활성 라운드가 있을 때만)
+              if (!isCompleted && canCapture)
                 Padding(
                   padding: const EdgeInsets.all(12),
                   child: SizedBox(
@@ -578,20 +649,21 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
           const SizedBox(height: 12),
         ],
 
-        // 사인하기 버튼
-        SizedBox(
-          width: double.infinity,
-          height: 48,
-          child: FilledButton.tonalIcon(
-            onPressed: () {
-              context.go('/signature', extra: {
-                'inspectionId': widget.inspectionId,
-              });
-            },
-            icon: const Icon(Icons.draw),
-            label: Text(ins.signatureImage != null ? '서명 다시 하기' : '사인하기'),
+        // 사인하기 버튼 (관리자 그룹이거나 활성 라운드가 있을 때만)
+        if (canCapture)
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: FilledButton.tonalIcon(
+              onPressed: () {
+                context.go('/signature', extra: {
+                  'inspectionId': widget.inspectionId,
+                });
+              },
+              icon: const Icon(Icons.draw),
+              label: Text(ins.signatureImage != null ? '서명 다시 하기' : '사인하기'),
+            ),
           ),
-        ),
 
         // 자산 상세 이동
         if (ins.assetId != null) ...[

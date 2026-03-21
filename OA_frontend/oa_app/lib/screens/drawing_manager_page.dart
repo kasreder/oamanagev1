@@ -169,6 +169,7 @@ class _DrawingManagerPageState extends ConsumerState<DrawingManagerPage> {
 
     if (result != true) return;
 
+    String? uploadedPath;
     try {
       // 이미지 업로드
       String? drawingFile;
@@ -184,6 +185,7 @@ class _DrawingManagerPageState extends ConsumerState<DrawingManagerPage> {
               fileOptions: const FileOptions(upsert: true),
             );
         drawingFile = fileName;
+        uploadedPath = fileName;
       }
 
       // 도면 레코드 생성
@@ -201,10 +203,16 @@ class _DrawingManagerPageState extends ConsumerState<DrawingManagerPage> {
         _loadDrawings();
       }
     } catch (e) {
+      // 고아파일 삭제
+      if (uploadedPath != null) {
+        try {
+          await supabase.storage.from('drawings').remove([uploadedPath]);
+        } catch (_) {}
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('등록 실패: ${e.toString()}'),
+            content: SelectableText('등록 실패: ${e.toString()}'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );

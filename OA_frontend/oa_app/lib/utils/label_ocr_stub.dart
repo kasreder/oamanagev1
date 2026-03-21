@@ -22,3 +22,21 @@ Future<List<String>> recognizeFromBytes(Uint8List bytes) async {
 
 @JS('ocrRecognize')
 external JSPromise<JSString> _jsOcrRecognize(JSString imageBase64);
+
+/// 웹: 바이트에서 단어 단위 인식 (Tesseract.js)
+Future<List<String>> recognizeWordsFromFile(String filePath) async {
+  throw UnsupportedError('웹에서는 recognizeWordsFromBytes를 사용하세요.');
+}
+
+/// 웹: 바이트에서 단어 단위 인식
+Future<List<String>> recognizeWordsFromBytes(Uint8List bytes) async {
+  final lines = await recognizeFromBytes(bytes);
+  final words = <String>[];
+  for (final line in lines) {
+    for (final word in line.split(RegExp(r'\s+'))) {
+      final w = word.trim();
+      if (w.isNotEmpty) words.add(w);
+    }
+  }
+  return words;
+}

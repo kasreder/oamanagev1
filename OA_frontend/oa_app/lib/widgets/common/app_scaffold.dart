@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../main.dart';
 import '../../notifiers/auth_notifier.dart';
+import 'asset_uid_guide_dialog.dart';
 
 /// 네비게이션 메뉴 항목 정의
 class _NavItem {
@@ -33,6 +34,7 @@ const _navItems = <_NavItem>[
 /// - width >= 600px -> NavigationRail
 ///
 /// Drawer: 사용자 정보 헤더, 메뉴 항목, 다크모드 토글, 로그아웃
+/// 앱바 오른쪽: ? 자산번호 부여 기준 (기본 내장) + 추가 actions
 class AppScaffold extends ConsumerWidget {
   final String title;
   final Widget body;
@@ -58,7 +60,16 @@ class AppScaffold extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(title),
-        actions: actions,
+        actions: [
+          // 추가 actions (각 페이지별)
+          if (actions != null) ...actions!,
+          // 공통: 자산번호 부여 기준
+          IconButton(
+            icon: const Icon(Icons.help_outline),
+            tooltip: '자산번호 부여 기준',
+            onPressed: () => AssetUidGuideDialog.show(context),
+          ),
+        ],
       ),
       drawer: _buildDrawer(context, ref, isDarkMode, user),
       body: isNarrow
@@ -101,14 +112,12 @@ class AppScaffold extends ConsumerWidget {
     );
   }
 
-  /// 네비게이션 항목 탭 시 라우팅
   void _onNavItemTapped(BuildContext context, int index) {
     if (index >= 0 && index < _navItems.length) {
       context.go(_navItems[index].path);
     }
   }
 
-  /// Drawer 구성
   Widget _buildDrawer(
     BuildContext context,
     WidgetRef ref,
@@ -119,7 +128,6 @@ class AppScaffold extends ConsumerWidget {
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          // 사용자 정보 헤더
           UserAccountsDrawerHeader(
             accountName: Text(user?.employeeName ?? '사용자'),
             accountEmail: Text(user?.employeeId ?? ''),
@@ -130,18 +138,13 @@ class AppScaffold extends ConsumerWidget {
               ),
             ),
           ),
-
-          // 메뉴 항목들
           _buildDrawerItem(context, Icons.home, '홈', '/'),
           _buildDrawerItem(context, Icons.list_alt, '자산목록', '/assets'),
           _buildDrawerItem(context, Icons.fact_check, '실사목록', '/inspections'),
           _buildDrawerItem(context, Icons.map, '도면관리', '/drawings'),
           _buildDrawerItem(
               context, Icons.warning_amber, '미검증자산', '/unverified'),
-
           const Divider(),
-
-          // 다크모드 토글
           SwitchListTile(
             title: const Text('다크 모드'),
             secondary: Icon(isDarkMode ? Icons.dark_mode : Icons.light_mode),
@@ -150,15 +153,12 @@ class AppScaffold extends ConsumerWidget {
               ref.read(isDarkModeProvider.notifier).state = value;
             },
           ),
-
           const Divider(),
-
-          // 로그아웃
           ListTile(
             leading: const Icon(Icons.logout),
             title: const Text('로그아웃'),
             onTap: () {
-              Navigator.of(context).pop(); // Drawer 닫기
+              Navigator.of(context).pop();
               ref.read(authNotifierProvider.notifier).logout();
               context.go('/login');
             },
@@ -168,7 +168,6 @@ class AppScaffold extends ConsumerWidget {
     );
   }
 
-  /// Drawer 메뉴 항목 빌더
   Widget _buildDrawerItem(
     BuildContext context,
     IconData icon,
@@ -179,7 +178,7 @@ class AppScaffold extends ConsumerWidget {
       leading: Icon(icon),
       title: Text(label),
       onTap: () {
-        Navigator.of(context).pop(); // Drawer 닫기
+        Navigator.of(context).pop();
         context.go(path);
       },
     );

@@ -18,6 +18,7 @@ class AssetInspection {
   final String? memo;
   final String? inspectionPhoto;
   final String? signatureImage;
+  final int? roundId;
   final bool synced;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -46,6 +47,7 @@ class AssetInspection {
     this.memo,
     this.inspectionPhoto,
     this.signatureImage,
+    this.roundId,
     this.synced = true,
     this.createdAt,
     this.updatedAt,
@@ -95,6 +97,7 @@ class AssetInspection {
       memo: json['memo'] as String?,
       inspectionPhoto: json['inspection_photo'] as String?,
       signatureImage: json['signature_image'] as String?,
+      roundId: json['round_id'] as int?,
       synced: json['synced'] as bool? ?? true,
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
@@ -127,6 +130,7 @@ class AssetInspection {
       'memo': memo,
       'inspection_photo': inspectionPhoto,
       'signature_image': signatureImage,
+      if (roundId != null) 'round_id': roundId,
       'synced': synced,
     };
   }
@@ -151,6 +155,7 @@ class AssetInspection {
     String? memo,
     String? inspectionPhoto,
     String? signatureImage,
+    int? roundId,
     bool? synced,
   }) {
     return AssetInspection(
@@ -174,6 +179,7 @@ class AssetInspection {
       memo: memo ?? this.memo,
       inspectionPhoto: inspectionPhoto ?? this.inspectionPhoto,
       signatureImage: signatureImage ?? this.signatureImage,
+      roundId: roundId ?? this.roundId,
       synced: synced ?? this.synced,
       createdAt: createdAt,
       updatedAt: updatedAt,
