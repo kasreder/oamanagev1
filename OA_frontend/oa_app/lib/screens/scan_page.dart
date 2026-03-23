@@ -6,6 +6,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../constants.dart';
 import '../main.dart';
+import '../utils/scan_feedback.dart';
 import '../widgets/common/app_scaffold.dart';
 
 /// 5.1.6 QR 스캔 화면 (/scan)
@@ -61,6 +62,20 @@ class _ScanPageState extends ConsumerState<ScanPage> {
 
     final code = barcode.rawValue!.trim();
     if (_scannedCodes.contains(code)) return;
+
+    // 자산번호 형식 검증 (영문+숫자 조합만 허용)
+    if (!assetUidRegex.hasMatch(code)) {
+      await ScanFeedback.invalid();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('자산번호 형식이 아닙니다: $code'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+      return;
+    }
 
     setState(() => _isProcessing = true);
     _scannedCodes.add(code);
@@ -119,8 +134,10 @@ class _ScanPageState extends ConsumerState<ScanPage> {
 
       if (result != null) {
         final assetId = result['id'] as int;
+        await ScanFeedback.success();
         context.go('/asset/$assetId');
       } else {
+        await ScanFeedback.error();
         _showRegisterDialog(assetUid);
       }
     } catch (e) {

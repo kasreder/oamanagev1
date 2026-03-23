@@ -39,9 +39,11 @@ const List<String> employmentTypes = [
   '도급직',
 ];
 
-/// asset_uid 검증 정규식
+/// asset_uid 검증 정규식 — 영문+숫자 조합 (신/구 형식 모두 허용)
+/// 신형식: BDT00001, RNB12345 등 (영문2~3자 + 숫자5자)
+/// 구형식: D00123, PC0001 등 (영문1~3자 + 숫자3~6자)
 final RegExp assetUidRegex = RegExp(
-  r'^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD|SM)[0-9]{5}$',
+  r'^[A-Za-z]{1,5}[0-9]{3,6}$',
 );
 
 /// 등록경로 코드
