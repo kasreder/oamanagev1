@@ -18,6 +18,7 @@ import '../notifiers/agent_presence_notifier.dart';
 import '../widgets/common/app_scaffold.dart';
 import '../widgets/common/loading_widget.dart';
 import '../utils/label_ocr.dart';
+import '../utils/scan_feedback.dart';
 import '../utils/temp_file_cleaner.dart';
 import '../widgets/common/error_widget.dart';
 
@@ -1271,6 +1272,7 @@ class _QrScanDialogState extends State<_QrScanDialog> {
               final barcode = capture.barcodes.firstOrNull;
               if (barcode == null || barcode.rawValue == null) return;
               _scanned = true;
+              ScanFeedback.success();
               Navigator.pop(context, barcode.rawValue!.trim());
             },
           ),
