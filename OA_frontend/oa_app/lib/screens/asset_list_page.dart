@@ -43,6 +43,10 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
   String? _selectedStatus;
   String _searchQuery = '';
 
+  // 정렬 상태
+  String? _sortColumnLabel;
+  bool _sortAscending = true;
+
   static const double _colId = 80;
   static const double _colAssetUid = 170;
   static const double _colName = 230;
@@ -76,6 +80,9 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
   static const double _colCreatedAt = 170;
   static const double _colUpdatedAt = 170;
   static const double _colAccessStatus = 60;
+  static const double _colOsType = 130;
+  static const double _colOsVersion = 180;
+  static const double _colOsDetail = 280;
   static const double _colVerificationStatus = 80;
   static const double _colAssignmentStatus = 100;
 
@@ -103,6 +110,9 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
     _AssetColumnMeta(label: '소유부서', width: _colOwnerDept, value: _assetOwnerDepartment),
     _AssetColumnMeta(label: '사용자', width: _colUserName, value: _assetUserName),
     _AssetColumnMeta(label: '접속현황', width: _colAccessStatus, value: _assetAccessStatusText, widgetBuilder: _accessStatusWidget),
+    _AssetColumnMeta(label: 'OS종류', width: _colOsType, value: _assetOsType),
+    _AssetColumnMeta(label: 'OS버전', width: _colOsVersion, value: _assetOsVersion),
+    _AssetColumnMeta(label: 'OS상세', width: _colOsDetail, value: _assetOsDetail),
     _AssetColumnMeta(label: '사용부서', width: _colUserDept, value: _assetUserDepartment),
     _AssetColumnMeta(label: '관리자', width: _colAdminName, value: _assetAdminName),
     _AssetColumnMeta(label: '관리부서', width: _colAdminDept, value: _assetAdminDepartment),
@@ -119,6 +129,7 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
 
   late List<_AssetColumnMeta> _orderedColumns;
   late Map<String, bool> _columnVisibility;
+  late Map<String, double> _columnWidths;
 
   int get _totalPages => (_totalCount / defaultPageSize).ceil().clamp(1, 9999);
 
@@ -126,14 +137,17 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
       .where((column) => _columnVisibility[column.label] ?? false)
       .toList();
 
+  double _getColWidth(String label) => _columnWidths[label] ?? 100;
+
   double get _tableWidth =>
-      _visibleColumns.fold(0.0, (sum, column) => sum + column.width);
+      _visibleColumns.fold(0.0, (sum, col) => sum + _getColWidth(col.label));
 
   @override
   void initState() {
     super.initState();
     _orderedColumns = List<_AssetColumnMeta>.from(_allColumns);
     _columnVisibility = {for (final column in _allColumns) column.label: true};
+    _columnWidths = {for (final column in _allColumns) column.label: column.width};
     _loadAssets();
   }
 
@@ -163,6 +177,7 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
         _assets = result.data;
         _totalCount = result.total;
         _isLoading = false;
+        _applySorting();
       });
     } catch (e) {
       setState(() {
@@ -170,6 +185,41 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
         _error = e.toString();
       });
     }
+  }
+
+  void _onSortColumn(String label) {
+    setState(() {
+      if (_sortColumnLabel == label) {
+        _sortAscending = !_sortAscending;
+      } else {
+        _sortColumnLabel = label;
+        _sortAscending = true;
+      }
+      _applySorting();
+    });
+  }
+
+  void _applySorting() {
+    if (_sortColumnLabel == null) return;
+    final col = _visibleColumns
+        .where((c) => c.label == _sortColumnLabel)
+        .firstOrNull;
+    if (col == null) return;
+
+    _assets.sort((a, b) {
+      final aVal = col.value(a, _dateTimeFmt);
+      final bVal = col.value(b, _dateTimeFmt);
+      // 숫자 비교 시도
+      final aNum = num.tryParse(aVal);
+      final bNum = num.tryParse(bVal);
+      int result;
+      if (aNum != null && bNum != null) {
+        result = aNum.compareTo(bNum);
+      } else {
+        result = aVal.compareTo(bVal);
+      }
+      return _sortAscending ? result : -result;
+    });
   }
 
   void _onCategoryChanged(String? category) {
@@ -419,9 +469,9 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
       child: Row(
         children: [
           for (int i = 0; i < columns.length; i++)
-            _buildHeaderCell(
+            _buildResizableHeaderCell(
               columns[i].label,
-              columns[i].width,
+              _getColWidth(columns[i].label),
               context,
               isLast: i == columns.length - 1,
             ),
@@ -451,14 +501,14 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
               if (columns[i].widgetBuilder != null)
                 _buildWidgetCell(
                   columns[i].widgetBuilder!(asset, context),
-                  columns[i].width,
+                  _getColWidth(columns[i].label),
                   context,
                   isLast: i == columns.length - 1,
                 )
               else
                 _buildBodyCell(
                   columns[i].value(asset, _dateTimeFmt),
-                  columns[i].width,
+                  _getColWidth(columns[i].label),
                   context,
                   isLast: i == columns.length - 1,
                 ),
@@ -543,7 +593,7 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
     );
   }
 
-  Widget _buildHeaderCell(
+  Widget _buildResizableHeaderCell(
     String label,
     double width,
     BuildContext context, {
@@ -551,23 +601,75 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
   }) {
     final theme = Theme.of(context);
 
-    return Container(
+    return SizedBox(
       width: width,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      decoration: BoxDecoration(
-        border: Border(
-          right:
-              isLast ? BorderSide.none : BorderSide(color: theme.dividerColor),
-          bottom: BorderSide(color: theme.dividerColor),
-        ),
-      ),
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.titleSmall?.copyWith(
-          fontWeight: FontWeight.w700,
-        ),
+      height: 44,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // 배경 + 텍스트 + 테두리 + 정렬 클릭
+          Positioned.fill(
+            child: InkWell(
+              onTap: () => _onSortColumn(label),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                decoration: BoxDecoration(
+                  border: Border(
+                    right: isLast
+                        ? BorderSide.none
+                        : BorderSide(color: theme.dividerColor),
+                    bottom: BorderSide(color: theme.dividerColor),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    if (_sortColumnLabel == label) ...[
+                      const SizedBox(width: 4),
+                      Icon(
+                        _sortAscending
+                            ? Icons.arrow_upward
+                            : Icons.arrow_downward,
+                        size: 14,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // 드래그 핸들 (오른쪽 경계)
+          if (!isLast)
+            Positioned(
+              right: -3,
+              top: 0,
+              bottom: 0,
+              width: 6,
+              child: MouseRegion(
+                cursor: SystemMouseCursors.resizeColumn,
+                child: GestureDetector(
+                  onHorizontalDragUpdate: (details) {
+                    setState(() {
+                      final newWidth =
+                          (_columnWidths[label] ?? 100) + details.delta.dx;
+                      _columnWidths[label] = newWidth.clamp(50, 600);
+                    });
+                  },
+                  child: Container(color: Colors.transparent),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -580,21 +682,24 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
   }) {
     final theme = Theme.of(context);
 
-    return Container(
+    return SizedBox(
       width: width,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        border: Border(
-          right:
-              isLast ? BorderSide.none : BorderSide(color: theme.dividerColor),
-          bottom: BorderSide(color: theme.dividerColor.withOpacity(0.55)),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border(
+            right: isLast
+                ? BorderSide.none
+                : BorderSide(color: theme.dividerColor),
+            bottom: BorderSide(color: theme.dividerColor.withOpacity(0.55)),
+          ),
         ),
-      ),
-      child: Text(
-        value,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.bodyMedium,
+        child: Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodyMedium,
+        ),
       ),
     );
   }
@@ -607,17 +712,20 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
   }) {
     final theme = Theme.of(context);
 
-    return Container(
+    return SizedBox(
       width: width,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        border: Border(
-          right:
-              isLast ? BorderSide.none : BorderSide(color: theme.dividerColor),
-          bottom: BorderSide(color: theme.dividerColor.withOpacity(0.55)),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border(
+            right: isLast
+                ? BorderSide.none
+                : BorderSide(color: theme.dividerColor),
+            bottom: BorderSide(color: theme.dividerColor.withOpacity(0.55)),
+          ),
         ),
+        child: Center(child: child),
       ),
-      child: Center(child: child),
     );
   }
 
@@ -710,6 +818,29 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
 
   static String _assetUpdatedAt(Asset asset, DateFormat dateFormat) =>
       _formatStaticDate(asset.updatedAt, dateFormat);
+
+  // ── OS 정보 (에이전트 전송 데이터) ──────────────────────────────────────
+
+  static String _assetOsType(Asset asset, DateFormat _) {
+    final ds = asset.specifications['device_status'] as Map<String, dynamic>?;
+    if (ds == null) return '[NULL]';
+    final osVer = ds['os_version'] as String?;
+    if (osVer == null || osVer.isEmpty) return '[NULL]';
+    // "Android 16 (API 36)" → "Android"
+    return osVer.split(' ').first;
+  }
+
+  static String _assetOsVersion(Asset asset, DateFormat _) {
+    final ds = asset.specifications['device_status'] as Map<String, dynamic>?;
+    if (ds == null) return '[NULL]';
+    return (ds['os_version'] as String?) ?? '[NULL]';
+  }
+
+  static String _assetOsDetail(Asset asset, DateFormat _) {
+    final ds = asset.specifications['device_status'] as Map<String, dynamic>?;
+    if (ds == null) return '[NULL]';
+    return (ds['os_detail_version'] as String?) ?? '[NULL]';
+  }
 
   // ── 접속현황 (Access Status Indicator) ──────────────────────────────────
 

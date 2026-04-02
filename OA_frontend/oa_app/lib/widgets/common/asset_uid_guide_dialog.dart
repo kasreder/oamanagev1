@@ -149,7 +149,9 @@ class _AssetUidGuideDialogState extends State<AssetUidGuideDialog> {
           ['SV', '서버', 'BSV00001'],
           ['WR', '웨어러블', 'BWR00001'],
           ['SD', '특수목적장비', 'BSD00001'],
-          ['SM', '테스트폰', 'BSM00001'],
+          ['TP', '테스트폰', 'BTP00001'],
+          ['ET', '현장업무 태블릿', 'BET00001'],
+          ['EH', '법인폰', 'BEH00001'],
         ]),
       ],
     );

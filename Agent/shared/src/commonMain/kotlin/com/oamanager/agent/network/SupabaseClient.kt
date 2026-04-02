@@ -90,7 +90,7 @@ class SupabaseClient(
         if (response.status == HttpStatusCode.Unauthorized) {
             throw UnauthorizedException()
         }
-        check(response.status == HttpStatusCode.OK) {
+        check(response.status.value in 200..204) {
             "Heartbeat failed: ${response.status} ${response.bodyAsText()}"
         }
     }
@@ -171,7 +171,7 @@ class SupabaseClient(
                 header("Authorization", "Bearer $accessToken")
                 parameter(
                     "setting_key",
-                    "in.(latest_agent_version,min_agent_version,agent_download_url)"
+                    "in.(latest_agent_version,min_agent_version,agent_download_url,heartbeat_interval)"
                 )
                 parameter("select", "setting_key,setting_value")
             }
@@ -183,36 +183,6 @@ class SupabaseClient(
             val obj = elem.jsonObject
             obj["setting_key"]!!.jsonPrimitive.content to
                 obj["setting_value"]!!.jsonPrimitive.content
-        }
-    }
-
-    // ─── FCM Token ──────────────────────────────────────────────────────────
-
-    /**
-     * FCM 토큰 등록/갱신 (device_tokens upsert).
-     */
-    suspend fun upsertDeviceToken(
-        accessToken: String,
-        assetUid: String,
-        fcmToken: String,
-        platform: String = "android",
-    ) {
-        val response: HttpResponse =
-            client.post("$supabaseUrl/rest/v1/device_tokens") {
-                header("apikey", anonKey)
-                header("Authorization", "Bearer $accessToken")
-                header("Prefer", "resolution=merge-duplicates")
-                contentType(ContentType.Application.Json)
-                setBody(
-                    mapOf(
-                        "asset_uid" to assetUid,
-                        "fcm_token" to fcmToken,
-                        "platform" to platform,
-                    )
-                )
-            }
-        check(response.status.value in 200..299) {
-            "upsertDeviceToken failed: ${response.status}"
         }
     }
 

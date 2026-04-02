@@ -15,6 +15,7 @@ import '../models/asset.dart';
 import '../services/api_service.dart';
 import '../services/realtime_service.dart';
 import '../notifiers/agent_presence_notifier.dart';
+import '../notifiers/auth_notifier.dart';
 import '../widgets/common/app_scaffold.dart';
 import '../widgets/common/loading_widget.dart';
 import '../utils/label_ocr.dart';
@@ -57,6 +58,11 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
   String? _error;
   Asset? _asset;
 
+  bool get _isAdminUser {
+    final authState = ref.read(authNotifierProvider);
+    return authState.valueOrNull?.user?.isAdminGroup ?? false;
+  }
+
   // 폼 컨트롤러
   late TextEditingController _assetUidCtrl;
   late TextEditingController _nameCtrl;
@@ -80,6 +86,7 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
   String _selectedStatus = assetStatuses.first;
   String _selectedSupplyType = supplyTypes.first;
   DateTime? _supplyEndDate;
+  bool _useNewUidFormat = false; // false=현재기준, true=변경후 기준
 
   @override
   void initState() {
@@ -406,22 +413,52 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
           _buildSectionTitle('기본 정보'),
           const SizedBox(height: 8),
 
+          // 자산번호 기준 선택 (생성 모드 + 관리자만)
+          if (widget.isCreateMode && _isAdminUser) ...[
+            Row(
+              children: [
+                const Text('자산번호 기준:', style: TextStyle(fontSize: 13)),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('현재기준'),
+                  selected: !_useNewUidFormat,
+                  onSelected: (_) => setState(() => _useNewUidFormat = false),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('변경후'),
+                  selected: _useNewUidFormat,
+                  onSelected: (_) => setState(() => _useNewUidFormat = true),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+
           // 자산번호
           TextFormField(
             controller: _assetUidCtrl,
             decoration: InputDecoration(
               labelText: '자산번호 *',
-              hintText: 'BDT00001 형태',
+              hintText: _useNewUidFormat ? 'BDT00001 형태' : 'D00001 형태',
               border: const OutlineInputBorder(),
               suffixIcon: _isEditing
                   ? _buildQrScanSuffix(_assetUidCtrl)
                   : null,
             ),
             readOnly: readOnly || !widget.isCreateMode,
+            textCapitalization: TextCapitalization.characters,
             validator: (v) {
               if (v == null || v.trim().isEmpty) return '자산번호를 입력하세요.';
-              if (!assetUidRegex.hasMatch(v.trim())) {
-                return '올바른 자산번호 형식이 아닙니다.';
+              final uid = v.trim().toUpperCase();
+              if (_useNewUidFormat) {
+                if (!assetUidNewRegex.hasMatch(uid)) {
+                  return '변경후 형식: BDT00001, STP22222 등 (8자리)';
+                }
+              } else {
+                if (!assetUidCurrentRegex.hasMatch(uid)) {
+                  return '현재기준 형식: D00001, TP0001 등';
+                }
               }
               return null;
             },
@@ -767,6 +804,8 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
           // ── 에이전트 상태 (상세 모드만) ──
           if (!widget.isCreateMode && _asset != null) ...[
             _buildAgentStatusSection(context),
+            const SizedBox(height: 16),
+            _buildDeviceStatusSection(context),
             const SizedBox(height: 24),
           ],
 
@@ -920,6 +959,149 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
         ),
       ),
     );
+  }
+
+  // ── 에이전트 전송 장비 상세 정보 ─────────────────────────────────────────
+  Widget _buildDeviceStatusSection(BuildContext context) {
+    final asset = _asset!;
+    final theme = Theme.of(context);
+    final deviceStatus =
+        (asset.specifications['device_status'] as Map<String, dynamic>?) ?? {};
+
+    if (deviceStatus.isEmpty) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(Icons.devices, size: 20, color: Colors.grey),
+              const SizedBox(width: 8),
+              Text('에이전트에서 전송된 장비 정보가 없습니다.',
+                  style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.devices, size: 20, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text('에이전트 장비 정보',
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const Divider(),
+
+            // 장비 기본
+            _deviceHeader(theme, Icons.phone_android, '장비'),
+            _deviceRow('제조사', deviceStatus['device_manufacturer']),
+            _deviceRow('모델', deviceStatus['device_model']),
+            _deviceRow('시리얼번호', deviceStatus['serial_number']),
+            _deviceRow('MAC 주소', deviceStatus['mac_address']),
+            _deviceRow('전화번호', deviceStatus['phone_number']),
+            const SizedBox(height: 12),
+
+            // OS
+            _deviceHeader(theme, Icons.settings, 'OS'),
+            _deviceRow('OS 버전', deviceStatus['os_version']),
+            _deviceRow('OS 상세', deviceStatus['os_detail_version']),
+            _deviceRow('가동시간', _formatUptime(deviceStatus['uptime_hours'])),
+            const SizedBox(height: 12),
+
+            // 성능
+            _deviceHeader(theme, Icons.speed, '성능'),
+            _deviceRow('CPU 사용률', _formatPercent(deviceStatus['cpu_usage'])),
+            _deviceRow('메모리',
+                '${deviceStatus['memory_used_mb'] ?? '-'} / ${deviceStatus['memory_total_mb'] ?? '-'} MB'),
+            _deviceRow('저장공간',
+                '${_formatGb(deviceStatus['storage_used_gb'])} / ${_formatGb(deviceStatus['storage_total_gb'])} GB'),
+            const SizedBox(height: 12),
+
+            // 배터리 & 네트워크
+            _deviceHeader(theme, Icons.battery_std, '배터리 / 네트워크'),
+            _deviceRow('배터리', _formatBattery(
+                deviceStatus['battery_level'], deviceStatus['battery_charging'])),
+            _deviceRow('네트워크', deviceStatus['network_type']),
+            _deviceRow('IP 주소', deviceStatus['ip_address']),
+            const SizedBox(height: 12),
+
+            // 사용자 정보
+            _deviceHeader(theme, Icons.person, '사용자'),
+            _deviceRow('기기 사용자', deviceStatus['device_user']),
+            _deviceRow('자산 사용자', deviceStatus['asset_user_name']),
+            _deviceRow('사번', deviceStatus['employee_id']),
+            _deviceRow('에이전트 버전', deviceStatus['agent_version']),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _deviceHeader(ThemeData theme, IconData icon, String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: theme.colorScheme.secondary),
+          const SizedBox(width: 6),
+          Text(title,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.secondary)),
+        ],
+      ),
+    );
+  }
+
+  Widget _deviceRow(String label, dynamic value) {
+    final text = (value == null || value.toString().isEmpty) ? '-' : value.toString();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey)),
+          ),
+          Expanded(
+            child: Text(text, style: const TextStyle(fontSize: 13)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatUptime(dynamic hours) {
+    if (hours == null) return '-';
+    final h = (hours as num).toDouble();
+    if (h < 1) return '${(h * 60).toInt()}분';
+    if (h < 24) return '${h.toStringAsFixed(1)}시간';
+    return '${(h / 24).toStringAsFixed(1)}일';
+  }
+
+  String _formatPercent(dynamic value) {
+    if (value == null) return '-';
+    return '${(value as num).toStringAsFixed(1)}%';
+  }
+
+  String _formatGb(dynamic value) {
+    if (value == null) return '-';
+    return (value as num).toStringAsFixed(1);
+  }
+
+  String _formatBattery(dynamic level, dynamic charging) {
+    if (level == null) return '-';
+    final pct = '$level%';
+    final charge = (charging == true) ? ' (충전 중)' : '';
+    return '$pct$charge';
   }
 
   Widget _buildVerificationIcon(String? status) {

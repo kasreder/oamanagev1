@@ -54,23 +54,28 @@ class SetupActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_setup)
+        try {
+            setContentView(R.layout.activity_setup)
 
-        bindViews()
-        setupAssetUidValidation()
-        setupIntervalSpinner()
-        setupButtons()
-        observeState()
+            bindViews()
+            setupAssetUidValidation()
+            setupIntervalSpinner()
+            setupButtons()
+            observeState()
 
-        // 배터리 최적화 예외 요청
-        requestBatteryOptimization()
+            // 배터리 최적화 예외 요청
+            try { requestBatteryOptimization() } catch (_: Exception) {}
 
-        // 알림 권한 요청 (Android 13+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            requestPermissions(
-                arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
-                1001
-            )
+            // 알림 권한 요청 (Android 13+)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                requestPermissions(
+                    arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                    1001
+                )
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("SetupActivity", "onCreate 크래시", e)
+            Toast.makeText(this, "초기화 오류: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -106,21 +111,29 @@ class SetupActivity : AppCompatActivity() {
     }
 
     private fun setupIntervalSpinner() {
-        val intervals = arrayOf("5분", "15분 (기본값)", "30분")
+        // 주기는 관리자가 서버(agent_settings)에서 설정 — 스피너는 읽기 전용으로 현재 값 표시
+        val intervals = arrayOf("5분", "15분", "30분")
         val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, intervals)
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         spinnerInterval.adapter = adapter
-        spinnerInterval.setSelection(1) // 기본값: 15분
+        spinnerInterval.isEnabled = false // 서버 설정 기반 — 수동 변경 불가
+        updateSpinnerSelection()
+    }
+
+    private fun updateSpinnerSelection() {
+        val interval = viewModel.uiState.value.intervalMinutes
+        val index = when (interval) {
+            5 -> 0
+            30 -> 2
+            else -> 1
+        }
+        spinnerInterval.setSelection(index)
     }
 
     private fun setupButtons() {
         btnStart.setOnClickListener {
             val assetUid = etAssetUid.text.toString().trim()
-            val interval = when (spinnerInterval.selectedItemPosition) {
-                0 -> 5
-                2 -> 30
-                else -> 15
-            }
+            val interval = viewModel.uiState.value.intervalMinutes
             viewModel.startAgent(assetUid, interval)
         }
 
@@ -145,7 +158,8 @@ class SetupActivity : AppCompatActivity() {
 
                 // 상태 표시
                 tvAssetUidDisplay.text = "자산 번호: ${state.assetUid.ifEmpty { "-" }}"
-                tvInterval.text = "전송 주기: ${state.intervalMinutes}분"
+                tvInterval.text = "전송 주기: ${state.intervalMinutes}분 (서버 설정)"
+                updateSpinnerSelection()
                 tvLastHeartbeat.text = if (state.lastHeartbeatTime > 0) {
                     "마지막 전송: ${dateFormat.format(Date(state.lastHeartbeatTime))}"
                 } else {
@@ -193,8 +207,6 @@ class SetupActivity : AppCompatActivity() {
     // ─── 다이얼로그 ─────────────────────────────────────────────────────
 
     private fun showVerificationDialog() {
-        val dialogView = layoutInflater.inflate(R.layout.activity_setup, null)
-        // 간단한 다이얼로그로 구현
         val etName = EditText(this).apply { hint = "이름" }
         val etEmpId = EditText(this).apply { hint = "사번" }
 

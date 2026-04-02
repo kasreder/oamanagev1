@@ -43,7 +43,8 @@ INSERT INTO public.agent_settings (setting_key, setting_value)
 VALUES
   ('latest_agent_version', '1.0.0'),
   ('min_agent_version', '1.0.0'),
-  ('agent_download_url', 'https://example.com/agent/latest.apk');
+  ('agent_download_url', 'https://example.com/agent/latest.apk'),
+  ('heartbeat_interval', '5');
 
 -- RLS 활성화
 ALTER TABLE public.device_tokens ENABLE ROW LEVEL SECURITY;

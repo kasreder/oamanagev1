@@ -38,7 +38,7 @@ BEGIN
   -- 입력 편차 방지: 공백 제거 + 대문자 표준화
   NEW.asset_uid = upper(btrim(NEW.asset_uid));
 
-  IF NEW.asset_uid !~ '^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD|SM)[0-9]{5}$' THEN
+  IF NEW.asset_uid !~ '^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD|TP|ET|EH)[0-9]{5}$' THEN
     RAISE EXCEPTION 'invalid asset_uid format: %', NEW.asset_uid
       USING HINT = 'Expected format: [B|R|C|L|S][DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD|SM][0-9]{5}';
   END IF;

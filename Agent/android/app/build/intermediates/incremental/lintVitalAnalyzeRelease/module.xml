@@ -1,0 +1,18 @@
+<lint-module
+    format="1"
+    dir="/home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app"
+    name=":android:app"
+    type="APP"
+    maven="OAAgent.android:app:"
+    agpVersion="8.1.0"
+    buildFolder="build"
+    bootClassPath="/home/kminer/android-sdk/platforms/android-36/android.jar:/home/kminer/android-sdk/build-tools/33.0.1/core-lambda-stubs.jar"
+    javaSourceLevel="17"
+    compileTarget="android-36">
+  <lintOptions
+      abortOnError="true"
+      absolutePaths="true"
+      checkReleaseBuilds="true"
+      explainIssues="true"/>
+  <variant name="release"/>
+</lint-module>

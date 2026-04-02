@@ -1,4 +1,4 @@
-/// 자산 카테고리 목록 (12종)
+/// 자산 카테고리 목록 (14종)
 const List<String> assetCategories = [
   '데스크탑',
   '모니터',
@@ -12,6 +12,8 @@ const List<String> assetCategories = [
   '서버',
   '웨어러블',
   '특수목적장비',
+  '현장업무 태블릿',
+  '법인폰',
 ];
 
 /// 자산 상태 목록
@@ -39,11 +41,21 @@ const List<String> employmentTypes = [
   '도급직',
 ];
 
-/// asset_uid 검증 정규식 — 영문+숫자 조합 (신/구 형식 모두 허용)
-/// 신형식: BDT00001, RNB12345 등 (영문2~3자 + 숫자5자)
-/// 구형식: D00123, PC0001 등 (영문1~3자 + 숫자3~6자)
+/// asset_uid 검증 정규식 — 현재기준 (기본)
+/// D00001, N00001, TP0001, EH0001, ET0001 등
+final RegExp assetUidCurrentRegex = RegExp(
+  r'^[A-Z]{1,2}[0-9]{4,5}$',
+);
+
+/// asset_uid 검증 정규식 — 변경후 기준
+/// BDT00001, RNB12345, STP22222 등
+final RegExp assetUidNewRegex = RegExp(
+  r'^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD|TP|ET|EH)[0-9]{5}$',
+);
+
+/// asset_uid 검증 정규식 — 둘 다 허용 (조회/스캔용)
 final RegExp assetUidRegex = RegExp(
-  r'^[A-Za-z]{1,5}[0-9]{3,6}$',
+  r'^([A-Z]{1,2}[0-9]{4,5}|(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD|TP|ET|EH)[0-9]{5})$',
 );
 
 /// 등록경로 코드
@@ -68,7 +80,9 @@ const Map<String, String> equipmentCodeToCategory = {
   'SV': '서버',
   'WR': '웨어러블',
   'SD': '특수목적장비',
-  'SM': '테스트폰',
+  'TP': '테스트폰',
+  'ET': '현장업무 태블릿',
+  'EH': '법인폰',
 };
 
 /// 카테고리 → 장비코드 역매핑
@@ -84,7 +98,9 @@ const Map<String, String> categoryToEquipmentCode = {
   '서버': 'SV',
   '웨어러블': 'WR',
   '특수목적장비': 'SD',
-  '테스트폰': 'SM',
+  '테스트폰': 'TP',
+  '현장업무 태블릿': 'ET',
+  '법인폰': 'EH',
 };
 
 /// 페이지네이션 기본 사이즈
