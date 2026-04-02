@@ -310,6 +310,27 @@ class ApiService {
   }
 
   // ---------------------------------------------------------------------------
+  // 에이전트 설정 (Agent Settings)
+  // ---------------------------------------------------------------------------
+
+  /// agent_settings 전체 조회
+  Future<List<Map<String, dynamic>>> fetchAgentSettings() async {
+    final response = await _client
+        .from('agent_settings')
+        .select()
+        .order('setting_key', ascending: true);
+    return List<Map<String, dynamic>>.from(response as List);
+  }
+
+  /// agent_settings 단건 수정 (관리자 전용 — RLS에서 is_admin() 체크)
+  Future<void> updateAgentSetting(String key, String value) async {
+    await _client
+        .from('agent_settings')
+        .update({'setting_value': value})
+        .eq('setting_key', key);
+  }
+
+  // ---------------------------------------------------------------------------
   // 도면에 배치된 자산 조회
   // ---------------------------------------------------------------------------
 

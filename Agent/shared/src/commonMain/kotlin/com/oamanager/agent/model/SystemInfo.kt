@@ -29,4 +29,7 @@ data class SystemInfo(
     @SerialName("asset_user_name")      val assetUserName: String,
     @SerialName("employee_id")          val employeeId: String,
     @SerialName("agent_version")        val agentVersion: String,
+    @SerialName("mac_address")          val macAddress: String = "",
+    @SerialName("serial_number")        val serialNumber: String = "",
+    @SerialName("phone_number")         val phoneNumber: String = "",
 )

@@ -8,19 +8,19 @@ package com.oamanager.agent
  */
 object AgentConfig {
     /** Supabase 프로젝트 URL (예: https://<project-id>.supabase.co) */
-    const val SUPABASE_URL: String = "https://YOUR_PROJECT.supabase.co"
+    const val SUPABASE_URL: String = "https://api.terraforming.info"
 
     /** Supabase Anon Key (공개 가능 — RLS로 보호) */
-    const val SUPABASE_ANON_KEY: String = "YOUR_ANON_KEY"
+    const val SUPABASE_ANON_KEY: String = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzczODcyMzk0LCJleHAiOjQxMDI0NDQ4MDB9.jOHmflTnhaydazQe8i4_WHzwRv7NM1i_Xw3KRNPkj1A"
 
     /** 에이전트 전용 서비스 계정 이메일 */
     const val AGENT_EMAIL: String = "agent@oamanager.internal"
 
     /** 에이전트 전용 서비스 계정 비밀번호 */
-    const val AGENT_PASSWORD: String = "AGENT_PASSWORD"
+    const val AGENT_PASSWORD: String = "OAAgent2026secure"
 
-    /** 기본 Heartbeat 전송 주기 (분) */
-    const val DEFAULT_INTERVAL_MINUTES: Int = 15
+    /** 기본 Heartbeat 전송 주기 (분) — 서버 agent_settings에서 동적으로 변경 가능 */
+    const val DEFAULT_INTERVAL_MINUTES: Int = 5
 
     /** Supabase Realtime WebSocket URL */
     val REALTIME_URL: String
@@ -38,5 +38,5 @@ object AgentConfig {
     const val RECONNECT_MAX_DELAY_MS: Long = 60_000L
 
     /** asset_uid 정규식 패턴 */
-    val ASSET_UID_REGEX = Regex("^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD)[0-9]{5}$")
+    val ASSET_UID_REGEX = Regex("^([A-Z]{1,2}[0-9]{4,5}|(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD|TP|ET|EH)[0-9]{5})$")
 }

@@ -2,25 +2,31 @@ package com.oamanager.agent.android.data
 
 import android.content.Context
 import android.content.SharedPreferences
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKeys
+import android.util.Log
 import com.oamanager.agent.network.TokenStorage
 
 /**
- * EncryptedSharedPreferences를 래핑한 보안 저장소.
+ * 보안 저장소.
  *
- * AES-256-GCM으로 모든 값을 암호화합니다.
- * [TokenStorage] 인터페이스를 구현하여 AuthManager에 주입됩니다.
+ * EncryptedSharedPreferences 사용을 시도하고,
+ * 실패 시 일반 SharedPreferences로 fallback합니다.
  */
 class AgentPreferences(context: Context) : TokenStorage {
 
-    private val prefs: SharedPreferences = EncryptedSharedPreferences.create(
-        "oa_agent_prefs",
-        MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC),
-        context,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-    )
+    private val prefs: SharedPreferences = try {
+        androidx.security.crypto.EncryptedSharedPreferences.create(
+            "oa_agent_prefs",
+            androidx.security.crypto.MasterKeys.getOrCreate(
+                androidx.security.crypto.MasterKeys.AES256_GCM_SPEC
+            ),
+            context,
+            androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+        )
+    } catch (e: Exception) {
+        Log.w("AgentPreferences", "EncryptedSharedPreferences 실패, 일반 모드 사용", e)
+        context.getSharedPreferences("oa_agent_prefs_plain", Context.MODE_PRIVATE)
+    }
 
     // ─── 자산 식별자 ────────────────────────────────────────────────────
 
@@ -45,7 +51,7 @@ class AgentPreferences(context: Context) : TokenStorage {
         set(value) = prefs.edit().putLong(KEY_LAST_HEARTBEAT, value).apply()
 
     var intervalMinutes: Int
-        get() = prefs.getInt(KEY_INTERVAL, 15)
+        get() = prefs.getInt(KEY_INTERVAL, 5)
         set(value) = prefs.edit().putInt(KEY_INTERVAL, value).apply()
 
     // ─── 사용자 정보 ────────────────────────────────────────────────────
@@ -62,12 +68,6 @@ class AgentPreferences(context: Context) : TokenStorage {
         get() = prefs.getLong(KEY_LAST_VERIFIED, 0L)
         set(value) = prefs.edit().putLong(KEY_LAST_VERIFIED, value).apply()
 
-    // ─── FCM ────────────────────────────────────────────────────────────
-
-    var fcmToken: String?
-        get() = prefs.getString(KEY_FCM_TOKEN, null)
-        set(value) = prefs.edit().putString(KEY_FCM_TOKEN, value).apply()
-
     // ─── Keys ───────────────────────────────────────────────────────────
 
     companion object {
@@ -79,6 +79,5 @@ class AgentPreferences(context: Context) : TokenStorage {
         private const val KEY_USER_NAME = "asset_user_name"
         private const val KEY_EMPLOYEE_ID = "employee_id"
         private const val KEY_LAST_VERIFIED = "last_verified_at"
-        private const val KEY_FCM_TOKEN = "fcm_token"
     }
 }

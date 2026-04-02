@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../main.dart';
+import '../../models/user.dart';
 import '../../notifiers/auth_notifier.dart';
 import 'asset_uid_guide_dialog.dart';
 
@@ -122,7 +123,7 @@ class AppScaffold extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     bool isDarkMode,
-    dynamic user,
+    User? user,
   ) {
     return Drawer(
       child: ListView(
@@ -144,6 +145,11 @@ class AppScaffold extends ConsumerWidget {
           _buildDrawerItem(context, Icons.map, '도면관리', '/drawings'),
           _buildDrawerItem(
               context, Icons.warning_amber, '미검증자산', '/unverified'),
+          if (user != null && user.isAdminGroup) ...[
+            const Divider(),
+            _buildDrawerItem(
+                context, Icons.settings, '에이전트 설정', '/admin/settings'),
+          ],
           const Divider(),
           SwitchListTile(
             title: const Text('다크 모드'),

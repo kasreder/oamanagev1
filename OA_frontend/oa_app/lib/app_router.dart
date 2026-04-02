@@ -14,6 +14,7 @@ import 'screens/signature_page.dart';
 import 'screens/drawing_manager_page.dart';
 import 'screens/drawing_viewer_page.dart';
 import 'screens/unverified_page.dart';
+import 'screens/admin_settings_page.dart';
 
 /// GoRouter Provider (Riverpod)
 /// GoRouter를 한 번만 생성하고, refreshListenable로 redirect만 재평가
@@ -36,18 +37,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       final isAuthenticated = authState.valueOrNull?.isAuthenticated ?? false;
       final isLoginPage = state.matchedLocation == '/login';
 
-      // 인증이 필요한 페이지 (등록/수정/서명)
-      const authRequiredPaths = [
-        '/asset/new',
-        '/signature',
-      ];
-      final location = state.matchedLocation;
-      // 정확히 일치하거나, /asset/:id (수정 화면)인 경우
-      final needsAuth = authRequiredPaths.contains(location) ||
-          RegExp(r'^/asset/\d+$').hasMatch(location);
-
-      // 미인증 상태에서 인증 필요 페이지 접근 시 → /login
-      if (!isAuthenticated && needsAuth) {
+      // 미인증 상태에서 로그인 페이지가 아니면 → /login
+      if (!isAuthenticated && !isLoginPage) {
         return '/login';
       }
       // 인증 상태에서 로그인 페이지면 → /
@@ -124,6 +115,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/unverified',
         builder: (context, state) => const UnverifiedPage(),
+      ),
+      GoRoute(
+        path: '/admin/settings',
+        builder: (context, state) => const AdminSettingsPage(),
       ),
     ],
   );

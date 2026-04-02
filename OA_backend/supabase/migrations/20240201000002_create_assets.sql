@@ -4,7 +4,7 @@
 CREATE TABLE public.assets (
   id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   asset_uid     text UNIQUE NOT NULL
-    CHECK (asset_uid ~ '^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD|SM)[0-9]{5}$'),
+    CHECK (asset_uid ~ '^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD|TP|ET|EH)[0-9]{5}$'),
   name          text,
   assets_status text DEFAULT '가용'
     CHECK (assets_status IN ('사용', '가용', '이동', '점검필요', '고장')),

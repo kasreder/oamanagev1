@@ -39,6 +39,9 @@ actual class SystemInfoCollector(
             assetUserName = assetUserName,
             employeeId = employeeId,
             agentVersion = agentVersion,
+            macAddress = getMacAddress(),
+            serialNumber = getSerialNumber(),
+            phoneNumber = "",
         )
     }
 
@@ -232,6 +235,30 @@ actual class SystemInfoCollector(
 
     private fun getDeviceUser(): String {
         return System.getProperty("user.name") ?: "Unknown"
+    }
+
+    // ─── MAC Address ────────────────────────────────────────────────────
+
+    private fun getMacAddress(): String {
+        return try {
+            NetworkInterface.getNetworkInterfaces().toList()
+                .filter { it.isUp && !it.isLoopback && it.hardwareAddress != null }
+                .firstOrNull()
+                ?.hardwareAddress
+                ?.joinToString(":") { "%02x".format(it) } ?: ""
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    // ─── Serial Number ──────────────────────────────────────────────────
+
+    private fun getSerialNumber(): String {
+        return try {
+            runPowerShell("(Get-CimInstance Win32_BIOS).SerialNumber").trim()
+        } catch (_: Exception) {
+            ""
+        }
     }
 
     // ─── PowerShell Helper ──────────────────────────────────────────────

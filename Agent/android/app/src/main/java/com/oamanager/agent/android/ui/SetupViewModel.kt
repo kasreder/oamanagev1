@@ -46,6 +46,7 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         loadSavedState()
+        fetchServerInterval()
     }
 
     private fun loadSavedState() {
@@ -56,6 +57,33 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
             isRunning = prefs.assetUid != null,
             lastVerifiedAt = prefs.lastVerifiedAt,
         )
+    }
+
+    /**
+     * 서버 agent_settings에서 heartbeat_interval을 가져와 UI에 반영합니다.
+     * 서버 값이 있으면 로컬 설정을 덮어씁니다.
+     */
+    private fun fetchServerInterval() {
+        viewModelScope.launch {
+            try {
+                val token = authManager.getValidToken() ?: return@launch
+                val settings = client.getAgentSettings(token)
+                val serverInterval = settings["heartbeat_interval"]?.toIntOrNull()
+                if (serverInterval != null && serverInterval > 0) {
+                    prefs.intervalMinutes = serverInterval
+                    _uiState.value = _uiState.value.copy(
+                        intervalMinutes = serverInterval,
+                    )
+                    // 이미 실행 중이면 새 주기로 재시작
+                    if (prefs.assetUid != null) {
+                        val app = getApplication<OAAgentApp>()
+                        app.enqueueHeartbeat(serverInterval)
+                    }
+                }
+            } catch (_: Exception) {
+                // 서버 조회 실패 시 로컬 설정 유지
+            }
+        }
     }
 
     // ─── Asset UID 검증 ─────────────────────────────────────────────────
@@ -81,9 +109,6 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
             isRunning = true,
         )
 
-        // 초기 FCM 토큰 등록
-        registerFcmToken()
-
         // 배정 상태 확인
         checkAssignmentStatus()
     }
@@ -91,9 +116,34 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
     // ─── 즉시 전송 ──────────────────────────────────────────────────────
 
     fun sendNow() {
-        val app = getApplication<OAAgentApp>()
-        app.sendHeartbeatNow()
-        _uiState.value = _uiState.value.copy(lastSendResult = "전송 요청됨")
+        val assetUid = prefs.assetUid ?: return
+        _uiState.value = _uiState.value.copy(lastSendResult = "전송 중...")
+
+        viewModelScope.launch {
+            try {
+                val token = authManager.getValidToken()
+                    ?: throw IllegalStateException("인증 실패")
+
+                val systemInfo = com.oamanager.agent.platform.SystemInfoCollector(
+                    context = getApplication(),
+                    assetUserName = prefs.assetUserName ?: "",
+                    employeeId = prefs.employeeId ?: "",
+                    agentVersion = "1.0.0",
+                ).collect()
+
+                client.updateHeartbeat(token, assetUid, systemInfo)
+                prefs.lastHeartbeatTime = System.currentTimeMillis()
+
+                _uiState.value = _uiState.value.copy(
+                    lastSendResult = "전송 성공!",
+                    lastHeartbeatTime = System.currentTimeMillis(),
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    lastSendResult = "전송 실패: ${e.message}",
+                )
+            }
+        }
     }
 
     // ─── 사용자 확인 ────────────────────────────────────────────────────
@@ -178,20 +228,6 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
                     message = "수령 확인 실패: ${e.message}",
                 )
             }
-        }
-    }
-
-    // ─── FCM 토큰 등록 ──────────────────────────────────────────────────
-
-    private fun registerFcmToken() {
-        val assetUid = prefs.assetUid ?: return
-        val fcmToken = prefs.fcmToken ?: return
-
-        viewModelScope.launch {
-            try {
-                val token = authManager.getValidToken() ?: return@launch
-                client.upsertDeviceToken(token, assetUid, fcmToken)
-            } catch (_: Exception) { }
         }
     }
 

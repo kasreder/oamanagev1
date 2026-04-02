@@ -1,0 +1,18 @@
+[
+    {
+        "merged": "com.oamanager.agent.app-merged_res-44:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "com.oamanager.agent.app-main-45:/drawable/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "com.oamanager.agent.app-merged_res-44:/drawable_ic_notification.xml.flat",
+        "source": "com.oamanager.agent.app-main-45:/drawable/ic_notification.xml"
+    },
+    {
+        "merged": "com.oamanager.agent.app-merged_res-44:/layout_activity_setup.xml.flat",
+        "source": "com.oamanager.agent.app-main-45:/layout/activity_setup.xml"
+    },
+    {
+        "merged": "com.oamanager.agent.app-merged_res-44:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "com.oamanager.agent.app-main-45:/mipmap-anydpi-v26/ic_launcher.xml"
+    }
+]

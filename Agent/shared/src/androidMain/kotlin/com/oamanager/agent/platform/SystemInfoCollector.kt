@@ -46,6 +46,9 @@ actual class SystemInfoCollector(
             assetUserName = assetUserName,
             employeeId = employeeId,
             agentVersion = agentVersion,
+            macAddress = getMacAddress(),
+            serialNumber = getSerialNumber(),
+            phoneNumber = getPhoneNumber(),
         )
     }
 
@@ -160,6 +163,45 @@ actual class SystemInfoCollector(
 
     private fun getUptimeHours(): Float {
         return SystemClock.elapsedRealtime() / 3_600_000f
+    }
+
+    // ─── MAC Address ────────────────────────────────────────────────────
+
+    private fun getMacAddress(): String {
+        return try {
+            val interfaces = NetworkInterface.getNetworkInterfaces()?.toList() ?: return ""
+            val wlan = interfaces.firstOrNull { it.name.equals("wlan0", ignoreCase = true) }
+                ?: interfaces.firstOrNull { it.hardwareAddress != null }
+            wlan?.hardwareAddress?.joinToString(":") { "%02x".format(it) } ?: ""
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    // ─── Serial Number ──────────────────────────────────────────────────
+
+    private fun getSerialNumber(): String {
+        return try {
+            Build.getSerial()
+        } catch (_: SecurityException) {
+            Build.SERIAL ?: ""
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    // ─── Phone Number ────────────────────────────────────────────────────
+
+    private fun getPhoneNumber(): String {
+        return try {
+            val telephonyManager =
+                context.getSystemService(Context.TELEPHONY_SERVICE) as android.telephony.TelephonyManager
+            telephonyManager.line1Number ?: ""
+        } catch (_: SecurityException) {
+            ""
+        } catch (_: Exception) {
+            ""
+        }
     }
 
     // ─── Device User ────────────────────────────────────────────────────

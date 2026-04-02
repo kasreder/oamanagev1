@@ -34,6 +34,8 @@ kotlin {
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
                 // Coroutines
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
+                // DateTime
+                implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.5.0")
             }
         }
         val androidMain by getting {
@@ -51,7 +53,7 @@ kotlin {
 
 android {
     namespace = "com.oamanager.agent.shared"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         minSdk = 26

@@ -1,6 +1,7 @@
 -- OA Manager v1
 -- asset_uid format alignment migration
--- Target format: [B|R|C|L|S][DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD][0-9]{5}
+-- 현재기준: D00001, TP0001 등 (문자1~2자리 + 숫자4~5자리)
+-- 변경후: BDT00001, STP22222 등 (등록경로1자리 + 장비코드2자리 + 일련번호5자리)
 
 BEGIN;
 
@@ -21,9 +22,10 @@ BEGIN
   -- Normalize input to avoid casing/whitespace drift
   NEW.asset_uid := upper(btrim(NEW.asset_uid));
 
-  IF NEW.asset_uid !~ '^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD)[0-9]{5}$' THEN
+  -- 현재기준 (D00001, TP0001 등) + 변경후 (BDT00001 등) 둘 다 허용
+  IF NEW.asset_uid !~ '^([A-Z]{1,2}[0-9]{4,5}|(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD|TP|ET|EH)[0-9]{5})$' THEN
     RAISE EXCEPTION 'invalid asset_uid format: %', NEW.asset_uid
-      USING HINT = 'Expected format: [B|R|C|L|S][DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD][0-9]{5}';
+      USING HINT = 'Current: D00001, TP0001 / New: BDT00001, STP22222';
   END IF;
 
   RETURN NEW;
@@ -37,7 +39,6 @@ FOR EACH ROW
 EXECUTE FUNCTION public.validate_asset_uid();
 
 -- 3) Add named CHECK constraint for schema-level consistency.
---    NOT VALID prevents migration failure on pre-existing legacy rows.
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -48,20 +49,10 @@ BEGIN
   ) THEN
     ALTER TABLE public.assets
       ADD CONSTRAINT chk_assets_asset_uid_format
-      CHECK (asset_uid ~ '^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD)[0-9]{5}$')
+      CHECK (asset_uid ~ '^([A-Z]{1,2}[0-9]{4,5}|(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD|TP|ET|EH)[0-9]{5})$')
       NOT VALID;
   END IF;
 END
 $$;
 
 COMMIT;
-
--- ---- Post-deploy verification (run manually) ----
--- 1) Legacy rows check:
--- SELECT id, asset_uid
--- FROM public.assets
--- WHERE asset_uid !~ '^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD)[0-9]{5}$';
---
--- 2) After legacy rows are fixed, enforce for all rows:
--- ALTER TABLE public.assets VALIDATE CONSTRAINT chk_assets_asset_uid_format;
-

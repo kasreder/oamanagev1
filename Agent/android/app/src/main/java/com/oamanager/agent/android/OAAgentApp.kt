@@ -5,6 +5,9 @@ import android.util.Log
 import androidx.work.*
 import com.oamanager.agent.android.service.HeartbeatForegroundService
 import com.oamanager.agent.android.worker.HeartbeatWorker
+import java.io.File
+import java.io.PrintWriter
+import java.io.StringWriter
 import java.util.concurrent.TimeUnit
 
 /**
@@ -14,10 +17,27 @@ import java.util.concurrent.TimeUnit
  */
 class OAAgentApp : Application(), Configuration.Provider {
 
-    override fun getWorkManagerConfiguration(): Configuration {
-        return Configuration.Builder()
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder()
             .setMinimumLoggingLevel(Log.INFO)
             .build()
+
+    override fun onCreate() {
+        super.onCreate()
+
+        // 전역 크래시 핸들러 — 크래시 로그를 파일에 저장
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            try {
+                val sw = StringWriter()
+                throwable.printStackTrace(PrintWriter(sw))
+                val logText = "=== CRASH ${java.util.Date()} ===\n${sw}\n"
+                val file = File(getExternalFilesDir(null), "crash_log.txt")
+                file.appendText(logText)
+                Log.e("OAAgentApp", "크래시 저장: ${file.absolutePath}", throwable)
+            } catch (_: Exception) {}
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
     }
 
     /**

@@ -1,19 +1,27 @@
 plugins {
     id("com.android.application")
     kotlin("android")
-    id("com.google.gms.google-services")
 }
 
 android {
     namespace = "com.oamanager.agent"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.oamanager.agent"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0.0"
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("oaagent-release.jks")
+            storePassword = "oaagent2026"
+            keyAlias = "oaagent"
+            keyPassword = "oaagent2026"
+        }
     }
 
     buildTypes {
@@ -23,6 +31,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
@@ -50,9 +59,9 @@ dependencies {
     // Material Design
     implementation("com.google.android.material:material:1.11.0")
 
-    // Firebase
-    implementation(platform("com.google.firebase:firebase-bom:32.7.1"))
-    implementation("com.google.firebase:firebase-messaging-ktx")
+
+    // JSON (kotlinx.serialization — shared 모듈의 API 타입 접근용)
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.0")
