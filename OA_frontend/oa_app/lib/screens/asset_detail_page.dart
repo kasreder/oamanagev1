@@ -75,10 +75,13 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
   late TextEditingController _floorCtrl;
   late TextEditingController _ownerNameCtrl;
   late TextEditingController _ownerDeptCtrl;
+  late TextEditingController _ownerEmpIdCtrl;
   late TextEditingController _userNameCtrl;
   late TextEditingController _userDeptCtrl;
+  late TextEditingController _userEmpIdCtrl;
   late TextEditingController _adminNameCtrl;
   late TextEditingController _adminDeptCtrl;
+  late TextEditingController _adminEmpIdCtrl;
   late TextEditingController _normalCommentCtrl;
   late TextEditingController _oaCommentCtrl;
 
@@ -115,10 +118,13 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
     _floorCtrl = TextEditingController();
     _ownerNameCtrl = TextEditingController();
     _ownerDeptCtrl = TextEditingController();
+    _ownerEmpIdCtrl = TextEditingController();
     _userNameCtrl = TextEditingController();
     _userDeptCtrl = TextEditingController();
+    _userEmpIdCtrl = TextEditingController();
     _adminNameCtrl = TextEditingController();
     _adminDeptCtrl = TextEditingController();
+    _adminEmpIdCtrl = TextEditingController();
     _normalCommentCtrl = TextEditingController();
     _oaCommentCtrl = TextEditingController();
   }
@@ -136,10 +142,13 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
     _floorCtrl.dispose();
     _ownerNameCtrl.dispose();
     _ownerDeptCtrl.dispose();
+    _ownerEmpIdCtrl.dispose();
     _userNameCtrl.dispose();
     _userDeptCtrl.dispose();
+    _userEmpIdCtrl.dispose();
     _adminNameCtrl.dispose();
     _adminDeptCtrl.dispose();
+    _adminEmpIdCtrl.dispose();
     _normalCommentCtrl.dispose();
     _oaCommentCtrl.dispose();
     super.dispose();
@@ -158,10 +167,13 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
     _floorCtrl.text = asset.floor ?? '';
     _ownerNameCtrl.text = asset.ownerName ?? '';
     _ownerDeptCtrl.text = asset.ownerDepartment ?? '';
+    _ownerEmpIdCtrl.text = asset.ownerEmployeeId ?? '';
     _userNameCtrl.text = asset.userName ?? '';
     _userDeptCtrl.text = asset.userDepartment ?? '';
+    _userEmpIdCtrl.text = asset.userEmployeeId ?? '';
     _adminNameCtrl.text = asset.adminName ?? '';
     _adminDeptCtrl.text = asset.adminDepartment ?? '';
+    _adminEmpIdCtrl.text = asset.adminEmployeeId ?? '';
     _normalCommentCtrl.text = asset.normalComment ?? '';
     _oaCommentCtrl.text = asset.oaComment ?? '';
 
@@ -220,10 +232,13 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
         'floor': _floorCtrl.text.trim(),
         'owner_name': _ownerNameCtrl.text.trim(),
         'owner_department': _ownerDeptCtrl.text.trim(),
+        'owner_employee_id': _ownerEmpIdCtrl.text.trim(),
         'user_name': _userNameCtrl.text.trim(),
         'user_department': _userDeptCtrl.text.trim(),
+        'user_employee_id': _userEmpIdCtrl.text.trim(),
         'admin_name': _adminNameCtrl.text.trim(),
         'admin_department': _adminDeptCtrl.text.trim(),
+        'admin_employee_id': _adminEmpIdCtrl.text.trim(),
         'normal_comment': _normalCommentCtrl.text.trim(),
         'oa_comment': _oaCommentCtrl.text.trim(),
         if (_supplyEndDate != null)
@@ -618,44 +633,13 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
           _buildSectionTitle('담당자 정보'),
           const SizedBox(height: 8),
 
-          // 소유자
-          Row(
-            children: [
-              Expanded(
-                child: TextFormField(
-                  controller: _ownerNameCtrl,
-                  decoration: const InputDecoration(
-                    labelText: '소유자',
-                    border: OutlineInputBorder(),
-                  ),
-                  readOnly: readOnly,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextFormField(
-                  controller: _ownerDeptCtrl,
-                  decoration: const InputDecoration(
-                    labelText: '소유자 부서',
-                    border: OutlineInputBorder(),
-                  ),
-                  readOnly: readOnly,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // 사용자
+          // 1. 실사용자
           Row(
             children: [
               Expanded(
                 child: TextFormField(
                   controller: _userNameCtrl,
-                  decoration: const InputDecoration(
-                    labelText: '사용자',
-                    border: OutlineInputBorder(),
-                  ),
+                  decoration: const InputDecoration(labelText: '실사용자 *', border: OutlineInputBorder()),
                   readOnly: readOnly,
                 ),
               ),
@@ -663,10 +647,15 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
               Expanded(
                 child: TextFormField(
                   controller: _userDeptCtrl,
-                  decoration: const InputDecoration(
-                    labelText: '사용자 부서',
-                    border: OutlineInputBorder(),
-                  ),
+                  decoration: const InputDecoration(labelText: '실사용 부서', border: OutlineInputBorder()),
+                  readOnly: readOnly,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  controller: _userEmpIdCtrl,
+                  decoration: const InputDecoration(labelText: '실사용자 사번', border: OutlineInputBorder()),
                   readOnly: readOnly,
                 ),
               ),
@@ -674,16 +663,43 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
           ),
           const SizedBox(height: 12),
 
-          // 관리자
+          // 2. 소유자
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _ownerNameCtrl,
+                  decoration: const InputDecoration(labelText: '소유자', border: OutlineInputBorder()),
+                  readOnly: readOnly,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  controller: _ownerDeptCtrl,
+                  decoration: const InputDecoration(labelText: '소유 부서', border: OutlineInputBorder()),
+                  readOnly: readOnly,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  controller: _ownerEmpIdCtrl,
+                  decoration: const InputDecoration(labelText: '소유자 사번', border: OutlineInputBorder()),
+                  readOnly: readOnly,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // 3. 관리자
           Row(
             children: [
               Expanded(
                 child: TextFormField(
                   controller: _adminNameCtrl,
-                  decoration: const InputDecoration(
-                    labelText: '관리자',
-                    border: OutlineInputBorder(),
-                  ),
+                  decoration: const InputDecoration(labelText: '관리자', border: OutlineInputBorder()),
                   readOnly: readOnly,
                 ),
               ),
@@ -691,10 +707,15 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
               Expanded(
                 child: TextFormField(
                   controller: _adminDeptCtrl,
-                  decoration: const InputDecoration(
-                    labelText: '관리자 부서',
-                    border: OutlineInputBorder(),
-                  ),
+                  decoration: const InputDecoration(labelText: '관리 부서', border: OutlineInputBorder()),
+                  readOnly: readOnly,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  controller: _adminEmpIdCtrl,
+                  decoration: const InputDecoration(labelText: '관리자 사번', border: OutlineInputBorder()),
                   readOnly: readOnly,
                 ),
               ),

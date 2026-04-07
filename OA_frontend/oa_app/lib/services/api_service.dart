@@ -14,7 +14,7 @@ class ApiService {
   // 자산 (Assets)
   // ---------------------------------------------------------------------------
 
-  /// 자산 목록 조회 (페이지네이션 + 필터)
+  /// 자산 목록 조회 (페이지네이션 — 호환용)
   Future<({List<Asset> data, int total})> fetchAssets({
     int page = 1,
     int pageSize = defaultPageSize,
@@ -57,6 +57,39 @@ class ApiService {
         .toList();
 
     return (data: rows, total: total);
+  }
+
+  /// 자산 목록 조회 (전체 — 페이지네이션 없음)
+  Future<List<Asset>> fetchAllAssets({
+    String? category,
+    String? status,
+    String? search,
+    String? building,
+  }) async {
+    var query = _client.from('assets').select();
+
+    if (category != null && category.isNotEmpty) {
+      query = query.eq('category', category);
+    }
+    if (status != null && status.isNotEmpty) {
+      query = query.eq('assets_status', status);
+    }
+    if (building != null && building.isNotEmpty) {
+      query = query.eq('building', building);
+    }
+    if (search != null && search.isNotEmpty) {
+      query = query.or(
+        'asset_uid.ilike.%$search%,'
+        'name.ilike.%$search%,'
+        'serial_number.ilike.%$search%,'
+        'user_name.ilike.%$search%',
+      );
+    }
+
+    final response = await query.order('id', ascending: false);
+    return (response as List<dynamic>)
+        .map((e) => Asset.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// 자산 단건 조회

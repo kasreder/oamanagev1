@@ -40,8 +40,14 @@ class _HomePageState extends ConsumerState<HomePage> {
   // 최신 등록 자산
   List<Asset> _recentAssets = [];
 
-  // 만료 임박 자산
+  // 대여일 만료예정 (D-7 이내)
   List<Asset> _expiringAssets = [];
+
+  // 대여일 초과 자산
+  List<Asset> _overdueAssets = [];
+
+  // 실사용자 불일치 자산
+  List<Asset> _mismatchAssets = [];
 
   @override
   void initState() {
@@ -87,13 +93,12 @@ class _HomePageState extends ConsumerState<HomePage> {
         _totalAssets = countResult.count;
       }
 
-      // 만료 임박 자산 (D-7 이내)
+      // 대여일 만료예정 (D-7 이내) + 대여일 초과 자산
       try {
-        _expiringAssets = await _api.getExpiringAssets();
-      } catch (_) {
-        // RPC 미구성 시 직접 조회
         final now = DateTime.now();
         final sevenDaysLater = now.add(const Duration(days: 7));
+
+        // 만료예정: 오늘 ~ 7일 후
         final expiringResult = await supabase
             .from('assets')
             .select()
@@ -104,6 +109,34 @@ class _HomePageState extends ConsumerState<HomePage> {
         _expiringAssets = (expiringResult as List<dynamic>)
             .map((e) => Asset.fromJson(e as Map<String, dynamic>))
             .toList();
+
+        // 초과: 만료일이 오늘 이전
+        final overdueResult = await supabase
+            .from('assets')
+            .select()
+            .inFilter('supply_type', ['렌탈', '대여'])
+            .lt('supply_end_date', now.toIso8601String())
+            .order('supply_end_date', ascending: true);
+        _overdueAssets = (overdueResult as List<dynamic>)
+            .map((e) => Asset.fromJson(e as Map<String, dynamic>))
+            .toList();
+      } catch (_) {
+        _expiringAssets = [];
+        _overdueAssets = [];
+      }
+
+      // 실사용자 불일치 자산
+      try {
+        final mismatchResult = await supabase
+            .from('assets')
+            .select()
+            .not('specifications->user_mismatch', 'is', null)
+            .order('last_active_at', ascending: false);
+        _mismatchAssets = (mismatchResult as List<dynamic>)
+            .map((e) => Asset.fromJson(e as Map<String, dynamic>))
+            .toList();
+      } catch (_) {
+        _mismatchAssets = [];
       }
 
       if (!mounted) return;
@@ -169,12 +202,78 @@ class _HomePageState extends ConsumerState<HomePage> {
 
           const SizedBox(height: 24),
 
-          // ── 만료 임박 자산 ──
+          // ── 실사용자 불일치 자산 ──
+          if (_mismatchAssets.isNotEmpty) ...[
+            Text(
+              '실사용자 불일치 (${_mismatchAssets.length}건)',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: Colors.deepOrange,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ..._mismatchAssets.map((asset) {
+              final mismatch = (asset.specifications['user_mismatch']
+                  as Map<String, dynamic>?) ?? {};
+              return Card(
+                margin: const EdgeInsets.only(bottom: 4),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.deepOrange.withOpacity(0.15),
+                    child: const Icon(Icons.person_off, color: Colors.deepOrange, size: 20),
+                  ),
+                  title: Text(asset.name ?? asset.assetUid, overflow: TextOverflow.ellipsis),
+                  subtitle: Text(
+                    '${asset.assetUid}  |  등록: ${mismatch['expected'] ?? '-'}  →  에이전트: ${mismatch['actual'] ?? '-'}',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  trailing: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.deepOrange.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text('불일치', style: TextStyle(
+                      color: Colors.deepOrange, fontSize: 12, fontWeight: FontWeight.bold)),
+                  ),
+                  onTap: () => context.go('/asset/${asset.id}'),
+                ),
+              );
+            }),
+            const SizedBox(height: 24),
+          ],
+
+          // ── 대여일 초과 자산 ──
           Text(
-            '만료 임박 자산 (D-7)',
+            '대여일 초과 자산 (${_overdueAssets.length}건)',
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.bold,
               color: theme.colorScheme.error,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (_overdueAssets.isEmpty)
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: EmptyStateWidget(
+                  icon: Icons.check_circle_outline,
+                  message: '대여일 초과 자산이 없습니다.',
+                ),
+              ),
+            )
+          else
+            ..._overdueAssets
+                .map((asset) => _buildOverdueTile(asset, brightness)),
+
+          const SizedBox(height: 24),
+
+          // ── 대여일 만료예정 (D-7) ──
+          Text(
+            '대여일 만료예정 D-7 이내 (${_expiringAssets.length}건)',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: Colors.orange,
             ),
           ),
           const SizedBox(height: 8),
@@ -184,7 +283,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                 padding: EdgeInsets.all(24),
                 child: EmptyStateWidget(
                   icon: Icons.check_circle_outline,
-                  message: '만료 임박 자산이 없습니다.',
+                  message: '만료예정 자산이 없습니다.',
                   subMessage: '렌탈/대여 자산 중 7일 이내 만료 건이 없습니다.',
                 ),
               ),
@@ -307,6 +406,47 @@ class _HomePageState extends ConsumerState<HomePage> {
           ),
           child: Text(
             'D-$daysLeft',
+            style: TextStyle(
+              color: theme.colorScheme.error,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        onTap: () => context.go('/asset/${asset.id}'),
+      ),
+    );
+  }
+  /// 대여일 초과 자산 타일
+  Widget _buildOverdueTile(Asset asset, Brightness brightness) {
+    final theme = Theme.of(context);
+    final daysOver = asset.supplyEndDate != null
+        ? DateTime.now().difference(asset.supplyEndDate!).inDays
+        : 0;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 4),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: theme.colorScheme.error.withOpacity(0.15),
+          child: Icon(Icons.warning, color: theme.colorScheme.error, size: 20),
+        ),
+        title: Text(
+          asset.name ?? asset.assetUid,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          '${asset.assetUid}  |  ${asset.supplyType}  |  만료: ${asset.supplyEndDate != null ? _dateFmt.format(asset.supplyEndDate!) : "-"}',
+          style: theme.textTheme.bodySmall,
+        ),
+        trailing: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.error.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            '+$daysOver일 초과',
             style: TextStyle(
               color: theme.colorScheme.error,
               fontSize: 12,
