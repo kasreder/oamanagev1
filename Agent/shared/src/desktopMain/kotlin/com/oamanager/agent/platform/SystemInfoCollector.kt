@@ -123,32 +123,42 @@ actual class SystemInfoCollector(
 
     private fun getBatteryLevel(): Int {
         return try {
-            val result = runPowerShell(
-                "(Get-CimInstance Win32_Battery).EstimatedChargeRemaining"
-            ).trim()
-            result.toIntOrNull() ?: -1 // 데스크탑(배터리 없음) → -1
-        } catch (_: Exception) {
-            -1
-        }
+            if (isMac) {
+                val result = runShell("sh", "-c", "pmset -g batt | grep -o '[0-9]*%' | tr -d '%'")
+                result.trim().toIntOrNull() ?: -1
+            } else {
+                runPowerShell("(Get-CimInstance Win32_Battery).EstimatedChargeRemaining")
+                    .trim().toIntOrNull() ?: -1
+            }
+        } catch (_: Exception) { -1 }
     }
 
     private fun isBatteryCharging(): Boolean {
         return try {
-            // BatteryStatus: 1=Discharging, 2=AC, 3~5=Charging variants
-            val result = runPowerShell(
-                "(Get-CimInstance Win32_Battery).BatteryStatus"
-            ).trim()
-            val status = result.toIntOrNull() ?: 2
-            status != 1 // 1이 아니면 충전 중 또는 AC 전원
-        } catch (_: Exception) {
-            true // 데스크탑은 항상 AC
-        }
+            if (isMac) {
+                val result = runShell("sh", "-c", "pmset -g batt | head -1")
+                result.contains("AC Power", ignoreCase = true)
+            } else {
+                val status = runPowerShell("(Get-CimInstance Win32_Battery).BatteryStatus")
+                    .trim().toIntOrNull() ?: 2
+                status != 1
+            }
+        } catch (_: Exception) { true }
     }
 
     // ─── Network ────────────────────────────────────────────────────────
 
     private fun getNetworkType(): String {
         return try {
+            if (isMac) {
+                val result = runShell("sh", "-c", "networksetup -listallhardwareports | grep -A1 'Wi-Fi' | grep Device | awk '{print \$2}'")
+                val wifiDev = result.trim()
+                if (wifiDev.isNotEmpty()) {
+                    val status = runShell("sh", "-c", "ifconfig $wifiDev | grep 'status: active'")
+                    if (status.contains("active")) return "WIFI"
+                }
+                return "ETHERNET"
+            }
             val result = runPowerShell(
                 "(Get-NetAdapter | Where-Object { \$_.Status -eq 'Up' } | Select-Object -First 1).InterfaceDescription"
             ).trim().lowercase()
@@ -184,15 +194,17 @@ actual class SystemInfoCollector(
 
     private fun getOsDetailVersion(): String {
         return try {
-            val build = runPowerShell(
-                "(Get-CimInstance Win32_OperatingSystem).BuildNumber"
-            ).trim()
-            val caption = runPowerShell(
-                "(Get-CimInstance Win32_OperatingSystem).Caption"
-            ).trim()
-            "$caption (Build $build)"
+            if (isMac) {
+                val ver = runShell("sh", "-c", "sw_vers -productVersion").trim()
+                val build = runShell("sh", "-c", "sw_vers -buildVersion").trim()
+                "macOS $ver (Build $build)"
+            } else {
+                val build = runPowerShell("(Get-CimInstance Win32_OperatingSystem).BuildNumber").trim()
+                val caption = runPowerShell("(Get-CimInstance Win32_OperatingSystem).Caption").trim()
+                "$caption (Build $build)"
+            }
         } catch (_: Exception) {
-            System.getProperty("os.name") ?: "Windows"
+            System.getProperty("os.name") ?: "Unknown"
         }
     }
 
@@ -200,37 +212,36 @@ actual class SystemInfoCollector(
 
     private fun getUptimeHours(): Float {
         return try {
-            val uptimeMs = ManagementFactory.getRuntimeMXBean().uptime
-            // 시스템 업타임 (JVM이 아닌 OS)
-            val result = runPowerShell(
-                "((Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime).TotalHours"
-            ).trim()
-            result.toFloatOrNull() ?: (uptimeMs / 3_600_000f)
-        } catch (_: Exception) {
-            0f
-        }
+            if (isMac) {
+                val result = runShell("sh", "-c", "sysctl -n kern.boottime | awk '{print \$4}' | tr -d ','")
+                val bootTime = result.trim().toLongOrNull() ?: return 0f
+                ((System.currentTimeMillis() / 1000 - bootTime) / 3600f)
+            } else {
+                val result = runPowerShell(
+                    "((Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime).TotalHours"
+                ).trim()
+                result.toFloatOrNull() ?: 0f
+            }
+        } catch (_: Exception) { 0f }
     }
 
     // ─── Device Info ────────────────────────────────────────────────────
 
     private fun getDeviceManufacturer(): String {
         return try {
-            runPowerShell(
-                "(Get-CimInstance Win32_ComputerSystem).Manufacturer"
-            ).trim().ifEmpty { "Unknown" }
-        } catch (_: Exception) {
-            "Unknown"
-        }
+            if (isMac) "Apple"
+            else runPowerShell("(Get-CimInstance Win32_ComputerSystem).Manufacturer").trim().ifEmpty { "Unknown" }
+        } catch (_: Exception) { "Unknown" }
     }
 
     private fun getDeviceModel(): String {
         return try {
-            runPowerShell(
-                "(Get-CimInstance Win32_ComputerSystem).Model"
-            ).trim().ifEmpty { "Unknown" }
-        } catch (_: Exception) {
-            "Unknown"
-        }
+            if (isMac) {
+                runShell("sh", "-c", "sysctl -n hw.model").trim().ifEmpty { "Mac" }
+            } else {
+                runPowerShell("(Get-CimInstance Win32_ComputerSystem).Model").trim().ifEmpty { "Unknown" }
+            }
+        } catch (_: Exception) { "Unknown" }
     }
 
     private fun getDeviceUser(): String {
@@ -255,19 +266,34 @@ actual class SystemInfoCollector(
 
     private fun getSerialNumber(): String {
         return try {
-            runPowerShell("(Get-CimInstance Win32_BIOS).SerialNumber").trim()
+            if (isMac) {
+                runShell("sh", "-c", "ioreg -l | grep IOPlatformSerialNumber | awk '{print \$4}' | tr -d '\"'")
+            } else {
+                runShell("powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+                    "(Get-CimInstance Win32_BIOS).SerialNumber")
+            }.trim()
         } catch (_: Exception) {
             ""
         }
     }
 
-    // ─── PowerShell Helper ──────────────────────────────────────────────
+    // ─── Phone Number (desktop: 해당 없음) ──────────────────────────────
+
+    private fun getPhoneNumber(): String = ""
+
+    // ─── OS Detection ──────────────────────────────────────────────────
+
+    private val isMac: Boolean = System.getProperty("os.name")?.lowercase()?.contains("mac") == true
+
+    // ─── Shell Helper ──────────────────────────────────────────────────
 
     private fun runPowerShell(command: String): String {
+        return runShell("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command)
+    }
+
+    private fun runShell(vararg command: String): String {
         return try {
-            val process = ProcessBuilder(
-                "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command
-            )
+            val process = ProcessBuilder(*command)
                 .redirectErrorStream(true)
                 .start()
 

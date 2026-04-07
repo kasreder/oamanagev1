@@ -1,7 +1,11 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html;
 
 import '../constants.dart';
 import '../models/asset.dart';
@@ -30,12 +34,18 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
   final ApiService _api = ApiService();
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalScrollController = ScrollController();
+  final ScrollController _verticalScrollController = ScrollController();
+  final ScrollController _verticalBarController = ScrollController();
+  bool _syncingScroll = false;
   final DateFormat _dateTimeFmt = DateFormat('yyyy-MM-dd HH:mm');
 
   List<Asset> _assets = [];
   int _totalCount = 0;
-  int _currentPage = 1;
   bool _isLoading = true;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  int _loadedPage = 0;
+  static const int _pageSize = 500;
   String? _error;
 
   // 필터 상태
@@ -106,16 +116,19 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
     _AssetColumnMeta(label: '건물(대)', width: _colBuilding1, value: _assetBuilding1),
     _AssetColumnMeta(label: '건물', width: _colBuilding, value: _assetBuilding),
     _AssetColumnMeta(label: '층', width: _colFloor, value: _assetFloor),
+    _AssetColumnMeta(label: '실사용자', width: _colUserName, value: _assetUserName),
+    _AssetColumnMeta(label: '실사용부서', width: _colUserDept, value: _assetUserDepartment),
+    _AssetColumnMeta(label: '실사용자사번', width: 120, value: _assetUserEmployeeId),
     _AssetColumnMeta(label: '소유자', width: _colOwnerName, value: _assetOwnerName),
     _AssetColumnMeta(label: '소유부서', width: _colOwnerDept, value: _assetOwnerDepartment),
-    _AssetColumnMeta(label: '사용자', width: _colUserName, value: _assetUserName),
+    _AssetColumnMeta(label: '소유자사번', width: 120, value: _assetOwnerEmployeeId),
+    _AssetColumnMeta(label: '관리자', width: _colAdminName, value: _assetAdminName),
+    _AssetColumnMeta(label: '관리부서', width: _colAdminDept, value: _assetAdminDepartment),
+    _AssetColumnMeta(label: '관리자사번', width: 120, value: _assetAdminEmployeeId),
     _AssetColumnMeta(label: '접속현황', width: _colAccessStatus, value: _assetAccessStatusText, widgetBuilder: _accessStatusWidget),
     _AssetColumnMeta(label: 'OS종류', width: _colOsType, value: _assetOsType),
     _AssetColumnMeta(label: 'OS버전', width: _colOsVersion, value: _assetOsVersion),
     _AssetColumnMeta(label: 'OS상세', width: _colOsDetail, value: _assetOsDetail),
-    _AssetColumnMeta(label: '사용부서', width: _colUserDept, value: _assetUserDepartment),
-    _AssetColumnMeta(label: '관리자', width: _colAdminName, value: _assetAdminName),
-    _AssetColumnMeta(label: '관리부서', width: _colAdminDept, value: _assetAdminDepartment),
     _AssetColumnMeta(label: '도면ID', width: _colLocationDrawingId, value: _assetLocationDrawingId),
     _AssetColumnMeta(label: '위치(행)', width: _colLocationRow, value: _assetLocationRow),
     _AssetColumnMeta(label: '위치(열)', width: _colLocationCol, value: _assetLocationCol),
@@ -131,7 +144,6 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
   late Map<String, bool> _columnVisibility;
   late Map<String, double> _columnWidths;
 
-  int get _totalPages => (_totalCount / defaultPageSize).ceil().clamp(1, 9999);
 
   List<_AssetColumnMeta> get _visibleColumns => _orderedColumns
       .where((column) => _columnVisibility[column.label] ?? false)
@@ -149,12 +161,32 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
     _columnVisibility = {for (final column in _allColumns) column.label: true};
     _columnWidths = {for (final column in _allColumns) column.label: column.width};
     _loadAssets();
+
+    // 세로 스크롤 동기화: 리스트 ↔ 오른쪽 스크롤바
+    _verticalScrollController.addListener(() {
+      if (_syncingScroll) return;
+      _syncingScroll = true;
+      if (_verticalBarController.hasClients) {
+        _verticalBarController.jumpTo(_verticalScrollController.offset);
+      }
+      _syncingScroll = false;
+    });
+    _verticalBarController.addListener(() {
+      if (_syncingScroll) return;
+      _syncingScroll = true;
+      if (_verticalScrollController.hasClients) {
+        _verticalScrollController.jumpTo(_verticalBarController.offset);
+      }
+      _syncingScroll = false;
+    });
   }
 
   @override
   void dispose() {
     _searchController.dispose();
     _horizontalScrollController.dispose();
+    _verticalScrollController.dispose();
+    _verticalBarController.dispose();
     super.dispose();
   }
 
@@ -162,28 +194,54 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
     setState(() {
       _isLoading = true;
       _error = null;
+      _assets = [];
+      _loadedPage = 0;
+      _hasMore = true;
     });
+
+    await _loadNextPage();
+
+    // 나머지를 백그라운드로 계속 로딩
+    _loadAllRemaining();
+  }
+
+  Future<void> _loadNextPage() async {
+    if (!_hasMore || _isLoadingMore) return;
+
+    setState(() => _isLoadingMore = true);
+    _loadedPage++;
 
     try {
       final result = await _api.fetchAssets(
-        page: _currentPage,
-        pageSize: defaultPageSize,
+        page: _loadedPage,
+        pageSize: _pageSize,
         category: _selectedCategory,
         status: _selectedStatus,
         search: _searchQuery.isNotEmpty ? _searchQuery : null,
       );
 
       setState(() {
-        _assets = result.data;
+        _assets.addAll(result.data);
         _totalCount = result.total;
+        _hasMore = _assets.length < result.total;
         _isLoading = false;
-        _applySorting();
+        _isLoadingMore = false;
+        if (_sortColumnLabel != null) _applySorting();
       });
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _error = e.toString();
+        _isLoadingMore = false;
+        _error = _assets.isEmpty ? e.toString() : null;
       });
+    }
+  }
+
+  Future<void> _loadAllRemaining() async {
+    while (_hasMore && mounted) {
+      await _loadNextPage();
+      // 약간의 딜레이로 UI 블로킹 방지
+      await Future.delayed(const Duration(milliseconds: 50));
     }
   }
 
@@ -223,31 +281,17 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
   }
 
   void _onCategoryChanged(String? category) {
-    setState(() {
-      _selectedCategory = category;
-      _currentPage = 1;
-    });
+    _selectedCategory = category;
     _loadAssets();
   }
 
   void _onStatusChanged(String? status) {
-    setState(() {
-      _selectedStatus = status;
-      _currentPage = 1;
-    });
+    _selectedStatus = status;
     _loadAssets();
   }
 
   void _onSearch(String query) {
-    setState(() {
-      _searchQuery = query;
-      _currentPage = 1;
-    });
-    _loadAssets();
-  }
-
-  void _onPageChanged(int page) {
-    setState(() => _currentPage = page);
+    _searchQuery = query;
     _loadAssets();
   }
 
@@ -261,18 +305,31 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
           _buildFilterBar(context),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: OutlinedButton.icon(
-                onPressed: () => _openColumnConfigDialog(context),
-                icon: const Icon(Icons.view_column, size: 18),
-                label: const Text('열 표시 설정'),
-              ),
+            child: Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => _openColumnConfigDialog(context),
+                  icon: const Icon(Icons.view_column, size: 18),
+                  label: const Text('열 표시 설정'),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: _assets.isNotEmpty ? _downloadCsv : null,
+                  icon: const Icon(Icons.download, size: 18),
+                  label: const Text('엑셀 다운로드'),
+                ),
+                const Spacer(),
+                if (!_isLoading)
+                  Text(
+                    _hasMore
+                        ? '${_assets.length} / $_totalCount건 로딩중...'
+                        : '총 ${_assets.length}건',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+              ],
             ),
           ),
           Expanded(child: _buildBody(context)),
-          if (!_isLoading && _error == null && _assets.isNotEmpty)
-            _buildPagination(context),
         ],
       ),
     );
@@ -410,52 +467,55 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
 
     return Padding(
       padding: const EdgeInsets.only(top: 8, left: 16, right: 16),
-      child: Scrollbar(
-        controller: _horizontalScrollController,
-        thumbVisibility: true,
-        child: SingleChildScrollView(
-          controller: _horizontalScrollController,
-          scrollDirection: Axis.horizontal,
-          child: SizedBox(
-            width: _tableWidth,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                border: Border.all(color: theme.dividerColor),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Column(
-                  children: [
-                    // ── 헤더 (고정) ──
-                    _buildTableHeader(context),
-                    // ── 본문 행 (세로 스크롤) ──
-                    Expanded(
-                      child: RefreshIndicator(
-                        onRefresh: _loadAssets,
-                        child: SingleChildScrollView(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              for (int i = 0; i < _assets.length; i++)
-                                _buildTableRow(
-                                  context: context,
-                                  asset: _assets[i],
-                                  rowIndex: i,
-                                ),
-                            ],
+      child: Row(
+        children: [
+          // ── 메인 테이블 영역 ──
+          Expanded(
+            child: Scrollbar(
+              controller: _horizontalScrollController,
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                controller: _horizontalScrollController,
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  width: _tableWidth,
+                  child: Column(
+                    children: [
+                      _buildTableHeader(context),
+                      Expanded(
+                        child: ListView.builder(
+                          controller: _verticalScrollController,
+                          itemCount: _assets.length,
+                          itemExtent: 42,
+                          itemBuilder: (context, i) => _buildTableRow(
+                            context: context,
+                            asset: _assets[i],
+                            rowIndex: i,
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
+          // ── 세로 스크롤바 (화면 오른쪽 고정) ──
+          SizedBox(
+            width: 14,
+            child: Scrollbar(
+              controller: _verticalBarController,
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                controller: _verticalBarController,
+                child: SizedBox(
+                  height: _assets.length * 42.0 + 44,
+                  width: 1,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -819,6 +879,15 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
   static String _assetUpdatedAt(Asset asset, DateFormat dateFormat) =>
       _formatStaticDate(asset.updatedAt, dateFormat);
 
+  static String _assetUserEmployeeId(Asset asset, DateFormat _) =>
+      asset.userEmployeeId ?? '[NULL]';
+
+  static String _assetOwnerEmployeeId(Asset asset, DateFormat _) =>
+      asset.ownerEmployeeId ?? '[NULL]';
+
+  static String _assetAdminEmployeeId(Asset asset, DateFormat _) =>
+      asset.adminEmployeeId ?? '[NULL]';
+
   // ── OS 정보 (에이전트 전송 데이터) ──────────────────────────────────────
 
   static String _assetOsType(Asset asset, DateFormat _) {
@@ -1022,6 +1091,40 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
   }
 
   /// 페이지네이션
+  void _downloadCsv() {
+    final columns = _visibleColumns;
+    final buf = StringBuffer();
+
+    // BOM (엑셀 한글 인코딩)
+    buf.write('\uFEFF');
+
+    // 헤더
+    buf.writeln(columns.map((c) => _csvEscape(c.label)).join(','));
+
+    // 데이터
+    for (final asset in _assets) {
+      buf.writeln(
+        columns.map((c) => _csvEscape(c.value(asset, _dateTimeFmt))).join(','),
+      );
+    }
+
+    final bytes = utf8.encode(buf.toString());
+    final blob = html.Blob([bytes], 'text/csv;charset=utf-8');
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    final now = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
+    html.AnchorElement(href: url)
+      ..setAttribute('download', 'assets_$now.csv')
+      ..click();
+    html.Url.revokeObjectUrl(url);
+  }
+
+  String _csvEscape(String value) {
+    if (value.contains(',') || value.contains('"') || value.contains('\n')) {
+      return '"${value.replaceAll('"', '""')}"';
+    }
+    return value;
+  }
+
   Widget _buildPagination(BuildContext context) {
     final theme = Theme.of(context);
 
@@ -1033,35 +1136,9 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
           top: BorderSide(color: theme.dividerColor),
         ),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          IconButton(
-            icon: const Icon(Icons.chevron_left),
-            onPressed: _currentPage > 1
-                ? () => _onPageChanged(_currentPage - 1)
-                : null,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            '$_currentPage / $_totalPages',
-            style: theme.textTheme.bodyMedium,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            '(총 $_totalCount건)',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.outline,
-            ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: const Icon(Icons.chevron_right),
-            onPressed: _currentPage < _totalPages
-                ? () => _onPageChanged(_currentPage + 1)
-                : null,
-          ),
-        ],
+      child: Text(
+        '총 ${_assets.length}건',
+        style: theme.textTheme.bodyMedium,
       ),
     );
   }

@@ -20,10 +20,13 @@ class Asset {
   final String? floor;
   final String? ownerName;
   final String? ownerDepartment;
+  final String? ownerEmployeeId;
   final String? userName;
   final String? userDepartment;
+  final String? userEmployeeId;
   final String? adminName;
   final String? adminDepartment;
+  final String? adminEmployeeId;
   final int? locationDrawingId;
   final int? locationRow;
   final int? locationCol;
@@ -60,10 +63,13 @@ class Asset {
     this.floor,
     this.ownerName,
     this.ownerDepartment,
+    this.ownerEmployeeId,
     this.userName,
     this.userDepartment,
+    this.userEmployeeId,
     this.adminName,
     this.adminDepartment,
+    this.adminEmployeeId,
     this.locationDrawingId,
     this.locationRow,
     this.locationCol,
@@ -108,10 +114,13 @@ class Asset {
       floor: json['floor'] as String?,
       ownerName: json['owner_name'] as String?,
       ownerDepartment: json['owner_department'] as String?,
+      ownerEmployeeId: json['owner_employee_id'] as String?,
       userName: json['user_name'] as String?,
       userDepartment: json['user_department'] as String?,
+      userEmployeeId: json['user_employee_id'] as String?,
       adminName: json['admin_name'] as String?,
       adminDepartment: json['admin_department'] as String?,
+      adminEmployeeId: json['admin_employee_id'] as String?,
       locationDrawingId: json['location_drawing_id'] as int?,
       locationRow: json['location_row'] as int?,
       locationCol: json['location_col'] as int?,
@@ -164,10 +173,13 @@ class Asset {
       'floor': floor,
       'owner_name': ownerName,
       'owner_department': ownerDepartment,
+      'owner_employee_id': ownerEmployeeId,
       'user_name': userName,
       'user_department': userDepartment,
+      'user_employee_id': userEmployeeId,
       'admin_name': adminName,
       'admin_department': adminDepartment,
+      'admin_employee_id': adminEmployeeId,
       'location_drawing_id': locationDrawingId,
       'location_row': locationRow,
       'location_col': locationCol,
@@ -199,10 +211,13 @@ class Asset {
     String? floor,
     String? ownerName,
     String? ownerDepartment,
+    String? ownerEmployeeId,
     String? userName,
     String? userDepartment,
+    String? userEmployeeId,
     String? adminName,
     String? adminDepartment,
+    String? adminEmployeeId,
     int? locationDrawingId,
     int? locationRow,
     int? locationCol,
@@ -237,10 +252,13 @@ class Asset {
       floor: floor ?? this.floor,
       ownerName: ownerName ?? this.ownerName,
       ownerDepartment: ownerDepartment ?? this.ownerDepartment,
+      ownerEmployeeId: ownerEmployeeId ?? this.ownerEmployeeId,
       userName: userName ?? this.userName,
       userDepartment: userDepartment ?? this.userDepartment,
+      userEmployeeId: userEmployeeId ?? this.userEmployeeId,
       adminName: adminName ?? this.adminName,
       adminDepartment: adminDepartment ?? this.adminDepartment,
+      adminEmployeeId: adminEmployeeId ?? this.adminEmployeeId,
       locationDrawingId: locationDrawingId ?? this.locationDrawingId,
       locationRow: locationRow ?? this.locationRow,
       locationCol: locationCol ?? this.locationCol,

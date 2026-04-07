@@ -158,7 +158,10 @@ class SetupActivity : AppCompatActivity() {
 
                 // 상태 표시
                 tvAssetUidDisplay.text = "자산 번호: ${state.assetUid.ifEmpty { "-" }}"
-                tvInterval.text = "전송 주기: ${state.intervalMinutes}분 (서버 설정)"
+                tvInterval.text = if (state.intervalMinutes >= 60)
+                    "전송 주기: ${state.intervalMinutes / 60}시간 (서버 설정)"
+                else
+                    "전송 주기: ${state.intervalMinutes}분 (서버 설정)"
                 updateSpinnerSelection()
                 tvLastHeartbeat.text = if (state.lastHeartbeatTime > 0) {
                     "마지막 전송: ${dateFormat.format(Date(state.lastHeartbeatTime))}"

@@ -27,7 +27,7 @@ class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage> {
 
   // heartbeat_interval 전용
   int _heartbeatInterval = 5;
-  final _intervalOptions = [5, 10, 15, 30];
+  final _intervalOptions = [5, 10, 15, 30, 1440];
 
   @override
   void initState() {
@@ -71,7 +71,7 @@ class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage> {
       setState(() => _heartbeatInterval = value);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Heartbeat 주기가 ${value}분으로 변경되었습니다.')),
+        SnackBar(content: Text('Heartbeat 주기가 ${value >= 60 ? '${value ~/ 60}시간' : '${value}분'}으로 변경되었습니다.')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -156,7 +156,7 @@ class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage> {
                     segments: _intervalOptions.map((v) {
                       return ButtonSegment<int>(
                         value: v,
-                        label: Text('${v}분'),
+                        label: Text(v >= 60 ? '${v ~/ 60}시간' : '${v}분'),
                       );
                     }).toList(),
                     selected: {_heartbeatInterval},
