@@ -6,7 +6,7 @@ cd "$SCRIPT_DIR"
 
 echo "============================================"
 echo " OAManager v1 - Docker 시작"
-echo " 도메인: terraforming.info"
+echo " 도메인: oa.terraforming.info"
 echo "============================================"
 
 # 1. .env 파일 확인
@@ -50,7 +50,7 @@ echo ""
 echo "============================================"
 echo " 시작 완료!"
 echo ""
-echo " Frontend : https://terraforming.info"
-echo " API      : https://api.terraforming.info"
+echo " Frontend : https://oa.terraforming.info"
+echo " API      : https://api.oa.terraforming.info"
 echo " DB       : localhost:5433"
 echo "============================================"

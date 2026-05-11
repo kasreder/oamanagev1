@@ -8,7 +8,7 @@ package com.oamanager.agent
  */
 object AgentConfig {
     /** Supabase 프로젝트 URL (예: https://<project-id>.supabase.co) */
-    const val SUPABASE_URL: String = "https://api.terraforming.info"
+    const val SUPABASE_URL: String = "https://api.oa.terraforming.info"
 
     /** Supabase Anon Key (공개 가능 — RLS로 보호) */
     const val SUPABASE_ANON_KEY: String = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzczODcyMzk0LCJleHAiOjQxMDI0NDQ4MDB9.jOHmflTnhaydazQe8i4_WHzwRv7NM1i_Xw3KRNPkj1A"
