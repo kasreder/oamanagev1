@@ -58,7 +58,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=cosmosx_traefik-public"
-      - "traefik.http.routers.oa-kong.rule=Host(`api.${OA_DOMAIN}`)"
+      - "traefik.http.routers.oa-kong.rule=Host(`apioa.terraforming.info`)"
       - "traefik.http.routers.oa-kong.entrypoints=websecure"
       - "traefik.http.routers.oa-kong.tls.certresolver=letsencrypt"
       - "traefik.http.services.oa-kong.loadbalancer.server.port=8000"

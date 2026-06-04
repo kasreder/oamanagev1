@@ -283,7 +283,7 @@ data class SystemInfo(
 | 5 | `/rest/v1/rpc/confirm_assignment` | POST | 자산 수령 확인 | Bearer token |
 | 6 | `/rest/v1/device_tokens` | POST/PATCH | FCM 토큰 등록/갱신 | Bearer token |
 | 7 | `/rest/v1/agent_settings?setting_key=in.(latest_agent_version,min_agent_version)` | GET | Heartbeat 성공 후 에이전트 버전 확인 (11.3절 참조) | Bearer token |
-| 8 | `wss://<project-id>.supabase.co/realtime/v1/websocket` | WebSocket | Supabase Realtime 연결 (Presence, Broadcast) | Bearer token |
+| 8 | `wss://apioa.terraforming.info/realtime/v1/websocket` | WebSocket | Supabase Realtime 연결 (Presence, Broadcast) | Bearer token |
 
 ### 4.2 인증 방식
 
@@ -314,7 +314,7 @@ data class SystemInfo(
 **요청:**
 ```http
 POST /rest/v1/rpc/update_heartbeat HTTP/1.1
-Host: <project-id>.supabase.co
+Host: apioa.terraforming.info
 Authorization: Bearer <access_token>
 apikey: <SUPABASE_ANON_KEY>
 Content-Type: application/json
@@ -1636,7 +1636,7 @@ GRANT EXECUTE ON FUNCTION public.confirm_assignment(text, text) TO authenticated
 ### 14.6 연결 관리
 
 #### WebSocket 연결
-- **URL**: `wss://<project-id>.supabase.co/realtime/v1/websocket?apikey=<ANON_KEY>&vsn=1.0.0`
+- **URL**: `wss://apioa.terraforming.info/realtime/v1/websocket?apikey=<ANON_KEY>&vsn=1.0.0`
 - **인증**: 연결 시 `access_token` 전달 (Phoenix Channel `join` 메시지 payload)
 - **프로토콜**: Phoenix Channels v1 (JSON 인코딩)
 

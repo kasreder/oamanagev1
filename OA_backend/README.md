@@ -178,19 +178,19 @@ Supabase Auth 내장 JWT 기반 인증을 사용합니다.
 #### 관리자 그룹
 | 사번(ID) | 이름 | 역할 | 비밀번호 |
 |----------|------|------|---------|
-| `temp01` | Test User | admin | `Temp1234!` |
-| `admin01` | 관리자 | admin | `Admin1234!` |
-| `oper01` | 운영자1 | operator1 | `Oper1234!` |
-| `oper02` | 운영자2 | operator2 | `Oper1234!` |
+| `temp01` | Test User | admin | `temp1234!` |
+| `admin01` | 관리자 | admin | `admin1234!` |
+| `oper01` | 운영자1 | operator1 | `oper1234!` |
+| `oper02` | 운영자2 | operator2 | `oper1234!` |
 
 #### 사용자 그룹
 | 사번(ID) | 이름 | 역할 | 비밀번호 |
 |----------|------|------|---------|
-| `user01` | 사용자1 | user | `User1234!` |
-| `user02` | 사용자2 | user | `User1234!` |
-| `user03` | 사용자3 | user | `User1234!` |
-| `user04` | 사용자4 | user | `User1234!` |
-| `user05` | 사용자5 | user | `User1234!` |
+| `user01` | 사용자1 | user | `user1234!` |
+| `user02` | 사용자2 | user | `user1234!` |
+| `user03` | 사용자3 | user | `user1234!` |
+| `user04` | 사용자4 | user | `user1234!` |
+| `user05` | 사용자5 | user | `user1234!` |
 
 > 로그인 이메일은 `{사번}@oamanager.internal` 형식으로 내부 변환됩니다.
 

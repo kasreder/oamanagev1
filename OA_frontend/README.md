@@ -614,7 +614,7 @@ final alertChannel = supabase.channel('agent-alerts:global')
 | 항목 | 값 |
 |------|-----|
 | 사번(ID) | `temp01` |
-| 비밀번호 | `Temp1234!` |
+| 비밀번호 | `temp1234!` |
 | 로그인 이메일(내부 변환) | `temp01@oamanager.internal` |
 
 #### 5.1.2 홈 (`/`)
