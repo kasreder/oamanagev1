@@ -60,19 +60,19 @@ flutter run -d <device-id> --dart-define=SUPABASE_URL=http://localhost:54321 --d
 #### 관리자 그룹
 | 사번(ID) | 이름 | 역할 | 비밀번호 |
 |----------|------|------|---------|
-| `temp01` | Test User | admin | `Temp1234!` |
-| `admin01` | 관리자 | admin | `Admin1234!` |
-| `oper01` | 운영자1 | operator1 | `Oper1234!` |
-| `oper02` | 운영자2 | operator2 | `Oper1234!` |
+| `temp01` | Test User | admin | `temp1234!` |
+| `admin01` | 관리자 | admin | `admin1234!` |
+| `oper01` | 운영자1 | operator1 | `oper1234!` |
+| `oper02` | 운영자2 | operator2 | `oper1234!` |
 
 #### 사용자 그룹
 | 사번(ID) | 이름 | 역할 | 비밀번호 |
 |----------|------|------|---------|
-| `user01` | 사용자1 | user | `User1234!` |
-| `user02` | 사용자2 | user | `User1234!` |
-| `user03` | 사용자3 | user | `User1234!` |
-| `user04` | 사용자4 | user | `User1234!` |
-| `user05` | 사용자5 | user | `User1234!` |
+| `user01` | 사용자1 | user | `user1234!` |
+| `user02` | 사용자2 | user | `user1234!` |
+| `user03` | 사용자3 | user | `user1234!` |
+| `user04` | 사용자4 | user | `user1234!` |
+| `user05` | 사용자5 | user | `user1234!` |
 
 > 로그인 이메일은 `{사번}@oamanager.internal` 형식으로 내부 변환됩니다.
 > Auth 계정 생성 SQL은 `seed.sql`에 포함되어 있으며, `auth.users` INSERT + `public.users` 동기화 트리거로 자동 반영됩니다.
