@@ -39,15 +39,17 @@ const _navItems = <_NavItem>[
 class AppScaffold extends ConsumerWidget {
   final String title;
   final Widget body;
-  final int currentIndex;
+  final int? currentIndex;
   final List<Widget>? actions;
+  final bool showPrimaryNav;
 
   const AppScaffold({
     super.key,
     required this.title,
     required this.body,
-    this.currentIndex = 0,
+    this.currentIndex,
     this.actions,
+    this.showPrimaryNav = true,
   });
 
   @override
@@ -57,6 +59,11 @@ class AppScaffold extends ConsumerWidget {
     final user = authState.valueOrNull?.user;
     final screenWidth = MediaQuery.of(context).size.width;
     final isNarrow = screenWidth < 600;
+    final hasPrimarySelection =
+        showPrimaryNav &&
+        currentIndex != null &&
+        currentIndex! >= 0 &&
+        currentIndex! < _navItems.length;
 
     return Scaffold(
       appBar: AppBar(
@@ -73,12 +80,12 @@ class AppScaffold extends ConsumerWidget {
         ],
       ),
       drawer: _buildDrawer(context, ref, isDarkMode, user),
-      body: isNarrow
+      body: isNarrow || !showPrimaryNav
           ? body
           : Row(
               children: [
                 NavigationRail(
-                  selectedIndex: currentIndex,
+                  selectedIndex: hasPrimarySelection ? currentIndex : null,
                   onDestinationSelected: (index) =>
                       _onNavItemTapped(context, index),
                   labelType: NavigationRailLabelType.all,
@@ -95,9 +102,9 @@ class AppScaffold extends ConsumerWidget {
                 Expanded(child: body),
               ],
             ),
-      bottomNavigationBar: isNarrow
+      bottomNavigationBar: isNarrow && showPrimaryNav && hasPrimarySelection
           ? BottomNavigationBar(
-              currentIndex: currentIndex,
+              currentIndex: currentIndex!,
               onTap: (index) => _onNavItemTapped(context, index),
               type: BottomNavigationBarType.fixed,
               items: _navItems

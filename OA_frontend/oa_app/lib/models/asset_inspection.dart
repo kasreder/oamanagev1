@@ -20,12 +20,20 @@ class AssetInspection {
   final String? signatureImage;
   final int? roundId;
   final bool synced;
+  final bool locked;  // N차 등록(잠금) 여부 — true이면 admin만 수정 가능
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
-  // 조인 필드 (실사 상세 조회 시)
+  // 조인 필드 (실사 상세/목록 조회 시)
   final String? assetUserName;
   final String? assetUserDepartment;
+  final String? assetUserEmployeeId;
+  final String? assetAdminName;
+  final String? assetAdminDepartment;
+  final String? assetCategory;
+  final String? assetNetwork;
+  final String? assetNormalComment;
+  final String? assetOaComment;
 
   const AssetInspection({
     required this.id,
@@ -49,10 +57,18 @@ class AssetInspection {
     this.signatureImage,
     this.roundId,
     this.synced = true,
+    this.locked = false,
     this.createdAt,
     this.updatedAt,
     this.assetUserName,
     this.assetUserDepartment,
+    this.assetUserEmployeeId,
+    this.assetAdminName,
+    this.assetAdminDepartment,
+    this.assetCategory,
+    this.assetNetwork,
+    this.assetNormalComment,
+    this.assetOaComment,
   });
 
   /// 완료 판정: 5개 필드 모두 NOT NULL
@@ -65,12 +81,26 @@ class AssetInspection {
 
   factory AssetInspection.fromJson(Map<String, dynamic> json) {
     // 조인된 assets 정보 추출
-    String? joinUserName;
-    String? joinUserDept;
+    String? joinUserName,
+        joinUserDept,
+        joinUserEmpId,
+        joinAdminName,
+        joinAdminDept,
+        joinCategory,
+        joinNetwork,
+        joinNormalComment,
+        joinOaComment;
     if (json['assets'] is Map<String, dynamic>) {
-      final assets = json['assets'] as Map<String, dynamic>;
-      joinUserName = assets['user_name'] as String?;
-      joinUserDept = assets['user_department'] as String?;
+      final a = json['assets'] as Map<String, dynamic>;
+      joinUserName = a['user_name'] as String?;
+      joinUserDept = a['user_department'] as String?;
+      joinUserEmpId = a['user_employee_id'] as String?;
+      joinAdminName = a['admin_name'] as String?;
+      joinAdminDept = a['admin_department'] as String?;
+      joinCategory = a['category'] as String?;
+      joinNetwork = a['network'] as String?;
+      joinNormalComment = a['normal_comment'] as String?;
+      joinOaComment = a['oa_comment'] as String?;
     }
 
     return AssetInspection(
@@ -85,7 +115,7 @@ class AssetInspection {
           (json['asset_info'] as Map<String, dynamic>?) ?? const {},
       inspectionCount: json['inspection_count'] as int? ?? 1,
       inspectionDate: json['inspection_date'] != null
-          ? DateTime.parse(json['inspection_date'] as String)
+          ? DateTime.parse(json['inspection_date'] as String).toLocal()
           : null,
       maintenanceCompanyStaff:
           json['maintenance_company_staff'] as String?,
@@ -99,14 +129,22 @@ class AssetInspection {
       signatureImage: json['signature_image'] as String?,
       roundId: json['round_id'] as int?,
       synced: json['synced'] as bool? ?? true,
+      locked: json['locked'] as bool? ?? false,
       createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
+          ? DateTime.parse(json['created_at'] as String).toLocal()
           : null,
       updatedAt: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'] as String)
+          ? DateTime.parse(json['updated_at'] as String).toLocal()
           : null,
       assetUserName: joinUserName,
       assetUserDepartment: joinUserDept,
+      assetUserEmployeeId: joinUserEmpId,
+      assetAdminName: joinAdminName,
+      assetAdminDepartment: joinAdminDept,
+      assetCategory: joinCategory,
+      assetNetwork: joinNetwork,
+      assetNormalComment: joinNormalComment,
+      assetOaComment: joinOaComment,
     );
   }
 

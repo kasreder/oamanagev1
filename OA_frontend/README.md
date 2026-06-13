@@ -485,10 +485,11 @@ Presence (실시간 WebSocket 접속)와 Heartbeat (`last_active_at`) 두 가지
 #### 4.6.5 관리자 명령 전송 (Broadcast)
 자산 상세 페이지에서 관리자가 특정 기기 에이전트에 명령을 전송합니다.
 
-| 버튼 | 명령 | 채널 | 설명 |
+| 버튼 | 명령 / 호출 | 채널 / RPC | 설명 |
 |------|------|------|------|
-| **즉시 Heartbeat** | `request_heartbeat` | `agent-commands:{asset_uid}` | 에이전트가 즉시 Heartbeat 전송 |
-| **시스템 정보 갱신** | `refresh_system_info` | `agent-commands:{asset_uid}` | 에이전트가 시스템 정보 즉시 수집 후 전송 |
+| **즉시 Heartbeat** | `request_heartbeat` | `agent-commands:{asset_uid}` (Broadcast) | 에이전트가 즉시 Heartbeat 전송 |
+| **시스템 정보 갱신** | `refresh_system_info` | `agent-commands:{asset_uid}` (Broadcast) | 에이전트가 시스템 정보 즉시 수집 후 전송 |
+| **관리자 재확인 요청** | `admin_force_verify(asset_uid)` RPC | PostgREST | `verification_status` 리셋 + notifications INSERT → 에이전트가 Realtime 수신 후 시스템 알림 표시 |
 
 ```dart
 // 자산 상세 페이지 버튼 핸들러
@@ -505,6 +506,39 @@ Future<void> requestHeartbeat(String assetUid) async {
   );
 }
 ```
+
+#### 4.6.5.1 관리자 재확인 요청 흐름
+
+```dart
+// 자산 상세 페이지 — "관리자 재확인 요청" 버튼
+Future<void> _requestForceVerify() async {
+  await Supabase.instance.client.rpc(
+    'admin_force_verify',
+    params: {'p_asset_uid': asset.assetUid},
+  );
+}
+```
+
+- 권한: `is_admin()` (admin role 전체). RLS와 무관하게 RPC 권한 체크
+- 부수효과:
+  1. `assets.verification_status=NULL`, `last_verified_at=NULL`, `specifications.user_mismatch` 제거
+  2. `notifications`에 row 1건 자동 INSERT
+- 에이전트 측: Realtime postgres_changes 구독 (filter=asset_uid=eq.자기자산) → 안드로이드 시스템 알림(`admin_alert_channel`)
+- 자동 트리거: **마스터 관리자**가 자산 상세에서 `user_name`을 수정·저장하면 별도 버튼 클릭 없이 동일 효과 발생 (백엔드 README 9.9.2 참고)
+
+#### 4.6.5.2 마스터 관리자 지정 (admin 전용)
+
+- 위치: 에이전트 설정 페이지 → "마스터 관리자" 카드
+- UI: 현재 마스터 수 `N / 4` 표시 + admin role 사용자별 SwitchListTile
+- 호출:
+  ```dart
+  await Supabase.instance.client
+      .from('users')
+      .update({'is_master_admin': value})
+      .eq('employee_id', employeeId);
+  ```
+- 한도 초과 시 SwitchListTile 비활성화 + "한도 초과로 추가 지정 불가" subtitle
+- 백엔드 트리거가 마지막 한도/role 강제 → 위반 시 `PostgrestException` SnackBar 노출
 
 #### 4.6.6 에이전트 알림 수신 (Broadcast)
 `agent-alerts:global` 채널을 구독하여 에이전트가 발생시킨 긴급 알림을 수신합니다.
@@ -591,6 +625,7 @@ final alertChannel = supabase.channel('agent-alerts:global')
 | **도면 관리** | `/drawings` | 건물/층별 도면 등록/관리 (새 지역 등록) |
 | **도면 뷰어** | `/drawing/:id` | 도면 이미지 + 격자 + 자산 마커 뷰어 |
 | 미검증 자산 | `/unverified` | 실사 미완료 자산 목록 (자산 목록에서 진입) |
+| **에이전트 설정** | (Drawer 메뉴) | admin 전용. Heartbeat 주기, **마스터 관리자 4명 토글**, 기타 agent_settings 편집 |
 
 > **공통 사항**: 로그인 화면을 제외한 **모든 페이지**에 네비게이션(BottomNavigationBar 또는 NavigationRail)과 Drawer가 기본 포함됩니다.
 
@@ -2059,6 +2094,38 @@ flutter test
 - **파일명**: snake_case
 - **클래스명**: PascalCase
 - **변수/함수명**: camelCase
+
+### 20.3 배포/캐시 정책 (`nginx.conf`)
+
+`oa-frontend` 컨테이너는 nginx로 정적 자산을 서빙하며, 캐시 정책은 다음과 같이 분리되어 있습니다 (2026-06-04 갱신).
+
+| 파일 | Cache-Control | 이유 |
+|------|---------------|------|
+| `flutter_service_worker.js` | `no-cache, no-store, must-revalidate` | SW 캐시 만료 트리거 — 재배포 즉시 반영 |
+| `main.dart.js` | `no-cache, no-store, must-revalidate` | 단일 번들 파일 — 새 빌드 즉시 다운로드 |
+| `flutter_bootstrap.js`, `flutter.js`, `index.html` | `no-cache, no-store, must-revalidate` | entry 자산 — SW 갱신 트리거 |
+| `canvaskit/*`, `tesseract/*` | `public, immutable`, `max-age=31536000` | 해시 폴더라 영구 캐시 가능 |
+| 폰트/이미지/CSS/SVG | `public, immutable`, `max-age=31536000` | 자주 안 바뀜 |
+
+> **이전 정책의 문제**: 모든 `.js`를 `immutable, 1y`로 묶어 SW가 1년 동안 갱신되지 않아 재빌드 후에도 옛 코드가 서빙됐던 사례 있음. 해결됨.
+
+### 20.4 환경 변수 (런타임 빌드 인자)
+- `SUPABASE_URL` → 현재 `https://apioa.terraforming.info` (2026-06-04 변경, 이전 `api.oa.terraforming.info`)
+- `SUPABASE_ANON_KEY` → `.env`의 `OA_ANON_KEY`
+- docker-compose `build.args`로 주입되어 `flutter build web --dart-define`에 전달됨
+
+---
+
+## 변경 이력 (프론트엔드)
+
+- `2026-06-04` :
+  - 자산 상세 페이지: "관리자 재확인 요청" 버튼 추가 (`admin_force_verify` RPC 호출, 다이얼로그 확인 후 실행)
+  - 에이전트 설정 페이지(`/admin_settings_page.dart`): 마스터 관리자 카드 추가 (현재 N/4 표시, admin 사용자별 SwitchListTile, 한도 초과 시 비활성화)
+  - API URL: `apioa.terraforming.info`로 변경
+  - 테스트 계정 비밀번호 소문자 통일 (`temp01`/`temp1234!` 등)
+  - nginx 캐시 정책 분리 (entry 자산은 no-cache, 보조 자산은 immutable)
+- `2026-03-21` : 역할 체계 + 실사 라운드(차수) UI
+- `2026-03-20` : OCR 웹 지원 (Tesseract.js), 실사 사진 촬영, 사진/서명 레이지 로딩
 
 ---
 

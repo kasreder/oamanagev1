@@ -4,6 +4,7 @@ import '../models/asset.dart';
 import '../models/asset_inspection.dart';
 import '../models/drawing.dart';
 import '../models/inspection_round.dart';
+import '../models/search_condition.dart';
 import '../models/user.dart';
 import '../constants.dart';
 
@@ -11,10 +12,25 @@ class ApiService {
   final SupabaseClient _client = Supabase.instance.client;
 
   // ---------------------------------------------------------------------------
+  // 자산 목록 in-memory 캐시 (단순 stale-while-revalidate)
+  // ---------------------------------------------------------------------------
+  static final Map<String, _AssetCacheEntry> _assetsCache = {};
+  static const Duration _assetsCacheTtl = Duration(seconds: 30);
+
+  /// Realtime UPDATE/INSERT/DELETE 또는 명시적 변경 후 호출 → 다음 fetch는 fresh.
+  static void invalidateAssetsCache() {
+    _assetsCache.clear();
+  }
+
+  // ---------------------------------------------------------------------------
   // 자산 (Assets)
   // ---------------------------------------------------------------------------
 
-  /// 자산 목록 조회 (페이지네이션 — 호환용)
+  /// 자산 목록 조회 (페이지네이션 + 다중조건 검색 + 서버 정렬).
+  ///
+  /// - `conditions`가 비어있고 `search`가 주어지면 옛 단일 검색 호환 동작
+  /// - `conditions`가 모두 AND이면 chain 적용, OR가 섞이면 `.or()` 평탄 문자열
+  /// - `count`는 기본 [CountOption.planned] (정확도 ↓ 속도 ↑)
   Future<({List<Asset> data, int total})> fetchAssets({
     int page = 1,
     int pageSize = defaultPageSize,
@@ -22,6 +38,10 @@ class ApiService {
     String? status,
     String? search,
     String? building,
+    List<SearchCondition> conditions = const [],
+    String orderBy = 'id',
+    bool ascending = false,
+    CountOption count = CountOption.planned,
   }) async {
     final from = (page - 1) * pageSize;
     final to = from + pageSize - 1;
@@ -37,7 +57,39 @@ class ApiService {
     if (building != null && building.isNotEmpty) {
       query = query.eq('building', building);
     }
-    if (search != null && search.isNotEmpty) {
+
+    // 캐시 키 (필터 시그니처)
+    final cacheKey = [
+      'p$page', 's$pageSize',
+      'c${category ?? ''}', 'st${status ?? ''}', 'b${building ?? ''}',
+      'sr${search ?? ''}',
+      ...conditions.map((c) => c.signature),
+      'o$orderBy:${ascending ? 'a' : 'd'}',
+      'cnt${count.name}',
+    ].join('|');
+    final cached = _assetsCache[cacheKey];
+    if (cached != null &&
+        DateTime.now().difference(cached.at) < _assetsCacheTtl) {
+      return (data: cached.data, total: cached.total);
+    }
+
+    if (conditions.isNotEmpty) {
+      final hasOr = conditions.skip(1).any((c) => c.joiner == Joiner.or);
+      if (!hasOr) {
+        for (final c in conditions) {
+          if (c.value.isEmpty) continue;
+          query = c.op == SearchOp.eq
+              ? query.eq(c.column.key, c.value)
+              : query.ilike(c.column.key, '%${c.value}%');
+        }
+      } else {
+        final filled = conditions.where((c) => c.value.isNotEmpty).toList();
+        if (filled.isNotEmpty) {
+          query = query.or(buildOrString(filled));
+        }
+      }
+    } else if (search != null && search.isNotEmpty) {
+      // 옛 단일 검색 호환
       query = query.or(
         'asset_uid.ilike.%$search%,'
         'name.ilike.%$search%,'
@@ -47,15 +99,18 @@ class ApiService {
     }
 
     final response = await query
-        .order('id', ascending: false)
+        .order(orderBy, ascending: ascending)
         .range(from, to)
-        .count(CountOption.exact);
+        .count(count);
 
     final total = response.count;
     final rows = response.data
         .map((e) => Asset.fromJson(e))
         .toList();
 
+    _assetsCache[cacheKey] = _AssetCacheEntry(
+      at: DateTime.now(), data: rows, total: total,
+    );
     return (data: rows, total: total);
   }
 
@@ -133,17 +188,28 @@ class ApiService {
     String? status,
     String? search,
     String? building,
+    int? roundId,         // 특정 라운드만
+    bool? onlyUnlocked,   // true=등록되지 않은 것만(locked=false)
+    List<SearchCondition> conditions = const [],
   }) async {
     final from = (page - 1) * pageSize;
     final to = from + pageSize - 1;
 
+    // 자산 join — UI 1줄 표시용 필드 모두 포함
     const selectFields =
         'id,asset_id,asset_code,asset_type,inspector_name,user_team,'
         'inspection_count,inspection_date,maintenance_company_staff,'
         'department_confirm,inspection_building,inspection_floor,'
         'inspection_position,status,memo,inspection_photo,signature_image,'
-        'synced,created_at,updated_at,'
-        'assets!inner(user_name,user_department)';
+        'round_id,locked,synced,created_at,updated_at,'
+        'assets!inner('
+        'asset_uid,name,category,'
+        'user_name,user_employee_id,user_department,'
+        'owner_name,owner_employee_id,owner_department,'
+        'admin_name,admin_employee_id,admin_department,'
+        'building,floor,vendor,model_name,serial_number,'
+        'network,normal_comment,oa_comment'
+        ')';
 
     var query = _client.from('asset_inspections').select(selectFields);
 
@@ -153,7 +219,42 @@ class ApiService {
     if (building != null && building.isNotEmpty) {
       query = query.eq('inspection_building', building);
     }
-    if (search != null && search.isNotEmpty) {
+    if (roundId != null) {
+      query = query.eq('round_id', roundId);
+    }
+    if (onlyUnlocked == true) {
+      query = query.eq('locked', false);
+    }
+
+    // 자산 컬럼 검색 (embedded filter)
+    if (conditions.isNotEmpty) {
+      final hasOr = conditions.skip(1).any((c) => c.joiner == Joiner.or);
+      final filled = conditions.where((c) => c.value.isNotEmpty).toList();
+      if (filled.isNotEmpty) {
+        if (!hasOr) {
+          for (final c in filled) {
+            final key = 'assets.${c.column.key}';
+            query = c.op == SearchOp.eq
+                ? query.eq(key, c.value)
+                : query.ilike(key, '%${c.value}%');
+          }
+        } else {
+          // OR가 섞이면 embedded resource or()
+          final orStr = filled.map((c) {
+            final v = c.value
+                .replaceAll(',', r'\,')
+                .replaceAll('(', r'\(')
+                .replaceAll(')', r'\)')
+                .replaceAll('*', r'\*');
+            return c.op == SearchOp.eq
+                ? '${c.column.key}.eq.$v'
+                : '${c.column.key}.ilike.*$v*';
+          }).join(',');
+          query = query.or(orStr, referencedTable: 'assets');
+        }
+      }
+    } else if (search != null && search.isNotEmpty) {
+      // 옛 단일 검색 호환
       query = query.or(
         'asset_code.ilike.%$search%,'
         'inspector_name.ilike.%$search%',
@@ -431,4 +532,55 @@ class ApiService {
     });
     return InspectionRound.fromJson(response as Map<String, dynamic>);
   }
+
+  /// 라운드 삭제 (관리자 전용).
+  /// [force]가 true면 그 라운드에 속한 inspection의 round_id를 NULL로 분리 후 삭제.
+  Future<Map<String, dynamic>> deleteRound(int roundId, {bool force = false}) async {
+    final response = await _client.rpc('delete_inspection_round', params: {
+      'p_round_id': roundId,
+      'p_force': force,
+    });
+    return Map<String, dynamic>.from(response as Map);
+  }
+
+  /// 라운드 재오픈 (closed → active, 관리자 전용)
+  Future<InspectionRound> reopenRound(int roundId) async {
+    final response = await _client.rpc('reopen_inspection_round', params: {
+      'p_round_id': roundId,
+    });
+    return InspectionRound.fromJson(response as Map<String, dynamic>);
+  }
+
+  /// 특정 자산의 실사 기록 중 가장 최근 1건 (또는 null)
+  Future<AssetInspection?> fetchLatestInspectionForAsset(int assetId) async {
+    final res = await _client
+        .from('asset_inspections')
+        .select()
+        .eq('asset_id', assetId)
+        .order('inspection_date', ascending: false)
+        .order('id', ascending: false)
+        .limit(1)
+        .maybeSingle();
+    if (res == null) return null;
+    return AssetInspection.fromJson(res);
+  }
+
+  /// 실사 잠금 / 해제 (UI [N차 등록] / [N차 등록취소])
+  Future<void> setInspectionLocked(int inspectionId, bool locked) async {
+    await _client
+        .from('asset_inspections')
+        .update({'locked': locked})
+        .eq('id', inspectionId);
+  }
+}
+
+class _AssetCacheEntry {
+  final DateTime at;
+  final List<Asset> data;
+  final int total;
+  const _AssetCacheEntry({
+    required this.at,
+    required this.data,
+    required this.total,
+  });
 }

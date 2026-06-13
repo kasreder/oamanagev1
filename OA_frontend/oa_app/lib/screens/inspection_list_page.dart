@@ -6,8 +6,10 @@ import 'package:intl/intl.dart';
 import '../constants.dart';
 import '../models/asset_inspection.dart';
 import '../models/inspection_round.dart';
+import '../models/search_condition.dart';
 import '../notifiers/auth_notifier.dart';
 import '../services/api_service.dart';
+import '../widgets/asset_search_dialog.dart';
 import '../widgets/common/app_scaffold.dart';
 import '../widgets/common/loading_widget.dart';
 import '../widgets/common/error_widget.dart';
@@ -40,6 +42,7 @@ class _InspectionListPageState extends ConsumerState<InspectionListPage> {
   // 필터
   String? _selectedStatus;
   String _searchQuery = '';
+  List<SearchCondition> _searchConditions = [];
 
   int get _totalPages => (_totalCount / defaultPageSize).ceil().clamp(1, 9999);
 
@@ -80,7 +83,14 @@ class _InspectionListPageState extends ConsumerState<InspectionListPage> {
         page: _currentPage,
         pageSize: defaultPageSize,
         status: _selectedStatus,
-        search: _searchQuery.isNotEmpty ? _searchQuery : null,
+        search: _searchConditions.isEmpty && _searchQuery.isNotEmpty
+            ? _searchQuery
+            : null,
+        conditions: _searchConditions,
+        // 활성 라운드의 미등록(locked=false) 실사만 표시.
+        // 활성 라운드가 없으면 일반 동작 (전체 조회).
+        roundId: _activeRound?.id,
+        onlyUnlocked: _activeRound != null ? true : null,
       );
 
       setState(() {
@@ -126,6 +136,19 @@ class _InspectionListPageState extends ConsumerState<InspectionListPage> {
           _buildRoundBanner(context),
           // ── 필터 바 ──
           _buildFilterBar(context),
+          _buildAppliedConditionsBar(context),
+          // ── 카운터 ──
+          if (!_isLoading)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 2),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  '${_inspections.length} / 총 ${_totalCount}건',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ),
           // ── 본문 ──
           Expanded(child: _buildBody(context)),
           // ── 페이지네이션 ──
@@ -186,9 +209,10 @@ class _InspectionListPageState extends ConsumerState<InspectionListPage> {
 
   Widget _buildFilterBar(BuildContext context) {
     final theme = Theme.of(context);
+    const dense = EdgeInsets.symmetric(horizontal: 6, vertical: 0);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: Border(
@@ -199,15 +223,15 @@ class _InspectionListPageState extends ConsumerState<InspectionListPage> {
         children: [
           // 상태 필터
           SizedBox(
-            width: 100,
-            height: 36,
+            width: 90,
+            height: 32,
             child: DropdownButtonFormField<String>(
               value: _selectedStatus,
               decoration: const InputDecoration(
-                labelText: '상태',
+                hintText: '상태',
+                floatingLabelBehavior: FloatingLabelBehavior.never,
                 isDense: true,
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                contentPadding: dense,
                 border: OutlineInputBorder(),
               ),
               style: theme.textTheme.bodySmall,
@@ -226,25 +250,24 @@ class _InspectionListPageState extends ConsumerState<InspectionListPage> {
               },
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
 
           // 검색
           Expanded(
             child: SizedBox(
-              height: 36,
+              height: 32,
               child: TextField(
                 controller: _searchController,
                 decoration: InputDecoration(
                   hintText: '자산번호/담당자',
                   hintStyle: theme.textTheme.bodySmall,
                   isDense: true,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  contentPadding: dense,
                   border: const OutlineInputBorder(),
                   suffixIcon: IconButton(
-                    icon: const Icon(Icons.search, size: 18),
+                    icon: const Icon(Icons.search, size: 16),
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(maxWidth: 32),
+                    constraints: const BoxConstraints(maxWidth: 28),
                     onPressed: () {
                       setState(() {
                         _searchQuery = _searchController.text;
@@ -264,6 +287,124 @@ class _InspectionListPageState extends ConsumerState<InspectionListPage> {
                   _loadInspections();
                 },
               ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          SizedBox(
+            height: 32,
+            child: OutlinedButton.icon(
+              onPressed: _openSearchDialog,
+              icon: Icon(
+                _searchConditions.isEmpty ? Icons.tune : Icons.filter_alt,
+                size: 16,
+                color: _searchConditions.isEmpty
+                    ? null
+                    : theme.colorScheme.primary,
+              ),
+              label: Text(
+                _searchConditions.isEmpty
+                    ? '고급1검색'
+                    : '조건 ${_searchConditions.length}',
+              ),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                textStyle: theme.textTheme.labelSmall,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openSearchDialog() async {
+    final result = await AssetSearchDialog.show(
+      context,
+      initial: _searchConditions,
+    );
+    if (result == null) return;
+    setState(() {
+      _searchConditions = result;
+      _searchQuery = '';
+      _searchController.clear();
+      _currentPage = 1;
+    });
+    _loadInspections();
+  }
+
+  void _clearSearchConditions() {
+    if (_searchConditions.isEmpty) return;
+    setState(() {
+      _searchConditions = [];
+      _currentPage = 1;
+    });
+    _loadInspections();
+  }
+
+  /// 적용된 검색 조건 chip 영역
+  Widget _buildAppliedConditionsBar(BuildContext context) {
+    if (_searchConditions.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      color: theme.colorScheme.surfaceContainerLow,
+      child: Row(
+        children: [
+          Icon(Icons.filter_alt, size: 14, color: theme.colorScheme.primary),
+          const SizedBox(width: 4),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (var i = 0; i < _searchConditions.length; i++) ...[
+                    if (i > 0) ...[
+                      const SizedBox(width: 3),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: _searchConditions[i].joiner == Joiner.or
+                              ? Colors.deepOrange.shade100
+                              : theme.colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                        child: Text(
+                          _searchConditions[i].joiner == Joiner.or
+                              ? 'OR'
+                              : 'AND',
+                          style: const TextStyle(
+                              fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      const SizedBox(width: 3),
+                    ],
+                    Chip(
+                      label: Text(
+                        '${_searchConditions[i].column.label} '
+                        '${_searchConditions[i].op == SearchOp.eq ? '=' : '~'} '
+                        '"${_searchConditions[i].value}"',
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize:
+                          MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          TextButton.icon(
+            onPressed: _clearSearchConditions,
+            icon: const Icon(Icons.close, size: 14),
+            label: const Text('초기화'),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              minimumSize: const Size(0, 28),
             ),
           ),
         ],
@@ -287,59 +428,141 @@ class _InspectionListPageState extends ConsumerState<InspectionListPage> {
 
     final theme = Theme.of(context);
 
+    final totalWidth = _columnSpecs.fold(0.0, (a, b) => a + b.width);
+
     return RefreshIndicator(
       onRefresh: _loadInspections,
-      child: ListView.separated(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemCount: _inspections.length,
-        separatorBuilder: (_, __) => const Divider(height: 1),
-        itemBuilder: (context, index) {
-          final inspection = _inspections[index];
-          final isCompleted = inspection.completed;
-
-          return ListTile(
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            leading: CircleAvatar(
-              backgroundColor: isCompleted
-                  ? Colors.green.withOpacity(0.15)
-                  : Colors.orange.withOpacity(0.15),
-              radius: 18,
-              child: Icon(
-                isCompleted ? Icons.check_circle : Icons.pending,
-                color: isCompleted ? Colors.green : Colors.orange,
-                size: 20,
-              ),
-            ),
-            title: Text(
-              inspection.assetCode ?? 'ID: ${inspection.id}',
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: Text(
-              '${inspection.inspectorName ?? "-"}  |  ${inspection.inspectionDate != null ? _dateFmt.format(inspection.inspectionDate!) : "-"}  |  ${inspection.inspectionCount}회차',
-              style: theme.textTheme.bodySmall,
-            ),
-            trailing: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: isCompleted
-                    ? Colors.green.withOpacity(0.12)
-                    : Colors.orange.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                isCompleted ? '완료' : '미완료',
-                style: TextStyle(
-                  color: isCompleted ? Colors.green : Colors.orange,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+      child: Scrollbar(
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            width: totalWidth < MediaQuery.of(context).size.width
+                ? MediaQuery.of(context).size.width
+                : totalWidth,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeaderRow(theme),
+                Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: theme.dividerColor),
+                Expanded(
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    itemCount: _inspections.length,
+                    separatorBuilder: (_, __) => Divider(
+                        height: 1,
+                        color: theme.dividerColor.withValues(alpha: 0.4)),
+                    itemBuilder: (context, index) =>
+                        _buildInspectionRow(context, _inspections[index]),
+                  ),
                 ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 컬럼 정의 (헤더와 row가 공유)
+  static const List<_ColumnSpec> _columnSpecs = [
+    _ColumnSpec('상태', 70),
+    _ColumnSpec('자산번호', 140),
+    _ColumnSpec('실사용자', 100),
+    _ColumnSpec('실사용자사번', 110),
+    _ColumnSpec('실사용자부서', 130),
+    _ColumnSpec('관리자', 90),
+    _ColumnSpec('관리자부서', 130),
+    _ColumnSpec('유형', 90),
+    _ColumnSpec('네트워크', 100),
+    _ColumnSpec('일반비고', 160),
+    _ColumnSpec('OA비고', 160),
+  ];
+
+  Widget _buildHeaderRow(ThemeData theme) {
+    return Container(
+      color: theme.colorScheme.surfaceContainerHigh,
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      child: Row(
+        children: _columnSpecs.map((c) {
+          return SizedBox(
+            width: c.width,
+            child: Text(
+              c.label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.onSurface,
               ),
             ),
-            onTap: () => context.go('/inspection/${inspection.id}'),
           );
-        },
+        }).toList(),
+      ),
+    );
+  }
+
+  /// 1줄 row — 컬럼: 상태/자산번호/실사용자/실사용자사번/실사용자부서/관리자/관리자부서/유형/네트워크/일반비고/OA비고
+  Widget _buildInspectionRow(BuildContext context, AssetInspection ins) {
+    final theme = Theme.of(context);
+    final isCompleted = ins.completed;
+    final widgets = <Widget>[
+      _statusBadge(theme, isCompleted),
+      Text(
+        ins.assetCode ?? 'ID: ${ins.id}',
+        style: const TextStyle(fontWeight: FontWeight.w600),
+        overflow: TextOverflow.ellipsis,
+      ),
+      _txt(theme, ins.assetUserName),
+      _txt(theme, ins.assetUserEmployeeId),
+      _txt(theme, ins.assetUserDepartment),
+      _txt(theme, ins.assetAdminName),
+      _txt(theme, ins.assetAdminDepartment),
+      _txt(theme, ins.assetCategory),
+      _txt(theme, ins.assetNetwork),
+      _txt(theme, ins.assetNormalComment),
+      _txt(theme, ins.assetOaComment),
+    ];
+
+    return InkWell(
+      onTap: () => context.go('/inspection/${ins.id}'),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        child: Row(
+          children: [
+            for (var i = 0; i < _columnSpecs.length; i++)
+              SizedBox(width: _columnSpecs[i].width, child: widgets[i]),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _txt(ThemeData theme, String? value) {
+    return Text(
+      value?.isNotEmpty == true ? value! : '-',
+      overflow: TextOverflow.ellipsis,
+      style: theme.textTheme.bodySmall,
+    );
+  }
+
+  Widget _statusBadge(ThemeData theme, bool isCompleted) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: isCompleted
+            ? Colors.green.withValues(alpha: 0.15)
+            : Colors.orange.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        isCompleted ? '완료' : '미완료',
+        style: TextStyle(
+          color: isCompleted ? Colors.green : Colors.orange,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -686,4 +909,10 @@ class _RoundManageDialogState extends State<_RoundManageDialog> {
       ],
     );
   }
+}
+
+class _ColumnSpec {
+  final String label;
+  final double width;
+  const _ColumnSpec(this.label, this.width);
 }

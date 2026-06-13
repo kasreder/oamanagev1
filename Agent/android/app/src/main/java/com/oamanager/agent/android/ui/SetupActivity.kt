@@ -13,8 +13,10 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import android.graphics.Color
 import com.oamanager.agent.AgentConfig
 import com.oamanager.agent.R
+import com.oamanager.agent.android.service.AdminCommandEvents
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -47,10 +49,17 @@ class SetupActivity : AppCompatActivity() {
     private lateinit var tvAgentVersion: TextView
     private lateinit var tvVerificationStatus: TextView
     private lateinit var tvLastVerified: TextView
+    private lateinit var tvUserName: TextView
+    private lateinit var tvEmployeeId: TextView
     private lateinit var btnVerify: Button
     private lateinit var progressBar: ProgressBar
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+
+    override fun onResume() {
+        super.onResume()
+        viewModel.refreshFromPrefs()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,6 +71,7 @@ class SetupActivity : AppCompatActivity() {
             setupIntervalSpinner()
             setupButtons()
             observeState()
+            observeAdminCommandEvents()
 
             // 배터리 최적화 예외 요청
             try { requestBatteryOptimization() } catch (_: Exception) {}
@@ -93,6 +103,8 @@ class SetupActivity : AppCompatActivity() {
         tvAgentVersion = findViewById(R.id.tv_agent_version)
         tvVerificationStatus = findViewById(R.id.tv_verification_status)
         tvLastVerified = findViewById(R.id.tv_last_verified)
+        tvUserName = findViewById(R.id.tv_user_name)
+        tvEmployeeId = findViewById(R.id.tv_employee_id)
         btnVerify = findViewById(R.id.btn_verify)
         progressBar = findViewById(R.id.progress_bar)
     }
@@ -146,6 +158,19 @@ class SetupActivity : AppCompatActivity() {
         }
     }
 
+    private fun observeAdminCommandEvents() {
+        lifecycleScope.launch {
+            AdminCommandEvents.events.collect { event ->
+                when (event) {
+                    is AdminCommandEvents.Event.HeartbeatAck -> {
+                        viewModel.refreshFromPrefs()
+                        viewModel.flashAdminHighlight()
+                    }
+                }
+            }
+        }
+    }
+
     private fun observeState() {
         lifecycleScope.launch {
             viewModel.uiState.collectLatest { state ->
@@ -168,6 +193,10 @@ class SetupActivity : AppCompatActivity() {
                 } else {
                     "마지막 전송: -"
                 }
+                // 관리자 명령으로 트리거된 직후 3초간 강조 (노란 배경)
+                tvLastHeartbeat.setBackgroundColor(
+                    if (state.highlightHeartbeat) Color.parseColor("#FFF59D") else Color.TRANSPARENT
+                )
                 tvSendResult.text = state.lastSendResult?.let { "전송 결과: $it" } ?: ""
                 tvAgentVersion.text = "에이전트 버전: ${getVersionName()}"
 
@@ -177,6 +206,8 @@ class SetupActivity : AppCompatActivity() {
                     "mismatch" -> "상태: ⚠ 불일치"
                     else -> "상태: 미확인"
                 }
+                tvUserName.text = "사용자 이름: ${state.assetUserName?.takeIf { it.isNotBlank() } ?: "-"}"
+                tvEmployeeId.text = "사번: ${state.employeeId?.takeIf { it.isNotBlank() } ?: "-"}"
                 tvLastVerified.text = if (state.lastVerifiedAt > 0) {
                     "마지막 확인: ${dateFormat.format(Date(state.lastVerifiedAt))}"
                 } else {

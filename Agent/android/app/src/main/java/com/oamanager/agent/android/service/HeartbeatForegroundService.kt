@@ -30,7 +30,9 @@ class HeartbeatForegroundService : Service() {
     companion object {
         private const val TAG = "HeartbeatFgService"
         private const val CHANNEL_ID = "heartbeat_channel"
+        private const val ALERT_CHANNEL_ID = "admin_alert_channel"
         private const val NOTIFICATION_ID = 1001
+        private const val ADMIN_ACK_NOTIFICATION_ID = 1003  // 즉시 Heartbeat ack 전용 (덮어쓰기)
         private const val EXTRA_INTERVAL = "interval_minutes"
 
         fun start(context: Context, intervalMinutes: Int = 5) {
@@ -150,14 +152,32 @@ class HeartbeatForegroundService : Service() {
                 )
                 realtimeManager?.joinCommandChannel(assetUid)
                 realtimeManager?.joinAlertChannel()
+                realtimeManager?.joinNotificationsChannel(assetUid)
 
                 // 명령 수신 처리
                 realtimeManager?.onCommand { command, _ ->
                     when (command) {
                         "request_heartbeat", "refresh_system_info" -> {
-                            serviceScope.launch { sendHeartbeat() }
+                            serviceScope.launch {
+                                sendHeartbeat()
+                                // Activity가 떠 있으면 UI 강조용 이벤트 emit
+                                AdminCommandEvents.tryEmit(AdminCommandEvents.Event.HeartbeatAck)
+                                // 화면이 닫혀 있어도 알 수 있게 시스템 알림 (덮어쓰기)
+                                handler.post { showAdminHeartbeatAck(command) }
+                            }
                         }
                     }
+                }
+
+                // notifications INSERT 수신 → 시스템 알림 표시
+                realtimeManager?.onNotification { record ->
+                    val title = record["title"]?.let {
+                        if (it is kotlinx.serialization.json.JsonPrimitive) it.content else null
+                    } ?: "알림"
+                    val body = record["body"]?.let {
+                        if (it is kotlinx.serialization.json.JsonPrimitive) it.content else null
+                    } ?: ""
+                    handler.post { showAdminAlert(title, body) }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Realtime connection failed", e)
@@ -169,16 +189,59 @@ class HeartbeatForegroundService : Service() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Heartbeat 서비스",
-                NotificationManager.IMPORTANCE_LOW,
-            ).apply {
-                description = "OA Agent Heartbeat 전송 서비스"
-            }
             val nm = getSystemService(NotificationManager::class.java)
-            nm.createNotificationChannel(channel)
+            nm.createNotificationChannel(
+                NotificationChannel(CHANNEL_ID, "Heartbeat 서비스", NotificationManager.IMPORTANCE_LOW).apply {
+                    description = "OA Agent Heartbeat 전송 서비스"
+                },
+            )
+            nm.createNotificationChannel(
+                NotificationChannel(ALERT_CHANNEL_ID, "관리자 알림", NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = "관리자 재확인 요청 등 서버 알림"
+                },
+            )
         }
+    }
+
+    private fun showAdminHeartbeatAck(command: String) {
+        val label = if (command == "refresh_system_info") "시스템 정보 갱신" else "즉시 Heartbeat"
+        val time = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.KOREA)
+            .format(java.util.Date())
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0,
+            Intent(this, SetupActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("$label 완료")
+            .setContentText("관리자 요청으로 $time 에 전송했습니다.")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .setTimeoutAfter(8_000)  // 8초 후 자동 사라짐
+            .build()
+        val nm = getSystemService(NotificationManager::class.java)
+        nm.notify(ADMIN_ACK_NOTIFICATION_ID, notification)  // 같은 ID로 덮어쓰기
+    }
+
+    private fun showAdminAlert(title: String, body: String) {
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0,
+            Intent(this, SetupActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+        val nm = getSystemService(NotificationManager::class.java)
+        nm.notify((System.currentTimeMillis() and 0x7fffffff).toInt(), notification)
     }
 
     private fun buildNotification(intervalMinutes: Int): Notification {

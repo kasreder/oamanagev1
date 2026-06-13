@@ -334,34 +334,40 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
     );
   }
 
-  /// 실사 등록 (자산 상세 모드에서)
-  /// 사진 촬영 없이 실사 레코드 생성 → 실사 상세 페이지로 이동
+  /// 자산 상세에서 [실사 보기] 버튼:
+  /// - 가장 최근 inspection이 있으면 그 상세 페이지로 이동
+  /// - 없으면 새 inspection을 자동 생성 후 그 상세 페이지로 이동
   Future<void> _createInspection() async {
+    final assetId = widget.assetId;
+    if (assetId == null) return;
     try {
+      // 1. 가장 최근 inspection 있으면 그것으로 이동
+      final latest = await _api.fetchLatestInspectionForAsset(assetId);
+      if (!mounted) return;
+      if (latest != null) {
+        context.go('/inspection/${latest.id}');
+        return;
+      }
+
+      // 2. 없으면 새 inspection 생성 후 이동
       final assetCode = _asset?.assetUid ?? 'UNKNOWN';
-
-      // 활성 라운드 조회
       final activeRound = await _api.fetchActiveRound();
-
-      // 실사 등록
-      final inspection = await _api.createInspection({
-        'asset_id': widget.assetId,
+      final created = await _api.createInspection({
+        'asset_id': assetId,
         'asset_code': assetCode,
         'asset_type': _asset?.category,
         if (activeRound != null) 'round_id': activeRound.id,
       });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('실사가 등록되었습니다.')),
-        );
-        context.go('/inspection/${inspection.id}');
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('실사가 등록되었습니다.')),
+      );
+      context.go('/inspection/${created.id}');
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: SelectableText('실사 등록 실패: ${e.toString()}'),
+            content: SelectableText('실사 조회/등록 실패: ${e.toString()}'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -888,6 +894,35 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
             ),
             const SizedBox(height: 16),
 
+            // 실사 회차
+            Row(
+              children: [
+                Icon(Icons.event_repeat, size: 20, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text('실사 회차', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: asset.inspectionRoundNo > 0
+                        ? theme.colorScheme.primaryContainer
+                        : theme.colorScheme.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${asset.inspectionRoundNo}차',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: asset.inspectionRoundNo > 0
+                          ? theme.colorScheme.onPrimaryContainer
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
             // 사용자 확인 현황
             Row(
               children: [
@@ -975,6 +1010,19 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _requestForceVerify,
+                icon: const Icon(Icons.verified_user_outlined, size: 18),
+                label: const Text('관리자 재확인 요청'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.orange.shade800,
+                  side: BorderSide(color: Colors.orange.shade800),
+                ),
+              ),
             ),
           ],
         ),
@@ -1187,6 +1235,40 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
           SnackBar(content: Text('명령 전송 실패: $e')),
         );
       }
+    }
+  }
+
+  Future<void> _requestForceVerify() async {
+    if (_asset == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('관리자 재확인 요청'),
+        content: const Text(
+          '에이전트의 사용자 확인 상태를 초기화하고 단말에 알림을 보냅니다. 계속할까요?',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('요청')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await Supabase.instance.client.rpc(
+        'admin_force_verify',
+        params: {'p_asset_uid': _asset!.assetUid},
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('재확인 요청 전송 완료')),
+      );
+      await _loadAsset();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('재확인 요청 실패: $e')),
+      );
     }
   }
 
@@ -1422,14 +1504,14 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
         ),
         const SizedBox(height: 12),
 
-        // 실사 등록 버튼
+        // 실사 보기 버튼 — 새 실사 생성 X, 최근 실사 상세로 이동
         SizedBox(
           width: double.infinity,
           height: 48,
           child: FilledButton.tonalIcon(
             onPressed: _createInspection,
             icon: const Icon(Icons.fact_check),
-            label: const Text('실사 등록'),
+            label: const Text('실사 보기'),
           ),
         ),
       ],

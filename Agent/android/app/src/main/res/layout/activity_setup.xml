@@ -168,12 +168,28 @@
             android:layout_marginTop="16dp" />
 
         <TextView
+            android:id="@+id/tv_user_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="사용자 이름: -"
+            android:textSize="14sp"
+            android:layout_marginTop="12dp" />
+
+        <TextView
+            android:id="@+id/tv_employee_id"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="사번: -"
+            android:textSize="14sp"
+            android:layout_marginTop="6dp" />
+
+        <TextView
             android:id="@+id/tv_last_verified"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="마지막 확인: -"
             android:textSize="14sp"
-            android:layout_marginTop="12dp" />
+            android:layout_marginTop="6dp" />
 
         <TextView
             android:id="@+id/tv_verification_status"

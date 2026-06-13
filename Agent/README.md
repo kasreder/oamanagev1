@@ -283,7 +283,8 @@ data class SystemInfo(
 | 5 | `/rest/v1/rpc/confirm_assignment` | POST | 자산 수령 확인 | Bearer token |
 | 6 | `/rest/v1/device_tokens` | POST/PATCH | FCM 토큰 등록/갱신 | Bearer token |
 | 7 | `/rest/v1/agent_settings?setting_key=in.(latest_agent_version,min_agent_version)` | GET | Heartbeat 성공 후 에이전트 버전 확인 (11.3절 참조) | Bearer token |
-| 8 | `wss://apioa.terraforming.info/realtime/v1/websocket` | WebSocket | Supabase Realtime 연결 (Presence, Broadcast) | Bearer token |
+| 8 | `wss://apioa.terraforming.info/realtime/v1/websocket` | WebSocket | Supabase Realtime 연결 (Presence + Broadcast + **postgres_changes**) | Bearer token |
+| 9 | Realtime postgres_changes (notifications) | WebSocket | `notifications` 테이블 INSERT 구독 (filter: `asset_uid=eq.<자기 자산>`) — 관리자 재확인 요청 등 서버 발생 알림 수신 | Bearer token |
 
 ### 4.2 인증 방식
 
@@ -1573,6 +1574,7 @@ GRANT EXECUTE ON FUNCTION public.confirm_assignment(text, text) TO authenticated
 | `agent-presence:global` | Presence | 에이전트 → 프론트엔드 | 에이전트 실시간 접속 상태 추적 |
 | `agent-commands:{asset_uid}` | Broadcast | 프론트엔드 → 에이전트 | 관리자 → 특정 기기 명령 전송 |
 | `agent-alerts:global` | Broadcast | 에이전트 → 프론트엔드 | 에이전트 → 관리자 실시간 알림 |
+| `notifications:{asset_uid}` | **postgres_changes** | 서버(DB INSERT) → 에이전트 | `notifications` 테이블 INSERT 수신 (관리자 재확인 요청 등) |
 
 ### 14.3 Presence 상태 등록
 
@@ -1633,6 +1635,53 @@ GRANT EXECUTE ON FUNCTION public.confirm_assignment(text, text) TO authenticated
 | `agent_started` | 에이전트 시작 | 서비스 시작 시 |
 | `agent_stopped` | 에이전트 종료 | 서비스 종료 시 (best-effort) |
 
+### 14.5.1 서버 발생 알림 수신 (Postgres Changes) — 2026-06-04 추가
+
+`notifications` 테이블이 Supabase Realtime publication에 등록되어 있어, INSERT 이벤트를 에이전트가 즉시 수신합니다 (Firebase/FCM 미사용).
+
+**구독 (Phoenix `phx_join` payload):**
+```json
+{
+  "config": {
+    "postgres_changes": [
+      {
+        "event": "INSERT",
+        "schema": "public",
+        "table": "notifications",
+        "filter": "asset_uid=eq.<자기 자산>"
+      }
+    ]
+  }
+}
+```
+
+**수신 이벤트 본문:**
+```json
+{
+  "data": {
+    "type": "INSERT",
+    "table": "notifications",
+    "record": {
+      "id": 12, "asset_uid": "BDT00001",
+      "type": "general",
+      "title": "사용자 재확인 요청",
+      "body": "관리자 요청으로 사용자 확인이 초기화되었습니다. 에이전트 앱에서 다시 확인을 진행해주세요.",
+      "sent_at": "2026-06-04T09:38:59Z"
+    }
+  }
+}
+```
+
+**Android 측 처리** ([HeartbeatForegroundService.kt](android/app/src/main/java/com/oamanager/agent/android/service/HeartbeatForegroundService.kt))
+- 알림 채널 `admin_alert_channel` (IMPORTANCE_HIGH) 추가
+- `showAdminAlert(title, body)` → `NotificationManager.notify(...)` 로 시스템 트레이 알림 표시 (BigTextStyle, AutoCancel)
+- 탭하면 `SetupActivity`로 이동
+
+**발생 경로**
+- 관리자 [자산 상세] → "관리자 재확인 요청" 버튼 (`admin_force_verify` RPC)
+- 마스터 관리자가 자산의 `user_name` 변경 → BEFORE UPDATE 트리거 자동 발생
+- 백엔드 README §4.10, §9.9.1, §9.9.2 참조
+
 ### 14.6 연결 관리
 
 #### WebSocket 연결
@@ -1675,6 +1724,7 @@ class RealtimeManager(
 
     // 채널 참여
     suspend fun joinPresence(assetUid: String, platform: String, agentVersion: String)
+    suspend fun joinNotificationsChannel(assetUid: String)  // 2026-06-04 추가
     suspend fun joinCommandChannel(assetUid: String)
     suspend fun joinAlertChannel()
 
@@ -1726,3 +1776,34 @@ ConnectivityManager 콜백 (네트워크 변경)
   → 네트워크 타입 변경
     → realtimeManager.sendAlert("network_changed", ...)
 ```
+
+#### 서버 알림 수신 트리거 (2026-06-04 추가)
+```
+realtimeManager.joinNotificationsChannel(assetUid)
+  → postgres_changes(INSERT, public.notifications, asset_uid=eq.X)
+    → handleMessage() → notificationHandler(record)
+      → HeartbeatForegroundService.showAdminAlert(title, body)
+        → NotificationManager.notify (admin_alert_channel, IMPORTANCE_HIGH)
+```
+
+---
+
+## 변경 이력 (에이전트)
+
+- `2026-06-04` :
+  - `RealtimeManager.kt`
+    - `joinNotificationsChannel(assetUid)` — postgres_changes 구독
+    - `onNotification(handler)` — INSERT 콜백 등록
+    - `handleMessage()`에 `postgres_changes` 이벤트 분기 추가
+  - `HeartbeatForegroundService.kt`
+    - Realtime 연결 setup에 `joinNotificationsChannel` 호출 추가
+    - `ALERT_CHANNEL_ID = "admin_alert_channel"` 신규 채널 + `showAdminAlert()` 헬퍼
+  - `AgentConfig.SUPABASE_URL` → `https://apioa.terraforming.info` (이전 `https://api.oa.terraforming.info`)
+  - APK 재빌드 (Android, Release, 3.2 MB, versionCode=1, versionName=1.0.0)
+  - README placeholder URL 일괄 치환 (`<project-id>.supabase.co` → `apioa.terraforming.info`)
+- `2026-03-21` 이전 : 초기 구현 (Heartbeat, verify_user, confirm_assignment, Realtime Presence/Broadcast)
+
+---
+
+## 문의
+프로젝트 관련 문의사항은 개발팀에 문의해주세요.

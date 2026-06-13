@@ -162,6 +162,7 @@ services:
     networks:
       oa-internal:
         aliases:
+          - realtime-dev
           - oa-realtime-dev
     healthcheck:
       test:

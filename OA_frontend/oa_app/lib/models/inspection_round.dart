@@ -39,17 +39,17 @@ class InspectionRound {
       status: json['status'] as String? ?? 'draft',
       startedBy: json['started_by'] as int?,
       startedAt: json['started_at'] != null
-          ? DateTime.parse(json['started_at'] as String)
+          ? DateTime.parse(json['started_at'] as String).toLocal()
           : null,
       closedBy: json['closed_by'] as int?,
       closedAt: json['closed_at'] != null
-          ? DateTime.parse(json['closed_at'] as String)
+          ? DateTime.parse(json['closed_at'] as String).toLocal()
           : null,
       createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
+          ? DateTime.parse(json['created_at'] as String).toLocal()
           : null,
       updatedAt: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'] as String)
+          ? DateTime.parse(json['updated_at'] as String).toLocal()
           : null,
     );
   }

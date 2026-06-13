@@ -24,6 +24,18 @@ RUN flutter build web --release \
     --dart-define=SUPABASE_URL=${SUPABASE_URL} \
     --dart-define=SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
 
+# main.dart.js / flutter_bootstrap.js는 CDN에 강하게 캐시될 수 있어,
+# 배포마다 파일명/쿼리를 바꿔 캐시를 우회한다.
+RUN set -eux; \
+    build_id="$(date +%s)"; \
+    main_cache_bust="main.${build_id}.dart.js"; \
+    bootstrap_cache_bust="flutter_bootstrap.${build_id}.js"; \
+    cp /app/build/web/main.dart.js "/app/build/web/${main_cache_bust}"; \
+    cp /app/build/web/flutter_bootstrap.js "/app/build/web/${bootstrap_cache_bust}"; \
+    sed -i "s#\"mainJsPath\":\"main.dart.js\"#\"mainJsPath\":\"${main_cache_bust}\"#g" "/app/build/web/${bootstrap_cache_bust}"; \
+    sed -i "s#flutter_bootstrap.js?v=__BUILD_ID__#${bootstrap_cache_bust}#g" /app/build/web/index.html; \
+    rm /app/build/web/main.dart.js /app/build/web/flutter_bootstrap.js
+
 # 정적 파일 사전 gzip 압축 (nginx gzip_static 서빙용)
 RUN find /app/build/web -type f \( \
     -name "*.js" -o -name "*.css" -o -name "*.html" \
