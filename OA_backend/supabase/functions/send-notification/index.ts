@@ -1,5 +1,6 @@
 // supabase/functions/send-notification/index.ts
 // 관리자가 프론트엔드에서 에이전트 기기로 FCM 푸시 알림을 발송합니다.
+// main 라우터에서 dynamic import 되므로 handler를 default export 합니다.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -9,7 +10,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-serve(async (req) => {
+const handler = async (req: Request): Promise<Response> => {
   // CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -152,4 +153,10 @@ serve(async (req) => {
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     )
   }
-})
+}
+
+export default handler
+
+if (import.meta.main) {
+  serve(handler)
+}

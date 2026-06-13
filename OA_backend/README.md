@@ -138,6 +138,15 @@ supabase db push
 # OA_backend/supabase/migrations/20260314000001_add_agent_rls_policies.sql
 # OA_backend/supabase/migrations/20260314000002_add_agent_rpc_and_columns.sql
 
+# 실사 라운드(차수) + 역할 체계 (2026-03-21 추가)
+# OA_backend/supabase/migrations/20260321000000_fix_inspection_update_rls.sql
+# OA_backend/supabase/migrations/20260321000001_add_user_role.sql
+# OA_backend/supabase/migrations/20260321000002_create_inspection_rounds.sql
+# OA_backend/supabase/migrations/20260321000003_add_round_to_inspections.sql
+
+# 마스터 관리자 + 강제 재확인 (2026-06-04 추가)
+# OA_backend/supabase/migrations/20260604000000_master_admin_and_force_verify.sql
+
 # 로컬 반영
 supabase db reset
 
@@ -365,6 +374,7 @@ CREATE TABLE public.users (
   sns_id        text,                                                -- SNS 고유 ID (OAuth 사용 시)
   role          text NOT NULL DEFAULT 'user'                          -- 사용자 역할
     CHECK (role IN ('admin', 'operator1', 'operator2', 'user')),
+  is_master_admin boolean NOT NULL DEFAULT false,                     -- 마스터 관리자 (최대 4명, role=admin 한정)
   created_at    timestamptz DEFAULT now(),
   updated_at    timestamptz DEFAULT now()
 );
@@ -372,6 +382,7 @@ CREATE TABLE public.users (
 -- 인덱스
 CREATE INDEX idx_users_auth_uid ON public.users(auth_uid);
 CREATE INDEX idx_users_employee_id ON public.users(employee_id);
+CREATE INDEX idx_users_is_master_admin ON public.users(is_master_admin) WHERE is_master_admin = true;
 ```
 
 > **역할 체계**:
@@ -381,6 +392,13 @@ CREATE INDEX idx_users_employee_id ON public.users(employee_id);
 > | `operator1` | 운영자1 | 차수 관리, 완료건 수정 |
 > | `operator2` | 운영자2 | 차수 관리, 완료건 수정 |
 > | `user` | 일반 사용자 | 활성 라운드 시에만 실사 수정 가능 |
+>
+> **마스터 관리자 (`is_master_admin`)**:
+> - role=admin 사용자 중 최대 **4명**까지 지정 가능 (BEFORE INSERT/UPDATE 트리거로 강제)
+> - role≠admin에 부여 시도 시 예외
+> - 기본값: 시드의 `admin01` 1명 (마이그레이션 #21에서 자동 설정)
+> - 마스터가 자산 `user_name`을 변경하면 자산의 `verification_status`가 자동 초기화되고 `notifications` 테이블에 row가 자동 삽입됨 (8.4 참조)
+> - `public.is_master_admin()` SECURITY DEFINER 헬퍼: 현재 로그인 사용자 체크
 >
 > **참고**: 비밀번호는 Supabase Auth(`auth.users`)에서 관리하며, `public.users`에는 저장하지 않습니다. `auth_uid`로 Supabase Auth 계정과 연결합니다.
 
@@ -670,8 +688,8 @@ CREATE INDEX idx_device_tokens_asset_uid ON public.device_tokens(asset_uid);
 CREATE INDEX idx_device_tokens_platform ON public.device_tokens(platform);
 ```
 
-### 4.10 notifications (푸시 알림 이력)
-> 관리자가 에이전트로 발송한 푸시 알림의 이력을 저장합니다.
+### 4.10 notifications (알림 이력 + Realtime 전송)
+> 관리자/시스템이 에이전트로 발송한 알림 이력을 저장하며, **Supabase Realtime publication에 등록**되어 있어 INSERT 시 에이전트가 즉시 수신합니다 (FCM 미사용).
 
 ```sql
 CREATE TABLE public.notifications (
@@ -689,7 +707,17 @@ CREATE TABLE public.notifications (
 CREATE INDEX idx_notifications_asset_uid ON public.notifications(asset_uid);
 CREATE INDEX idx_notifications_type ON public.notifications(type);
 CREATE INDEX idx_notifications_sent_at ON public.notifications(sent_at DESC);
+
+-- Realtime publication (마이그레이션 #21에서 추가)
+ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;
 ```
+
+> **알림 발생 경로**
+> 1. `admin_force_verify(asset_uid)` RPC 호출 (관리자 그룹)
+> 2. 마스터 관리자가 `assets.user_name` 변경 → BEFORE UPDATE 트리거가 자동으로 INSERT
+> 3. (선택) 프론트엔드에서 직접 INSERT
+>
+> **에이전트 수신**: Phoenix WebSocket `postgres_changes` 구독 (`filter=asset_uid=eq.<자기 자산>`). 수신 시 Android 시스템 알림(`admin_alert_channel`, IMPORTANCE_HIGH)으로 사용자에게 표시.
 
 ### 4.11 agent_settings (에이전트 설정)
 > 에이전트 최신 버전 및 다운로드 URL 등 에이전트 전역 설정을 관리합니다.
@@ -1780,7 +1808,93 @@ $$;
 |------|------|------|
 | `is_admin()` | boolean | role='admin' 여부 (기존, role 기반으로 교체됨) |
 | `is_admin_group()` | boolean | admin/operator1/operator2 여부 (RLS, RPC에서 사용) |
+| `is_master_admin()` | boolean | 마스터 관리자 여부 (role=admin AND is_master_admin=true) — SECURITY DEFINER |
 | `get_my_role()` | text | 현재 사용자의 role 값 (프론트엔드 역할 조회용) |
+
+### 9.9.1 관리자 강제 재확인 RPC `admin_force_verify`
+
+마이그레이션 #21에서 추가. 자산의 사용자 확인 상태를 초기화하고 에이전트에 알림을 발송합니다.
+
+```sql
+CREATE OR REPLACE FUNCTION public.admin_force_verify(p_asset_uid text)
+RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER
+AS $$
+DECLARE
+  v_found boolean;
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION '권한 없음: 관리자만 강제 재확인 가능합니다';
+  END IF;
+
+  UPDATE public.assets
+  SET verification_status = NULL,
+      last_verified_at    = NULL,
+      specifications      = specifications - 'user_mismatch'
+  WHERE asset_uid = p_asset_uid
+  RETURNING true INTO v_found;
+
+  IF NOT v_found THEN
+    RAISE EXCEPTION '자산을 찾을 수 없음: %', p_asset_uid;
+  END IF;
+
+  INSERT INTO public.notifications (asset_uid, type, title, body)
+  VALUES (
+    p_asset_uid, 'general',
+    '사용자 재확인 요청',
+    '관리자 요청으로 사용자 확인이 초기화되었습니다. 에이전트 앱에서 다시 확인을 진행해주세요.'
+  );
+
+  RETURN jsonb_build_object('asset_uid', p_asset_uid, 'reset', true, 'requested_at', now());
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.admin_force_verify(text) TO authenticated;
+```
+
+| 항목 | 값 |
+|------|-----|
+| 함수명 | `admin_force_verify` |
+| 인자 | `p_asset_uid text` |
+| 반환 | jsonb `{asset_uid, reset, requested_at}` |
+| 권한 | `is_admin()` (admin role) |
+| 부수효과 | `assets.verification_status=NULL`, `last_verified_at=NULL`, `specifications.user_mismatch` 제거, `notifications` INSERT 1건 |
+| 호출 경로 | 프론트엔드 [자산 상세] → "관리자 재확인 요청" 버튼 |
+
+### 9.9.2 마스터 관리자 user_name 변경 자동 트리거
+
+마스터 관리자(`is_master_admin()=true`)가 `assets.user_name`을 변경하면 자동으로 `admin_force_verify`와 동일한 효과가 발생합니다.
+
+```sql
+CREATE OR REPLACE FUNCTION public.assets_master_user_change_trigger()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  IF NEW.user_name IS DISTINCT FROM OLD.user_name
+     AND public.is_master_admin() THEN
+    NEW.verification_status := NULL;
+    NEW.last_verified_at    := NULL;
+    NEW.specifications      := NEW.specifications - 'user_mismatch';
+
+    INSERT INTO public.notifications (asset_uid, type, title, body)
+    VALUES (NEW.asset_uid, 'general',
+      '사용자 재확인 요청 (자동)',
+      format('마스터 관리자가 실사용자를 %s → %s 으로 변경했습니다. 에이전트 앱에서 다시 사용자 확인을 진행해주세요.',
+        COALESCE(OLD.user_name, '(미지정)'), COALESCE(NEW.user_name, '(미지정)'))
+    );
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_assets_master_user_change
+  BEFORE UPDATE OF user_name ON public.assets
+  FOR EACH ROW
+  EXECUTE FUNCTION public.assets_master_user_change_trigger();
+```
+
+> **마스터 관리자 제약 트리거** (`enforce_master_admin_constraints`)
+> - BEFORE INSERT/UPDATE OF `is_master_admin`, `role` ON public.users
+> - role≠'admin' → 예외 `마스터 관리자는 role=admin 인 사용자만 지정 가능합니다`
+> - 마스터 4명 이미 존재 시 5번째 지정 → 예외 `마스터 관리자는 최대 4명까지 지정 가능합니다`
 
 ### 9.10 실사 라운드 시작 RPC `start_inspection_round`
 
@@ -2233,8 +2347,28 @@ curl -X POST http://localhost:54321/functions/v1/dashboard-stats \
 | 23 | 사용자 확인 RPC | `verify_user('BDT00001', '김개발', 'EMP20001')` → 일치/불일치 응답, verification_status 갱신 |
 | 24 | 자산 수령 확인 RPC | `confirm_assignment('BDT00001', '김개발')` → assignment_status='confirmed' 전환 |
 | 25 | FCM 토큰 등록 | device_tokens upsert → 토큰 저장/갱신 |
-| 26 | 푸시 알림 발송 | send-notification Edge Function → FCM 발송 + notifications 이력 저장 |
+| 26 | 푸시 알림 발송 | (구) send-notification Edge Function → FCM. **2026-06-04 이후 미사용** — Supabase Realtime(notifications INSERT)으로 대체 |
 | 27 | 에이전트 버전 조회 | agent_settings 테이블에서 latest/min 버전 조회 |
+| 28 | 관리자 강제 재확인 | `admin_force_verify(asset_uid)` RPC → assets 상태 리셋 + notifications INSERT |
+| 29 | 마스터 관리자 자동 재확인 | 마스터가 `assets.user_name` UPDATE → BEFORE UPDATE 트리거가 자동으로 #28과 동일 효과 |
+| 30 | 마스터 관리자 토글 | 프론트 [에이전트 설정] → admin 사용자 토글 (최대 4명, role=admin 한정, 제약 트리거로 강제) |
+
+---
+
+## 변경 이력 (백엔드)
+
+- `2026-06-04` :
+  - **마이그레이션 #21** 추가 (`20260604000000_master_admin_and_force_verify.sql`)
+    - `users.is_master_admin` 컬럼 + `enforce_master_admin_constraints` 트리거 (max 4 + role=admin)
+    - `is_master_admin()`, `admin_force_verify(asset_uid)` 함수
+    - `assets_master_user_change_trigger` (BEFORE UPDATE OF user_name)
+    - `ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications`
+  - 시드: admin01 자동 마스터 지정
+  - 테스트 계정 비번 소문자 통일 (`temp1234!`, `admin1234!`, `oper1234!`, `user1234!`)
+  - Edge Function `main`을 단일 진입 dispatcher로 재구성 (self-hosted edge-runtime의 cross-function import 제약 우회). `send-notification` 로직을 main에 inline. Firebase 의존 코드는 보존하되 트리거에서는 호출하지 않음 (Realtime로 대체)
+- `2026-03-21` : 역할 체계 + 실사 라운드(차수) + 시드 9개 계정
+- `2026-03-14` : 에이전트 테이블 (heartbeat, agent_settings, device_tokens, notifications)
+- `2026-02-11` : 자산 담당정보 필드, asset_uid 정규식, 실사 권한/초기화 RPC
 
 ---
 

@@ -36,9 +36,12 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
         val lastSendResult: String? = null,
         val verificationStatus: String? = null,
         val lastVerifiedAt: Long = 0L,
+        val assetUserName: String? = null,
+        val employeeId: String? = null,
         val assignmentStatus: String? = null,
         val isLoading: Boolean = false,
         val message: String? = null,
+        val highlightHeartbeat: Boolean = false,  // 관리자 명령 직후 3초간 강조
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -56,6 +59,8 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
             lastHeartbeatTime = prefs.lastHeartbeatTime,
             isRunning = prefs.assetUid != null,
             lastVerifiedAt = prefs.lastVerifiedAt,
+            assetUserName = prefs.assetUserName,
+            employeeId = prefs.employeeId,
         )
     }
 
@@ -83,6 +88,30 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
             } catch (_: Exception) {
                 // 서버 조회 실패 시 로컬 설정 유지
             }
+        }
+    }
+
+    /**
+     * SharedPreferences에 저장된 최신 값을 UI 상태에 반영합니다.
+     * (Activity onResume / 관리자 명령 ack 시 호출)
+     */
+    fun refreshFromPrefs() {
+        _uiState.value = _uiState.value.copy(
+            lastHeartbeatTime = prefs.lastHeartbeatTime,
+            lastVerifiedAt = prefs.lastVerifiedAt,
+            assetUserName = prefs.assetUserName,
+            employeeId = prefs.employeeId,
+        )
+    }
+
+    /**
+     * 관리자가 트리거한 Heartbeat이 단말에 도달했을 때 UI에 3초간 강조 효과.
+     */
+    fun flashAdminHighlight() {
+        _uiState.value = _uiState.value.copy(highlightHeartbeat = true)
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(3000)
+            _uiState.value = _uiState.value.copy(highlightHeartbeat = false)
         }
     }
 
@@ -179,6 +208,8 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
                     isLoading = false,
                     verificationStatus = if (matched) "verified" else "mismatch",
                     lastVerifiedAt = if (matched) System.currentTimeMillis() else prefs.lastVerifiedAt,
+                    assetUserName = if (matched) userName else _uiState.value.assetUserName,
+                    employeeId = if (matched) employeeId else _uiState.value.employeeId,
                     message = message,
                 )
             } catch (e: Exception) {

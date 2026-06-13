@@ -4,13 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../utils/csv_downloader_stub.dart'
+    if (dart.library.html) '../utils/csv_downloader_web.dart';
 
 import '../constants.dart';
 import '../models/asset.dart';
+import '../models/search_condition.dart';
 import '../services/api_service.dart';
 import '../notifiers/agent_presence_notifier.dart';
+import '../widgets/asset_search_dialog.dart';
 import '../widgets/common/app_scaffold.dart';
 import '../widgets/common/loading_widget.dart';
 import '../widgets/common/error_widget.dart';
@@ -43,19 +47,42 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
   int _totalCount = 0;
   bool _isLoading = true;
   bool _isLoadingMore = false;
+  bool _isExporting = false;  // CSV 전체 export 진행 중
   bool _hasMore = true;
   int _loadedPage = 0;
-  static const int _pageSize = 500;
+  static const int _pageSize = 100;  // 500→100, 무한스크롤로 추가 로드
   String? _error;
 
   // 필터 상태
   String? _selectedCategory;
   String? _selectedStatus;
   String _searchQuery = '';
+  List<SearchCondition> _searchConditions = [];
 
-  // 정렬 상태
+  // 정렬 상태 — 컬럼 라벨 + DB 컬럼 키. 서버 정렬에 사용.
   String? _sortColumnLabel;
   bool _sortAscending = true;
+
+  // 서버 정렬 가능 컬럼 화이트리스트 (라벨 → DB 컬럼)
+  static const Map<String, String> _serverSortKeys = {
+    'ID': 'id',
+    '자산번호': 'asset_uid',
+    '자산명': 'name',
+    '상태': 'assets_status',
+    '유형': 'category',
+    '지급형태': 'supply_type',
+    '시리얼': 'serial_number',
+    '모델명': 'model_name',
+    '제조사': 'vendor',
+    '건물': 'building',
+    '층': 'floor',
+    '실사용자': 'user_name',
+    '소유자': 'owner_name',
+    '관리자': 'admin_name',
+    '등록일': 'created_at',
+    '수정일': 'updated_at',
+    '마지막 접속': 'last_active_at',
+  };
 
   static const double _colId = 80;
   static const double _colAssetUid = 170;
@@ -138,11 +165,18 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
     _AssetColumnMeta(label: '수정일', width: _colUpdatedAt, value: _assetUpdatedAt),
     _AssetColumnMeta(label: '사용자확인', width: _colVerificationStatus, value: _assetVerificationStatusText, widgetBuilder: _verificationStatusWidget),
     _AssetColumnMeta(label: '배정상태', width: _colAssignmentStatus, value: _assetAssignmentStatusText, widgetBuilder: _assignmentStatusWidget),
+    _AssetColumnMeta(label: '실사회차', width: 80, value: _assetInspectionRoundNo),
   ];
+
+  static String _assetInspectionRoundNo(Asset asset, DateFormat _) =>
+      '${asset.inspectionRoundNo}차';
 
   late List<_AssetColumnMeta> _orderedColumns;
   late Map<String, bool> _columnVisibility;
   late Map<String, double> _columnWidths;
+
+  // 컬럼 설정 저장 키 (localStorage on web)
+  static const String _columnConfigPrefsKey = 'asset_list_column_config_v1';
 
 
   List<_AssetColumnMeta> get _visibleColumns => _orderedColumns
@@ -160,16 +194,24 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
     _orderedColumns = List<_AssetColumnMeta>.from(_allColumns);
     _columnVisibility = {for (final column in _allColumns) column.label: true};
     _columnWidths = {for (final column in _allColumns) column.label: column.width};
+    _loadColumnConfig(); // 저장된 컬럼 설정 복원 (async, 즉시 반환)
     _loadAssets();
 
-    // 세로 스크롤 동기화: 리스트 ↔ 오른쪽 스크롤바
+    // 세로 스크롤 동기화 + 무한스크롤 (끝 200px 도달 시 다음 페이지)
     _verticalScrollController.addListener(() {
-      if (_syncingScroll) return;
-      _syncingScroll = true;
-      if (_verticalBarController.hasClients) {
-        _verticalBarController.jumpTo(_verticalScrollController.offset);
+      if (!_syncingScroll) {
+        _syncingScroll = true;
+        if (_verticalBarController.hasClients) {
+          _verticalBarController.jumpTo(_verticalScrollController.offset);
+        }
+        _syncingScroll = false;
       }
-      _syncingScroll = false;
+      final pos = _verticalScrollController.position;
+      if (_hasMore &&
+          !_isLoadingMore &&
+          pos.pixels >= pos.maxScrollExtent - 200) {
+        _loadNextPage();
+      }
     });
     _verticalBarController.addListener(() {
       if (_syncingScroll) return;
@@ -200,9 +242,7 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
     });
 
     await _loadNextPage();
-
-    // 나머지를 백그라운드로 계속 로딩
-    _loadAllRemaining();
+    // 백그라운드 전수 로딩 제거 — 무한 스크롤로 필요할 때만 추가 fetch
   }
 
   Future<void> _loadNextPage() async {
@@ -212,12 +252,22 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
     _loadedPage++;
 
     try {
+      final orderBy = _sortColumnLabel != null
+          ? (_serverSortKeys[_sortColumnLabel!] ?? 'id')
+          : 'id';
+      final ascending = _sortColumnLabel != null ? _sortAscending : false;
+
       final result = await _api.fetchAssets(
         page: _loadedPage,
         pageSize: _pageSize,
         category: _selectedCategory,
         status: _selectedStatus,
-        search: _searchQuery.isNotEmpty ? _searchQuery : null,
+        search: _searchConditions.isEmpty && _searchQuery.isNotEmpty
+            ? _searchQuery
+            : null,
+        conditions: _searchConditions,
+        orderBy: orderBy,
+        ascending: ascending,
       );
 
       setState(() {
@@ -226,7 +276,6 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
         _hasMore = _assets.length < result.total;
         _isLoading = false;
         _isLoadingMore = false;
-        if (_sortColumnLabel != null) _applySorting();
       });
     } catch (e) {
       setState(() {
@@ -237,15 +286,16 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
     }
   }
 
-  Future<void> _loadAllRemaining() async {
+  /// CSV export용 — 현재 필터로 전체 로드 (정렬 적용)
+  Future<void> _loadAllForExport() async {
     while (_hasMore && mounted) {
       await _loadNextPage();
-      // 약간의 딜레이로 UI 블로킹 방지
       await Future.delayed(const Duration(milliseconds: 50));
     }
   }
 
   void _onSortColumn(String label) {
+    if (!_serverSortKeys.containsKey(label)) return; // 서버 정렬 미지원 컬럼은 무시
     setState(() {
       if (_sortColumnLabel == label) {
         _sortAscending = !_sortAscending;
@@ -253,31 +303,8 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
         _sortColumnLabel = label;
         _sortAscending = true;
       }
-      _applySorting();
     });
-  }
-
-  void _applySorting() {
-    if (_sortColumnLabel == null) return;
-    final col = _visibleColumns
-        .where((c) => c.label == _sortColumnLabel)
-        .firstOrNull;
-    if (col == null) return;
-
-    _assets.sort((a, b) {
-      final aVal = col.value(a, _dateTimeFmt);
-      final bVal = col.value(b, _dateTimeFmt);
-      // 숫자 비교 시도
-      final aNum = num.tryParse(aVal);
-      final bNum = num.tryParse(bVal);
-      int result;
-      if (aNum != null && bNum != null) {
-        result = aNum.compareTo(bNum);
-      } else {
-        result = aVal.compareTo(bVal);
-      }
-      return _sortAscending ? result : -result;
-    });
+    _loadAssets(); // 서버 정렬로 재fetch
   }
 
   void _onCategoryChanged(String? category) {
@@ -295,6 +322,172 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
     _loadAssets();
   }
 
+  /// 적용된 검색 조건을 chip으로 표시 (조건 비면 hide).
+  Widget _buildAppliedConditionsBar(BuildContext context) {
+    if (_searchConditions.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      color: theme.colorScheme.surfaceContainerLow,
+      child: Row(
+        children: [
+          Icon(Icons.filter_alt, size: 16, color: theme.colorScheme.primary),
+          const SizedBox(width: 6),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (var i = 0; i < _searchConditions.length; i++) ...[
+                    if (i > 0) ...[
+                      const SizedBox(width: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: _searchConditions[i].joiner == Joiner.or
+                              ? Colors.deepOrange.shade100
+                              : theme.colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          _searchConditions[i].joiner == Joiner.or
+                              ? 'OR'
+                              : 'AND',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: _searchConditions[i].joiner == Joiner.or
+                                ? Colors.deepOrange.shade900
+                                : theme.colorScheme.onPrimaryContainer,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                    Chip(
+                      label: Text(
+                        '${_searchConditions[i].column.label} '
+                        '${_searchConditions[i].op == SearchOp.eq ? '=' : 'like'} '
+                        '"${_searchConditions[i].value}"',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize:
+                          MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton.icon(
+            onPressed: _clearSearchConditions,
+            icon: const Icon(Icons.close, size: 16),
+            label: const Text('초기화'),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: const Size(0, 30),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openSearchDialog() async {
+    final result = await AssetSearchDialog.show(context, initial: _searchConditions);
+    if (result == null) return;
+    setState(() {
+      _searchConditions = result;
+      _searchQuery = '';
+      _searchController.clear();
+    });
+    _loadAssets();
+  }
+
+  void _clearSearchConditions() {
+    if (_searchConditions.isEmpty) return;
+    setState(() => _searchConditions = []);
+    _loadAssets();
+  }
+
+  // ── 컬럼 설정 저장/로드 ──────────────────────────────────────────────────
+  Future<void> _loadColumnConfig() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_columnConfigPrefsKey);
+      if (raw == null) return;
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+
+      // 저장된 순서 + 새로 추가된 컬럼은 끝에 append (호환성)
+      final byLabel = {for (final c in _allColumns) c.label: c};
+      final savedOrder = (json['order'] as List?)?.cast<String>() ?? [];
+      final newOrder = <_AssetColumnMeta>[];
+      final seen = <String>{};
+      for (final label in savedOrder) {
+        final c = byLabel[label];
+        if (c != null && !seen.contains(label)) {
+          newOrder.add(c);
+          seen.add(label);
+        }
+      }
+      for (final c in _allColumns) {
+        if (!seen.contains(c.label)) newOrder.add(c);
+      }
+
+      final visibility = (json['visibility'] as Map?) ?? {};
+      final widths = (json['widths'] as Map?) ?? {};
+
+      if (!mounted) return;
+      setState(() {
+        _orderedColumns = newOrder;
+        for (final entry in visibility.entries) {
+          final key = entry.key.toString();
+          if (_columnVisibility.containsKey(key)) {
+            _columnVisibility[key] = entry.value == true;
+          }
+        }
+        for (final entry in widths.entries) {
+          final key = entry.key.toString();
+          if (_columnWidths.containsKey(key) && entry.value is num) {
+            _columnWidths[key] = (entry.value as num).toDouble();
+          }
+        }
+      });
+    } catch (_) {
+      // 저장 형식 불일치 등은 무시 (기본값 사용)
+    }
+  }
+
+  Future<void> _saveColumnConfig() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final payload = {
+        'order': _orderedColumns.map((c) => c.label).toList(),
+        'visibility': _columnVisibility,
+        'widths': _columnWidths,
+      };
+      await prefs.setString(_columnConfigPrefsKey, jsonEncode(payload));
+    } catch (_) {
+      // 저장 실패는 silently 무시 (다음 변경 시 재시도)
+    }
+  }
+
+  Future<void> _resetColumnConfig() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_columnConfigPrefsKey);
+    } catch (_) {}
+    setState(() {
+      _orderedColumns = List<_AssetColumnMeta>.from(_allColumns);
+      _columnVisibility = {for (final c in _allColumns) c.label: true};
+      _columnWidths = {for (final c in _allColumns) c.label: c.width};
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
@@ -303,44 +496,73 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
       body: Column(
         children: [
           _buildFilterBar(context),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Row(
-              children: [
-                OutlinedButton.icon(
-                  onPressed: () => _openColumnConfigDialog(context),
-                  icon: const Icon(Icons.view_column, size: 18),
-                  label: const Text('열 표시 설정'),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  onPressed: _assets.isNotEmpty ? _downloadCsv : null,
-                  icon: const Icon(Icons.download, size: 18),
-                  label: const Text('엑셀 다운로드'),
-                ),
-                const Spacer(),
-                if (!_isLoading)
-                  Text(
-                    _hasMore
-                        ? '${_assets.length} / $_totalCount건 로딩중...'
-                        : '총 ${_assets.length}건',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-              ],
-            ),
-          ),
+          _buildAppliedConditionsBar(context),
+          _buildToolbar(context),
           Expanded(child: _buildBody(context)),
         ],
       ),
     );
   }
 
-  /// 필터 바 (카테고리, 상태, 검색, 자산등록) - 한 줄 컴팩트
+  /// 모바일 너비 판단 (작은 화면이면 버튼 라벨 숨기고 아이콘만)
+  bool _isCompactWidth(BuildContext ctx) =>
+      MediaQuery.of(ctx).size.width < 720;
+
+  /// 컬럼설정/엑셀 + 카운터 한 줄 툴바
+  Widget _buildToolbar(BuildContext context) {
+    final compact = _isCompactWidth(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 2),
+      child: SizedBox(
+        height: 32,
+        child: Row(
+          children: [
+            _CompactButton(
+              compact: compact,
+              icon: Icons.view_column,
+              label: '열 표시 설정',
+              tooltip: '열 표시 설정',
+              onPressed: () => _openColumnConfigDialog(context),
+            ),
+            const SizedBox(width: 4),
+            _CompactButton(
+              compact: compact,
+              icon: Icons.download,
+              label: '엑셀 다운로드',
+              tooltip: '엑셀 다운로드',
+              onPressed:
+                  (_assets.isEmpty || _isExporting) ? null : _downloadCsvAll,
+            ),
+            const Spacer(),
+            if (_isExporting)
+              const Padding(
+                padding: EdgeInsets.only(right: 8),
+                child: SizedBox(
+                  width: 14, height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            if (!_isLoading)
+              Text(
+                _isExporting
+                    ? '전체 데이터 로딩 중...'
+                    : '${_assets.length} / 총 ${_totalCount}건',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 필터 바 (카테고리, 상태, 검색, 고급검색, 등록) - 한 줄 컴팩트
   Widget _buildFilterBar(BuildContext context) {
     final theme = Theme.of(context);
+    final compact = _isCompactWidth(context);
+    const dense = EdgeInsets.symmetric(horizontal: 6, vertical: 0);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: Border(
@@ -351,15 +573,15 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
         children: [
           // 카테고리 드롭다운
           SizedBox(
-            width: 110,
-            height: 36,
+            width: compact ? 90 : 110,
+            height: 32,
             child: DropdownButtonFormField<String>(
               value: _selectedCategory,
               decoration: const InputDecoration(
-                labelText: '카테고리',
+                hintText: '카테고리',
+                floatingLabelBehavior: FloatingLabelBehavior.never,
                 isDense: true,
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                contentPadding: dense,
                 border: OutlineInputBorder(),
               ),
               style: theme.textTheme.bodySmall,
@@ -373,19 +595,19 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
               onChanged: _onCategoryChanged,
             ),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 4),
 
           // 상태 드롭다운
           SizedBox(
-            width: 90,
-            height: 36,
+            width: compact ? 70 : 90,
+            height: 32,
             child: DropdownButtonFormField<String>(
               value: _selectedStatus,
               decoration: const InputDecoration(
-                labelText: '상태',
+                hintText: '상태',
+                floatingLabelBehavior: FloatingLabelBehavior.never,
                 isDense: true,
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                contentPadding: dense,
                 border: OutlineInputBorder(),
               ),
               style: theme.textTheme.bodySmall,
@@ -399,25 +621,24 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
               onChanged: _onStatusChanged,
             ),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 4),
 
-          // 검색 입력 필드
+          // 검색 입력 필드 (간단 검색)
           Expanded(
             child: SizedBox(
-              height: 36,
+              height: 32,
               child: TextField(
                 controller: _searchController,
                 decoration: InputDecoration(
-                  hintText: '자산번호/자산명/사용자',
+                  hintText: compact ? '검색' : '자산번호/자산명/사용자',
                   hintStyle: theme.textTheme.bodySmall,
                   isDense: true,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  contentPadding: dense,
                   border: const OutlineInputBorder(),
                   suffixIcon: IconButton(
-                    icon: const Icon(Icons.search, size: 18),
+                    icon: const Icon(Icons.search, size: 16),
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(maxWidth: 32),
+                    constraints: const BoxConstraints(maxWidth: 28),
                     onPressed: () => _onSearch(_searchController.text),
                   ),
                 ),
@@ -427,20 +648,33 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
               ),
             ),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 4),
 
-          // 자산등록 버튼
-          SizedBox(
-            height: 36,
-            child: FilledButton.icon(
-              onPressed: () => context.go('/asset/new'),
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('등록'),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                textStyle: theme.textTheme.labelMedium,
-              ),
-            ),
+          // 고급 검색 버튼
+          _CompactButton(
+            compact: compact,
+            icon: _searchConditions.isEmpty ? Icons.tune : Icons.filter_alt,
+            iconColor: _searchConditions.isEmpty
+                ? null
+                : theme.colorScheme.primary,
+            label: _searchConditions.isEmpty
+                ? '고급 검색'
+                : '조건 ${_searchConditions.length}',
+            tooltip: _searchConditions.isEmpty
+                ? '고급 검색'
+                : '조건 ${_searchConditions.length}개 적용 중',
+            onPressed: _openSearchDialog,
+          ),
+          const SizedBox(width: 4),
+
+          // 자산등록 버튼 (FilledButton)
+          _CompactButton(
+            compact: compact,
+            filled: true,
+            icon: Icons.add,
+            label: '등록',
+            tooltip: '자산 등록',
+            onPressed: () => context.go('/asset/new'),
           ),
         ],
       ),
@@ -633,6 +867,14 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
                   onPressed: () => Navigator.of(context).pop(),
                   child: const Text('취소'),
                 ),
+                TextButton.icon(
+                  onPressed: () {
+                    _resetColumnConfig();
+                    Navigator.of(context).pop();
+                  },
+                  icon: const Icon(Icons.restore, size: 16),
+                  label: const Text('기본값'),
+                ),
                 ElevatedButton(
                   onPressed: visibleCount > 0
                       ? () {
@@ -640,6 +882,7 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
                             _orderedColumns = tempOrder;
                             _columnVisibility = tempVisibility;
                           });
+                          _saveColumnConfig(); // 컬럼 순서/표시 변경 저장
                           Navigator.of(context).pop();
                         }
                       : null,
@@ -725,6 +968,8 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
                       _columnWidths[label] = newWidth.clamp(50, 600);
                     });
                   },
+                  // drag 종료 시점에 한 번만 저장 (Update마다 저장하면 부하)
+                  onHorizontalDragEnd: (_) => _saveColumnConfig(),
                   child: Container(color: Colors.transparent),
                 ),
               ),
@@ -1090,7 +1335,30 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
     return dateFormat.format(value);
   }
 
-  /// 페이지네이션
+  /// 검색된 전체를 끝까지 fetch한 뒤 CSV로 다운로드.
+  Future<void> _downloadCsvAll() async {
+    if (!kIsWeb) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('CSV 내보내기는 웹에서만 지원됩니다.')),
+        );
+      }
+      return;
+    }
+    setState(() => _isExporting = true);
+    try {
+      while (_hasMore && mounted) {
+        await _loadNextPage();
+        await Future.delayed(const Duration(milliseconds: 30));
+      }
+      if (!mounted) return;
+      _downloadCsv();
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
+  /// 현재 로드된 자산 _assets 기반 CSV 다운로드
   void _downloadCsv() {
     final columns = _visibleColumns;
     final buf = StringBuffer();
@@ -1108,14 +1376,17 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
       );
     }
 
-    final bytes = utf8.encode(buf.toString());
-    final blob = html.Blob([bytes], 'text/csv;charset=utf-8');
-    final url = html.Url.createObjectUrlFromBlob(blob);
     final now = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
-    html.AnchorElement(href: url)
-      ..setAttribute('download', 'assets_$now.csv')
-      ..click();
-    html.Url.revokeObjectUrl(url);
+    final filename = 'assets_$now.csv';
+    if (!kIsWeb) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('CSV 내보내기는 웹에서만 지원됩니다.')),
+        );
+      }
+      return;
+    }
+    downloadCsv(buf.toString(), filename);
   }
 
   String _csvEscape(String value) {
@@ -1159,4 +1430,86 @@ class _AssetColumnMeta {
 }
 
 // _AssetUidGuideDialog는 widgets/common/asset_uid_guide_dialog.dart로 이동됨
+
+/// 컴팩트 모드에서는 IconButton + Tooltip, 그 외엔 OutlinedButton.icon (또는 filled)로 라벨까지 표시.
+class _CompactButton extends StatelessWidget {
+  final bool compact;
+  final bool filled;
+  final IconData icon;
+  final Color? iconColor;
+  final String label;
+  final String tooltip;
+  final VoidCallback? onPressed;
+
+  const _CompactButton({
+    required this.compact,
+    required this.icon,
+    required this.label,
+    required this.tooltip,
+    required this.onPressed,
+    this.filled = false,
+    this.iconColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (compact) {
+      final btn = IconButton.outlined(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 18, color: iconColor),
+        tooltip: tooltip,
+        style: IconButton.styleFrom(
+          minimumSize: const Size(32, 32),
+          padding: const EdgeInsets.all(4),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+      );
+      if (filled) {
+        return IconButton.filled(
+          onPressed: onPressed,
+          icon: Icon(icon, size: 18),
+          tooltip: tooltip,
+          style: IconButton.styleFrom(
+            minimumSize: const Size(32, 32),
+            padding: const EdgeInsets.all(4),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        );
+      }
+      return btn;
+    }
+    final style = ButtonStyle(
+      padding: WidgetStateProperty.all(
+        const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+      ),
+      visualDensity: VisualDensity.compact,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      textStyle: WidgetStateProperty.all(
+        Theme.of(context).textTheme.labelSmall,
+      ),
+    );
+    final iconWidget = Icon(icon, size: 16, color: iconColor);
+    final text = Text(label);
+    if (filled) {
+      return SizedBox(
+        height: 32,
+        child: FilledButton.icon(
+          onPressed: onPressed,
+          icon: iconWidget,
+          label: text,
+          style: style,
+        ),
+      );
+    }
+    return SizedBox(
+      height: 32,
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: iconWidget,
+        label: text,
+        style: style,
+      ),
+    );
+  }
+}
 

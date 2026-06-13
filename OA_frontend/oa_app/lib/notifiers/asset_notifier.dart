@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/asset.dart';
+import '../models/search_condition.dart';
 import '../services/api_service.dart';
 import '../constants.dart';
 
@@ -47,7 +48,8 @@ class AssetNotifier extends Notifier<AssetListState> {
     return const AssetListState();
   }
 
-  /// 자산 목록 조회
+  /// 자산 목록 조회 (다중조건 + 서버 정렬).
+  /// 빈 인자는 전달하지 않으면 옛 호출 패턴과 호환.
   Future<void> fetchAssets({
     int page = 1,
     int pageSize = defaultPageSize,
@@ -55,6 +57,9 @@ class AssetNotifier extends Notifier<AssetListState> {
     String? status,
     String? search,
     String? building,
+    List<SearchCondition> conditions = const [],
+    String orderBy = 'id',
+    bool ascending = false,
   }) async {
     state = state.copyWith(isLoading: true);
 
@@ -66,6 +71,9 @@ class AssetNotifier extends Notifier<AssetListState> {
         status: status,
         search: search,
         building: building,
+        conditions: conditions,
+        orderBy: orderBy,
+        ascending: ascending,
       );
 
       final totalPages = (result.total / pageSize).ceil();
@@ -83,23 +91,26 @@ class AssetNotifier extends Notifier<AssetListState> {
     }
   }
 
-  /// 자산 등록 후 목록 새로고침
+  /// 자산 등록 후 캐시 무효화 + 첫 페이지 새로고침
   Future<Asset> createAsset(Map<String, dynamic> data) async {
     final created = await _apiService.createAsset(data);
-    await fetchAssets(page: state.page);
+    ApiService.invalidateAssetsCache();
+    await fetchAssets(page: 1);
     return created;
   }
 
-  /// 자산 수정 후 목록 새로고침
+  /// 자산 수정 후 캐시 무효화 + 현재 페이지 새로고침
   Future<Asset> updateAsset(int id, Map<String, dynamic> data) async {
     final updated = await _apiService.updateAsset(id, data);
+    ApiService.invalidateAssetsCache();
     await fetchAssets(page: state.page);
     return updated;
   }
 
-  /// 자산 삭제 후 목록 새로고침
+  /// 자산 삭제 후 캐시 무효화 + 현재 페이지 새로고침
   Future<void> deleteAsset(int id) async {
     await _apiService.deleteAsset(id);
+    ApiService.invalidateAssetsCache();
     await fetchAssets(page: state.page);
   }
 
@@ -109,6 +120,15 @@ class AssetNotifier extends Notifier<AssetListState> {
       return a.assetUid == updated.assetUid ? updated : a;
     }).toList();
     state = state.copyWith(assets: assets);
+  }
+
+  /// Realtime DELETE 이벤트 수신 시 로컬 목록에서 제거
+  void removeLocal(String assetUid) {
+    final assets = state.assets.where((a) => a.assetUid != assetUid).toList();
+    state = state.copyWith(
+      assets: assets,
+      total: state.total > 0 ? state.total - 1 : 0,
+    );
   }
 }
 

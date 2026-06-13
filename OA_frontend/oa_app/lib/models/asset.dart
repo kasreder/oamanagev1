@@ -36,6 +36,7 @@ class Asset {
   final DateTime? lastActiveAt;
   final DateTime? lastVerifiedAt;
   final String? verificationStatus;
+  final int inspectionRoundNo; // 자산의 마지막 등록 실사 회차 (기본 0)
   final String? assignmentStatus;
   final DateTime? assignmentConfirmedAt;
   final DateTime? createdAt;
@@ -79,6 +80,7 @@ class Asset {
     this.lastActiveAt,
     this.lastVerifiedAt,
     this.verificationStatus,
+    this.inspectionRoundNo = 0,
     this.assignmentStatus,
     this.assignmentConfirmedAt,
     this.createdAt,
@@ -93,7 +95,7 @@ class Asset {
       assetsStatus: json['assets_status'] as String? ?? '가용',
       supplyType: json['supply_type'] as String? ?? '지급',
       supplyEndDate: json['supply_end_date'] != null
-          ? DateTime.parse(json['supply_end_date'] as String)
+          ? DateTime.parse(json['supply_end_date'] as String).toLocal()
           : null,
       category: json['category'] as String,
       serialNumber: json['serial_number'] as String?,
@@ -101,10 +103,10 @@ class Asset {
       vendor: json['vendor'] as String?,
       network: json['network'] as String?,
       physicalCheckDate: json['physical_check_date'] != null
-          ? DateTime.parse(json['physical_check_date'] as String)
+          ? DateTime.parse(json['physical_check_date'] as String).toLocal()
           : null,
       confirmationDate: json['confirmation_date'] != null
-          ? DateTime.parse(json['confirmation_date'] as String)
+          ? DateTime.parse(json['confirmation_date'] as String).toLocal()
           : null,
       normalComment: json['normal_comment'] as String?,
       oaComment: json['oa_comment'] as String?,
@@ -129,21 +131,22 @@ class Asset {
       specifications:
           (json['specifications'] as Map<String, dynamic>?) ?? const {},
       lastActiveAt: json['last_active_at'] != null
-          ? DateTime.parse(json['last_active_at'] as String)
+          ? DateTime.parse(json['last_active_at'] as String).toLocal()
           : null,
       lastVerifiedAt: json['last_verified_at'] != null
-          ? DateTime.parse(json['last_verified_at'] as String)
+          ? DateTime.parse(json['last_verified_at'] as String).toLocal()
           : null,
       verificationStatus: json['verification_status'] as String?,
+      inspectionRoundNo: (json['inspection_round_no'] as int?) ?? 0,
       assignmentStatus: json['assignment_status'] as String?,
       assignmentConfirmedAt: json['assignment_confirmed_at'] != null
-          ? DateTime.parse(json['assignment_confirmed_at'] as String)
+          ? DateTime.parse(json['assignment_confirmed_at'] as String).toLocal()
           : null,
       createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
+          ? DateTime.parse(json['created_at'] as String).toLocal()
           : null,
       updatedAt: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'] as String)
+          ? DateTime.parse(json['updated_at'] as String).toLocal()
           : null,
     );
   }
@@ -227,6 +230,7 @@ class Asset {
     DateTime? lastActiveAt,
     DateTime? lastVerifiedAt,
     String? verificationStatus,
+    int? inspectionRoundNo,
     String? assignmentStatus,
     DateTime? assignmentConfirmedAt,
   }) {
@@ -268,6 +272,7 @@ class Asset {
       lastActiveAt: lastActiveAt ?? this.lastActiveAt,
       lastVerifiedAt: lastVerifiedAt ?? this.lastVerifiedAt,
       verificationStatus: verificationStatus ?? this.verificationStatus,
+      inspectionRoundNo: inspectionRoundNo ?? this.inspectionRoundNo,
       assignmentStatus: assignmentStatus ?? this.assignmentStatus,
       assignmentConfirmedAt: assignmentConfirmedAt ?? this.assignmentConfirmedAt,
       createdAt: createdAt,

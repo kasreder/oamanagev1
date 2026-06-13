@@ -109,11 +109,11 @@ supabase functions serve
 
 ## 구현 현황 (Implementation Status)
 
-> 최종 업데이트: 2026-03-21
+> 최종 업데이트: 2026-06-04
 
 ### 백엔드 (Supabase)
 
-#### DB 마이그레이션 (20건 완료)
+#### DB 마이그레이션 (21건 완료)
 | # | 파일명 | 내용 | 상태 |
 |---|--------|------|------|
 | 1 | `20240201000000_create_users.sql` | users 테이블 생성 | ✅ 완료 |
@@ -136,13 +136,16 @@ supabase functions serve
 | 18 | `20260321000001_add_user_role.sql` | users role 컬럼 + is_admin_group() 함수 | ✅ 완료 |
 | 19 | `20260321000002_create_inspection_rounds.sql` | 전사 실사 라운드(차수) 테이블 + RPC | ✅ 완료 |
 | 20 | `20260321000003_add_round_to_inspections.sql` | asset_inspections round_id + RLS 수정 | ✅ 완료 |
+| 21 | `20260604000000_master_admin_and_force_verify.sql` | 마스터 관리자(`is_master_admin`, 최대 4명) + `admin_force_verify` RPC + user_name 변경 자동 트리거 + notifications Realtime publication | ✅ 완료 |
 
-#### Edge Functions (3건 완료)
+#### Edge Functions
 | 함수명 | 용도 | 상태 |
 |--------|------|------|
 | `auth-kakao` | 카카오 OAuth 토큰 검증 → Supabase Auth 세션 생성 | ✅ 완료 |
 | `dashboard-stats` | 홈 대시보드 통계 (총 자산/실사율/미검증/만료 임박) | ✅ 완료 |
 | `expiring-assets` | 만료 임박 자산 상세 목록 (D-7 이내) | ✅ 완료 |
+| `main` (라우터) | 단일 진입 dispatcher (`/functions/v1/<name>`), `send-notification` inline 호스팅 | ✅ 완료 |
+| `send-notification` | 알림 발송 (현재 미사용 — Realtime로 대체) | 보존 |
 
 #### 기타 백엔드
 | 항목 | 상태 |
@@ -153,6 +156,9 @@ supabase functions serve
 | 사용자 역할 체계 (admin, operator1, operator2, user) | ✅ 완료 |
 | 전사 실사 라운드(차수) 관리 (생성/시작/종료 RPC) | ✅ 완료 |
 | 테스트 시드 데이터 (seed.sql — 9개 계정, 역할별) | ✅ 완료 |
+| 마스터 관리자 시스템 (`is_master_admin`, 최대 4명, role=admin 한정) | ✅ 완료 |
+| 관리자 강제 재확인 (`admin_force_verify` RPC) | ✅ 완료 |
+| Realtime publication에 `notifications` 포함 (FCM 미사용) | ✅ 완료 |
 
 ---
 
@@ -239,8 +245,8 @@ supabase functions serve
 
 | 영역 | 파일 수 |
 |------|---------|
-| 백엔드 마이그레이션 (SQL) | 20 |
-| Edge Functions (TypeScript) | 3 |
+| 백엔드 마이그레이션 (SQL) | 21 |
+| Edge Functions (TypeScript) | 5 (main 라우터 포함) |
 | 프론트엔드 Dart 소스 | 48+ |
 | 웹 OCR 번들 (Tesseract.js) | 5 |
 | **총 소스 파일** | **76+** |
@@ -259,6 +265,7 @@ supabase functions serve
 8. **Realtime**: 자산/실사 변경 실시간 WebSocket 구독, 에이전트 Presence/Broadcast
 9. **OCR**: 디바이스 라벨 자동 인식 (모바일: Google ML Kit, 웹: Tesseract.js 로컬 번들), 사진촬영/갤러리 선택, 매칭 실패 시 직접 편집, 단어별 탭 복사
 10. **에이전트 연동**: Heartbeat 수신, 시스템 정보 실시간 동기화, Presence 상태 모니터링
+11. **마스터 관리자 + 자동 재확인 알림**: admin 권한 사용자 중 최대 4명을 마스터로 지정 → 마스터가 자산 `user_name` 변경 시 `verification_status` 자동 초기화 + `notifications` 자동 삽입 → 에이전트가 Realtime 구독으로 즉시 수신 → Android 시스템 알림 표시. 관리자는 자산 상세에서 "관리자 재확인 요청" 버튼으로도 강제 호출 가능.
 
 ## 버전 관리
 
@@ -269,6 +276,15 @@ supabase functions serve
 
 ### 변경 이력
 
+- `2026-06-04` :
+  - 도메인 변경: API 호스트를 `api.oa.terraforming.info` → `apioa.terraforming.info`로 변경 (.env / docker-compose Traefik / Agent `AgentConfig.SUPABASE_URL` / Agent README 일괄 반영)
+  - 테스트 계정 비밀번호 소문자 통일 (`Temp1234!` → `temp1234!`, `Admin1234!` → `admin1234!`, `Oper1234!` → `oper1234!`, `User1234!` → `user1234!`)
+  - 마이그레이션 #21 추가: 마스터 관리자(`users.is_master_admin`, 최대 4명, role=admin 한정), `admin_force_verify(asset_uid)` RPC, `assets` UPDATE 트리거(마스터가 user_name 변경 시 자동 reset+notification), `notifications` 테이블 Realtime publication 추가
+  - 푸시 전략: Firebase 의존 제거. 알림 전달은 Supabase Realtime(notifications INSERT)로 일원화
+  - 에이전트: `RealtimeManager.joinNotificationsChannel()` + 안드로이드 시스템 알림 채널 `admin_alert_channel` 추가, APK 재빌드 (3.2 MB)
+  - 프론트: 에이전트 설정 페이지에 마스터 관리자 카드(현재/한도 표시, 사용자별 토글) + 자산 상세에 "관리자 재확인 요청" 버튼
+  - Edge Function: `main`을 dispatcher로 재구성, `send-notification` 로직 inline (cross-function import 제약 우회)
+  - nginx 캐시 정책 수정: `flutter_service_worker.js` / `main.dart.js` / `flutter_bootstrap.js` / `flutter.js` / `index.html` → no-cache (재배포 즉시 반영). canvaskit/tesseract/font/image는 그대로 1년 immutable
 - `2026-03-21` : 역할 체계 추가 (admin/operator1/operator2/user), 전사 실사 라운드(차수) 관리 기능, 사진 저장 경로 라운드 기반 변경, 고아파일 자동 삭제, 에러 메시지 SelectableText, 앱바 자산번호 부여 기준 전체 적용, QR 웹 카메라 지원, 실시간 OCR 스캔, 테스트 시드 9개 계정 (역할별)
 - `2026-03-20` : 앱 이름 변경 (oa_app → OAManager), OCR 웹 지원 (Tesseract.js 로컬 번들), 실사 사진 촬영 기능 추가, 사진/서명 레이지 로딩, 서명 export 에러 수정, 임시 파일 자동 삭제, Docker Desktop → Colima(macOS)/Docker Engine(Linux), 에이전트 테이블 마이그레이션 4건 추가
 - `2026-02-17` : 구현 현황 섹션 추가 (백엔드 12건 마이그레이션, Edge Function 3건, 프론트엔드 40개 Dart 파일 현황 기록)

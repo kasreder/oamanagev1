@@ -33,6 +33,45 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <!--
+    Service Worker 완전 비활성화 + 옛 SW/캐시 강제 정리.
+    배포 시 캐시 정합성 문제로 SPA를 SW 없이 운영 (nginx no-cache 정책으로 충분).
+    매 페이지 로드마다 동작 (멱등) — 옛 SW 잔존 시 항상 제거.
+  -->
+  <script>
+    (function () {
+      if (!('serviceWorker' in navigator)) return;
+      // 1) Flutter의 자동 SW 등록을 노옵으로 무력화
+      var origRegister = navigator.serviceWorker.register;
+      navigator.serviceWorker.register = function () {
+        return Promise.resolve({ active: null, installing: null, waiting: null, scope: location.origin + '/', update: function () {}, unregister: function () { return Promise.resolve(true); } });
+      };
+      // 2) 기존 등록된 SW 모두 해제
+      navigator.serviceWorker.getRegistrations()
+        .then(function (regs) {
+          if (regs.length === 0) return false;
+          return Promise.all(regs.map(function (r) { return r.unregister(); })).then(function () { return true; });
+        })
+        .then(function (hadOld) {
+          if (typeof caches === 'undefined') return hadOld;
+          return caches.keys().then(function (keys) {
+            return Promise.all(keys.map(function (k) { return caches.delete(k); })).then(function () { return hadOld; });
+          });
+        })
+        .then(function (hadOld) {
+          // 옛 SW가 있었던 경우에만 1회 재로드 (이미 깨끗하면 재로드 안 함)
+          if (hadOld) {
+            var FLAG = '_sw_purged';
+            if (sessionStorage.getItem(FLAG) !== '1') {
+              sessionStorage.setItem(FLAG, '1');
+              location.reload();
+            }
+          }
+        })
+        .catch(function () {});
+    })();
+  </script>
+
   <!-- Tesseract.js OCR (로컬 번들) -->
   <script src="tesseract/tesseract.min.js"></script>
   <script>
@@ -57,6 +96,6 @@
     }
   </script>
 
-  <script src="flutter_bootstrap.js" async></script>
+  <script src="flutter_bootstrap.js?v=__BUILD_ID__" async></script>
 </body>
 </html>

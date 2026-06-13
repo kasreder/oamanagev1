@@ -12,11 +12,13 @@ id spinner_interval
 id tv_agent_version
 id tv_asset_uid_display
 id tv_asset_uid_error
+id tv_employee_id
 id tv_interval
 id tv_last_heartbeat
 id tv_last_verified
 id tv_send_result
 id tv_status
+id tv_user_name
 id tv_verification_status
 layout activity_setup
 mipmap ic_launcher

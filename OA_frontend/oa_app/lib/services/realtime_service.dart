@@ -5,6 +5,7 @@ import '../models/asset.dart';
 import '../notifiers/asset_notifier.dart';
 import '../notifiers/agent_presence_notifier.dart';
 import '../notifiers/agent_alert_notifier.dart';
+import 'api_service.dart';
 
 /// Supabase Realtime 구독 총괄 관리
 ///
@@ -49,7 +50,7 @@ class RealtimeService {
   // ---------------------------------------------------------------------------
 
   void _subscribePostgresChanges() {
-    // assets 테이블 UPDATE 이벤트
+    // assets 테이블 UPDATE/INSERT/DELETE 이벤트
     _assetsChannel = _client
         .channel('assets-realtime')
         .onPostgresChanges(
@@ -60,9 +61,36 @@ class RealtimeService {
             try {
               final updated = Asset.fromJson(payload.newRecord);
               _ref.read(assetNotifierProvider.notifier).updateLocal(updated);
+              ApiService.invalidateAssetsCache();
             } catch (_) {
               // JSON 파싱 실패 시 무시
             }
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'assets',
+          callback: (payload) {
+            // 새 자산은 현재 필터/페이지에 맞춰 재fetch가 가장 안전
+            ApiService.invalidateAssetsCache();
+            final notifier = _ref.read(assetNotifierProvider.notifier);
+            final state = _ref.read(assetNotifierProvider);
+            notifier.fetchAssets(page: state.page);
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.delete,
+          schema: 'public',
+          table: 'assets',
+          callback: (payload) {
+            try {
+              final deletedUid = payload.oldRecord['asset_uid'] as String?;
+              if (deletedUid != null) {
+                _ref.read(assetNotifierProvider.notifier).removeLocal(deletedUid);
+              }
+              ApiService.invalidateAssetsCache();
+            } catch (_) {}
           },
         )
         .subscribe();

@@ -49,6 +49,9 @@ class RealtimeManager(
     // 명령 수신 콜백
     private var commandHandler: ((command: String, params: JsonObject) -> Unit)? = null
 
+    // notifications 테이블 INSERT 수신 콜백 (관리자 재확인 요청 등)
+    private var notificationHandler: ((record: JsonObject) -> Unit)? = null
+
     private val json = Json { ignoreUnknownKeys = true }
 
     // ─── 연결 ────────────────────────────────────────────────────────────
@@ -137,6 +140,27 @@ class RealtimeManager(
     }
 
     /**
+     * notifications 테이블 INSERT를 구독합니다 (자신의 asset_uid 한정).
+     * 관리자 재확인 요청 등 서버 발생 알림을 실시간 수신합니다.
+     */
+    suspend fun joinNotificationsChannel(assetUid: String) {
+        val topic = "realtime:notifications:$assetUid"
+        sendPhoenixMessage(topic, "phx_join", buildJsonObject {
+            put("config", buildJsonObject {
+                put("postgres_changes", buildJsonArray {
+                    add(buildJsonObject {
+                        put("event", "INSERT")
+                        put("schema", "public")
+                        put("table", "notifications")
+                        put("filter", "asset_uid=eq.$assetUid")
+                    })
+                })
+            })
+        })
+        joinedChannels.add(topic)
+    }
+
+    /**
      * 알림 발신 채널(`agent-alerts:global`)에 참여합니다.
      */
     suspend fun joinAlertChannel() {
@@ -182,6 +206,14 @@ class RealtimeManager(
      */
     fun onCommand(handler: (command: String, params: JsonObject) -> Unit) {
         commandHandler = handler
+    }
+
+    /**
+     * notifications INSERT 수신 시 호출될 콜백을 등록합니다.
+     * record: { id, asset_uid, type, title, body, sent_at, ... }
+     */
+    fun onNotification(handler: (record: JsonObject) -> Unit) {
+        notificationHandler = handler
     }
 
     // ─── Phoenix 프로토콜 내부 ──────────────────────────────────────────
@@ -246,6 +278,14 @@ class RealtimeManager(
                     val command = cmdPayload["command"]?.jsonPrimitive?.content ?: return
                     val params = cmdPayload["params"]?.jsonObject ?: buildJsonObject {}
                     commandHandler?.invoke(command, params)
+                }
+            } else if (event == "postgres_changes") {
+                val data = payload["data"]?.jsonObject ?: return
+                val type = data["type"]?.jsonPrimitive?.content
+                val table = data["table"]?.jsonPrimitive?.content
+                if (type == "INSERT" && table == "notifications") {
+                    val record = data["record"]?.jsonObject ?: return
+                    notificationHandler?.invoke(record)
                 }
             }
         } catch (_: Exception) {

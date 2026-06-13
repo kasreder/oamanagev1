@@ -44,6 +44,7 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
   InspectionRound? _activeRound;
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _isLocking = false;
   bool _isUploadingPhoto = false;
   String? _error;
 
@@ -187,6 +188,83 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
     }
   }
 
+  /// N차 등록 — 잠금
+  Future<void> _lockInspection() async {
+    final round = _activeRound?.round;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(round != null ? '${round}차 등록' : '실사 등록'),
+        content: const Text(
+          '등록 후에는 일반 사용자가 수정할 수 없습니다. 계속하시겠습니까?',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('등록')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _isLocking = true);
+    try {
+      await _api.setInspectionLocked(widget.inspectionId, true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('등록되었습니다.')),
+        );
+        _loadInspection();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: SelectableText('등록 실패: ${e.toString()}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLocking = false);
+    }
+  }
+
+  /// N차 등록취소 — 잠금 해제 (admin만)
+  Future<void> _unlockInspection() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('등록 취소'),
+        content: const Text('등록을 취소하면 다시 수정 가능 상태가 됩니다. 계속하시겠습니까?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('아니오')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('등록취소')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _isLocking = true);
+    try {
+      await _api.setInspectionLocked(widget.inspectionId, false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('등록이 취소되었습니다.')),
+        );
+        _loadInspection();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: SelectableText('취소 실패: ${e.toString()}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLocking = false);
+    }
+  }
+
   /// 사진 촬영 및 업로드
   Future<void> _captureAndUploadPhoto() async {
     final picker = ImagePicker();
@@ -278,13 +356,20 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
     final theme = Theme.of(context);
     final ins = _inspection!;
     final isCompleted = ins.completed;
-    final readOnly = isCompleted;
+    final readOnly = isCompleted || ins.locked;
 
-    // 촬영 권한: 관리자 그룹이거나 활성 라운드가 있을 때
+    // 권한
     final authState = ref.read(authNotifierProvider);
     final currentUser = authState.valueOrNull?.user;
     final isAdminGroup = currentUser?.isAdminGroup ?? false;
+    final isAdmin = currentUser?.isAdmin ?? false;
     final canCapture = isAdminGroup || _activeRound != null;
+
+    // N차 등록 라벨용 — 이 inspection이 속한 라운드 번호 우선, 없으면 현재 활성 라운드
+    final roundNumber = (_activeRound?.id == ins.roundId
+            ? _activeRound?.round
+            : null) ??
+        _activeRound?.round;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -628,9 +713,28 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
         ),
         const SizedBox(height: 32),
 
-        // ── 액션 버튼 ──
-        if (!isCompleted) ...[
-          // 저장 버튼
+        // ── 액션 버튼 ── 순서: 사인하기 → 저장 → 자산상세 → N차 등록/취소
+
+        // 1) 사인하기 (활성 라운드 있을 때 + locked 아니면)
+        if (canCapture && !readOnly) ...[
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: FilledButton.tonalIcon(
+              onPressed: () {
+                context.go('/signature', extra: {
+                  'inspectionId': widget.inspectionId,
+                });
+              },
+              icon: const Icon(Icons.draw),
+              label: Text(ins.signatureImage != null ? '서명 다시 하기' : '사인하기'),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+
+        // 2) 저장 (잠금 아닐 때 — admin은 잠금이어도 가능)
+        if (!readOnly || isAdmin) ...[
           SizedBox(
             width: double.infinity,
             height: 48,
@@ -649,25 +753,8 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
           const SizedBox(height: 12),
         ],
 
-        // 사인하기 버튼 (관리자 그룹이거나 활성 라운드가 있을 때만)
-        if (canCapture)
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: FilledButton.tonalIcon(
-              onPressed: () {
-                context.go('/signature', extra: {
-                  'inspectionId': widget.inspectionId,
-                });
-              },
-              icon: const Icon(Icons.draw),
-              label: Text(ins.signatureImage != null ? '서명 다시 하기' : '사인하기'),
-            ),
-          ),
-
-        // 자산 상세 이동
+        // 3) 자산 상세 이동
         if (ins.assetId != null) ...[
-          const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             height: 48,
@@ -675,6 +762,59 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
               onPressed: () => context.go('/asset/${ins.assetId}'),
               icon: const Icon(Icons.devices),
               label: const Text('자산 상세 보기'),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+
+        // 4) N차 등록 / N차 등록취소
+        if (ins.locked) ...[
+          // 잠금됨 — admin만 등록취소 가능
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: FilledButton.icon(
+              onPressed: isAdmin ? _unlockInspection : null,
+              icon: const Icon(Icons.lock_open),
+              label: Text(
+                roundNumber != null
+                    ? '${roundNumber}차 등록취소'
+                    : '실사 등록취소',
+              ),
+              style: FilledButton.styleFrom(
+                backgroundColor: theme.colorScheme.error,
+                foregroundColor: theme.colorScheme.onError,
+              ),
+            ),
+          ),
+          if (!isAdmin)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                '관리자만 등록취소할 수 있습니다.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+        ] else if (_activeRound != null) ...[
+          // 활성 라운드가 있을 때만 등록 가능
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: FilledButton.icon(
+              onPressed: _isLocking ? null : _lockInspection,
+              icon: _isLocking
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.lock),
+              label: Text(
+                roundNumber != null ? '${roundNumber}차 등록' : '실사 등록',
+              ),
             ),
           ),
         ],
