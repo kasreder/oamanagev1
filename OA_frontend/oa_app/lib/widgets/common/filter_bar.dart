@@ -4,15 +4,11 @@ import '../../constants.dart';
 
 /// 자산 목록에서 사용하는 필터/검색 바 위젯.
 ///
-/// - 카테고리 드롭다운 (12개, constants.dart)
-/// - 상태 드롭다운 (5개, constants.dart)
+/// - 카테고리 드롭다운
 /// - 검색 TextField
 class FilterBar extends StatefulWidget {
   /// 카테고리 변경 콜백 (null → 전체)
   final ValueChanged<String?> onCategoryChanged;
-
-  /// 상태 변경 콜백 (null → 전체)
-  final ValueChanged<String?> onStatusChanged;
 
   /// 검색어 변경 콜백
   final ValueChanged<String> onSearchChanged;
@@ -26,7 +22,6 @@ class FilterBar extends StatefulWidget {
   const FilterBar({
     super.key,
     required this.onCategoryChanged,
-    required this.onStatusChanged,
     required this.onSearchChanged,
     this.buildings,
     this.onBuildingChanged,
@@ -38,7 +33,6 @@ class FilterBar extends StatefulWidget {
 
 class _FilterBarState extends State<FilterBar> {
   String? _selectedCategory;
-  String? _selectedStatus;
   String? _selectedBuilding;
   final _searchController = TextEditingController();
 
@@ -63,7 +57,7 @@ class _FilterBarState extends State<FilterBar> {
             child: DropdownButtonFormField<String>(
               value: _selectedCategory,
               decoration: const InputDecoration(
-                labelText: '카테고리',
+                labelText: '자산종류',
                 border: OutlineInputBorder(),
                 contentPadding:
                     EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -85,38 +79,6 @@ class _FilterBarState extends State<FilterBar> {
               onChanged: (value) {
                 setState(() => _selectedCategory = value);
                 widget.onCategoryChanged(value);
-              },
-            ),
-          ),
-
-          // 상태 드롭다운
-          SizedBox(
-            width: 140,
-            child: DropdownButtonFormField<String>(
-              value: _selectedStatus,
-              decoration: const InputDecoration(
-                labelText: '상태',
-                border: OutlineInputBorder(),
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                isDense: true,
-              ),
-              isExpanded: true,
-              items: [
-                const DropdownMenuItem<String>(
-                  value: null,
-                  child: Text('전체'),
-                ),
-                ...assetStatuses.map(
-                  (status) => DropdownMenuItem<String>(
-                    value: status,
-                    child: Text(status),
-                  ),
-                ),
-              ],
-              onChanged: (value) {
-                setState(() => _selectedStatus = value);
-                widget.onStatusChanged(value);
               },
             ),
           ),

@@ -115,8 +115,8 @@ class _DrawingViewerPageState extends ConsumerState<DrawingViewerPage> {
             ),
             const Divider(),
             _infoRow('자산번호', asset.assetUid),
-            _infoRow('카테고리', asset.category),
-            _infoRow('상태', asset.assetsStatus),
+            _infoRow('자산종류', asset.category),
+            _infoRow('지급형태', asset.supplyType),
             _infoRow('사용자', asset.userName ?? '-'),
             _infoRow('부서', asset.userDepartment ?? '-'),
             if (asset.locationRow != null && asset.locationCol != null)

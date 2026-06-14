@@ -155,7 +155,7 @@ class AppScaffold extends ConsumerWidget {
           if (user != null && user.isAdminGroup) ...[
             const Divider(),
             _buildDrawerItem(
-                context, Icons.settings, '에이전트 설정', '/admin/settings'),
+                context, Icons.settings, '설정', '/admin/settings'),
           ],
           const Divider(),
           SwitchListTile(

@@ -1,6 +1,6 @@
 -- Merging decision tree log ---
 provider#androidx.startup.InitializationProvider
-INJECTED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:20:9-28:20
+INJECTED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:21:9-29:20
 REJECTED from [androidx.work:work-runtime:2.9.0] /home/kminer/.gradle/caches/transforms-3/b86a20e599037961735073324d5f4835/transformed/work-runtime-2.9.0/AndroidManifest.xml:29:9-37:20
 MERGED from [androidx.emoji2:emoji2:1.2.0] /home/kminer/.gradle/caches/transforms-3/01a1b8cd2bef295b729991e6b0c4c0b0/transformed/emoji2-1.2.0/AndroidManifest.xml:24:9-32:20
 MERGED from [androidx.emoji2:emoji2:1.2.0] /home/kminer/.gradle/caches/transforms-3/01a1b8cd2bef295b729991e6b0c4c0b0/transformed/emoji2-1.2.0/AndroidManifest.xml:24:9-32:20
@@ -11,19 +11,19 @@ MERGED from [androidx.profileinstaller:profileinstaller:1.3.0] /home/kminer/.gra
 MERGED from [androidx.startup:startup-runtime:1.1.1] /home/kminer/.gradle/caches/transforms-3/fe43bd2e6506e021be6c6e4ae355b7fb/transformed/startup-runtime-1.1.1/AndroidManifest.xml:26:9-30:34
 MERGED from [androidx.startup:startup-runtime:1.1.1] /home/kminer/.gradle/caches/transforms-3/fe43bd2e6506e021be6c6e4ae355b7fb/transformed/startup-runtime-1.1.1/AndroidManifest.xml:26:9-30:34
 	tools:node
-		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:23:13-32
+		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:24:13-32
 	android:authorities
 		INJECTED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml
-		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:22:13-68
+		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:23:13-68
 	android:exported
 		ADDED from [androidx.emoji2:emoji2:1.2.0] /home/kminer/.gradle/caches/transforms-3/01a1b8cd2bef295b729991e6b0c4c0b0/transformed/emoji2-1.2.0/AndroidManifest.xml:27:13-37
 	android:name
-		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:21:13-67
+		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:22:13-67
 manifest
-ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:2:1-54:12
-INJECTED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:2:1-54:12
-INJECTED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:2:1-54:12
-INJECTED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:2:1-54:12
+ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:2:1-55:12
+INJECTED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:2:1-55:12
+INJECTED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:2:1-55:12
+INJECTED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:2:1-55:12
 MERGED from [:shared] /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/shared/build/intermediates/merged_manifest/debug/AndroidManifest.xml:2:1-7:12
 MERGED from [com.google.android.material:material:1.11.0] /home/kminer/.gradle/caches/transforms-3/8bf998aafbf6e844aa98d3bf01b59d55/transformed/material-1.11.0/AndroidManifest.xml:17:1-24:12
 MERGED from [androidx.appcompat:appcompat-resources:1.6.1] /home/kminer/.gradle/caches/transforms-3/c42859ff36cef6f73db10db7801e1185/transformed/appcompat-resources-1.6.1/AndroidManifest.xml:17:1-22:12
@@ -123,9 +123,13 @@ uses-permission#android.permission.POST_NOTIFICATIONS
 ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:11:5-77
 	android:name
 		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:11:22-74
+uses-permission#android.permission.READ_PHONE_STATE
+ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:12:5-75
+	android:name
+		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:12:22-72
 application
-ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:13:5-53:19
-INJECTED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:13:5-53:19
+ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:14:5-54:19
+INJECTED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:14:5-54:19
 MERGED from [com.google.android.material:material:1.11.0] /home/kminer/.gradle/caches/transforms-3/8bf998aafbf6e844aa98d3bf01b59d55/transformed/material-1.11.0/AndroidManifest.xml:22:5-20
 MERGED from [com.google.android.material:material:1.11.0] /home/kminer/.gradle/caches/transforms-3/8bf998aafbf6e844aa98d3bf01b59d55/transformed/material-1.11.0/AndroidManifest.xml:22:5-20
 MERGED from [androidx.constraintlayout:constraintlayout:2.0.1] /home/kminer/.gradle/caches/transforms-3/f33b0e55eef25a692017c14cf9f2b535/transformed/constraintlayout-2.0.1/AndroidManifest.xml:9:5-20
@@ -151,61 +155,61 @@ MERGED from [androidx.startup:startup-runtime:1.1.1] /home/kminer/.gradle/caches
 	android:appComponentFactory
 		ADDED from [androidx.core:core:1.9.0] /home/kminer/.gradle/caches/transforms-3/8d74a6feef9c1955090f1532e0d03814/transformed/core-1.9.0/AndroidManifest.xml:28:18-86
 	android:label
-		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:17:9-41
+		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:18:9-41
 	android:icon
-		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:16:9-43
+		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:17:9-43
 	android:allowBackup
-		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:15:9-36
+		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:16:9-36
 	android:theme
-		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:18:9-45
+		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:19:9-45
 	android:name
-		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:14:9-62
+		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:15:9-62
 activity#com.oamanager.agent.android.ui.SetupActivity
-ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:30:9-38:20
+ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:31:9-39:20
 	android:label
-		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:33:13-45
+		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:34:13-45
 	android:exported
-		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:32:13-36
+		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:33:13-36
 	android:name
-		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:31:13-72
+		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:32:13-72
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
-ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:34:13-37:29
+ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:35:13-38:29
 action#android.intent.action.MAIN
-ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:35:17-69
+ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:36:17-69
 	android:name
-		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:35:25-66
+		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:36:25-66
 category#android.intent.category.LAUNCHER
-ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:36:17-77
+ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:37:17-77
 	android:name
-		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:36:27-74
+		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:37:27-74
 service#com.oamanager.agent.android.service.HeartbeatForegroundService
-ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:40:9-43:56
+ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:41:9-44:56
 	android:exported
-		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:42:13-37
+		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:43:13-37
 	android:foregroundServiceType
-		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:43:13-53
+		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:44:13-53
 	android:name
-		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:41:13-90
+		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:42:13-90
 receiver#com.oamanager.agent.android.receiver.BootReceiver
-ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:45:9-51:20
+ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:46:9-52:20
 	android:exported
-		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:47:13-36
+		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:48:13-36
 	android:name
-		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:46:13-77
+		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:47:13-77
 intent-filter#action:name:android.intent.action.BOOT_COMPLETED
-ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:48:13-50:29
+ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:49:13-51:29
 action#android.intent.action.BOOT_COMPLETED
-ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:49:17-79
+ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:50:17-79
 	android:name
-		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:49:25-76
+		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:50:25-76
 meta-data#androidx.work.WorkManagerInitializer
-ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:24:13-27:39
+ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:25:13-28:39
 	tools:node
-		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:27:17-36
+		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:28:17-36
 	android:value
-		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:26:17-49
+		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:27:17-49
 	android:name
-		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:25:17-68
+		ADDED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml:26:17-68
 uses-sdk
 INJECTED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from /home/kminer/docker-workdir/OAManager260319/oamanagev1/Agent/android/app/src/main/AndroidManifest.xml

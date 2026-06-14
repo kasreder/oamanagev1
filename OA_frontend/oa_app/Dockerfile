@@ -24,17 +24,23 @@ RUN flutter build web --release \
     --dart-define=SUPABASE_URL=${SUPABASE_URL} \
     --dart-define=SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
 
-# main.dart.js / flutter_bootstrap.js는 CDN에 강하게 캐시될 수 있어,
-# 배포마다 파일명/쿼리를 바꿔 캐시를 우회한다.
-RUN set -eux; \
-    build_id="$(date +%s)"; \
-    main_cache_bust="main.${build_id}.dart.js"; \
-    bootstrap_cache_bust="flutter_bootstrap.${build_id}.js"; \
-    cp /app/build/web/main.dart.js "/app/build/web/${main_cache_bust}"; \
-    cp /app/build/web/flutter_bootstrap.js "/app/build/web/${bootstrap_cache_bust}"; \
-    sed -i "s#\"mainJsPath\":\"main.dart.js\"#\"mainJsPath\":\"${main_cache_bust}\"#g" "/app/build/web/${bootstrap_cache_bust}"; \
-    sed -i "s#flutter_bootstrap.js?v=__BUILD_ID__#${bootstrap_cache_bust}#g" /app/build/web/index.html; \
-    rm /app/build/web/main.dart.js /app/build/web/flutter_bootstrap.js
+# 캐시 무효화 패턴(main.<id>.dart.js) 제거됨.
+# 캐시 정책은 nginx.conf의 no-cache 헤더에 일임.
+# index.html의 placeholder만 정리.
+RUN sed -i 's#flutter_bootstrap.js?v=__BUILD_ID__#flutter_bootstrap.js#g' /app/build/web/index.html || true
+
+# Flutter가 생성한 SW를 자가 소멸 SW로 교체 (옛 SW가 새 SW를 받은 직후 자기 자신 unregister)
+RUN cat > /app/build/web/flutter_service_worker.js <<'EOF_SW'
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+      .then(() => self.registration.unregister())
+      .then(() => self.clients.matchAll())
+      .then((clients) => clients.forEach((c) => c.navigate(c.url)))
+  );
+});
+EOF_SW
 
 # 정적 파일 사전 gzip 압축 (nginx gzip_static 서빙용)
 RUN find /app/build/web -type f \( \

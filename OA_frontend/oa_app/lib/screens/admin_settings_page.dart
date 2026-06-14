@@ -21,12 +21,18 @@ class AdminSettingsPage extends ConsumerStatefulWidget {
   ConsumerState<AdminSettingsPage> createState() => _AdminSettingsPageState();
 }
 
-class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage> {
+class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage>
+    with SingleTickerProviderStateMixin {
   final ApiService _api = ApiService();
 
   bool _isLoading = true;
   String? _error;
   List<Map<String, dynamic>> _settings = [];
+
+  // 유저 정보 탭
+  List<Map<String, dynamic>> _users = [];
+  String? _usersLoadError;
+  bool _usersLoading = false;
 
   // heartbeat_interval 전용
   int _heartbeatInterval = 5;
@@ -49,6 +55,104 @@ class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage> {
     _loadSettings();
     _loadAdmins();
     _loadRounds();
+    _loadUsers();
+  }
+
+  Future<void> _loadUsers() async {
+    setState(() => _usersLoading = true);
+    try {
+      // RLS: 일반 user는 자기 행만 보이도록 정책이 잡혀 있어야 함.
+      // 관리자/마스터관리자는 RLS 정책에서 전체 허용.
+      final rows = await Supabase.instance.client
+          .from('users')
+          .select(
+              'id, employee_id, employee_name, role, is_master_admin, organization_dept, created_at')
+          .order('role', ascending: false)
+          .order('employee_id');
+      if (!mounted) return;
+      setState(() {
+        _users = List<Map<String, dynamic>>.from(rows as List);
+        _usersLoadError = null;
+        _usersLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _usersLoadError = e.toString();
+        _usersLoading = false;
+      });
+    }
+  }
+
+  /// role 변경 — 관리자 그룹만 사용.
+  Future<void> _updateUserRole(String employeeId, String role) async {
+    try {
+      await Supabase.instance.client
+          .from('users')
+          .update({'role': role})
+          .eq('employee_id', employeeId);
+      // 권한이 admin이 아니면 is_master_admin도 false로 자동 정리
+      if (role != 'admin') {
+        await Supabase.instance.client
+            .from('users')
+            .update({'is_master_admin': false})
+            .eq('employee_id', employeeId);
+      }
+      await Future.wait([_loadUsers(), _loadAdmins()]);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$employeeId 권한이 $role 로 변경되었습니다.')),
+      );
+    } on PostgrestException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('변경 실패: ${e.message}'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: SelectableText('변경 실패: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
+  Future<void> _resetUserPassword(String employeeId) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('$employeeId 비번 초기화'),
+        content: Text('$employeeId 의 비밀번호를 [$employeeId' '1234!]로 초기화합니다. 계속하시겠습니까?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('초기화')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await Supabase.instance.client.rpc(
+        'admin_reset_user_password',
+        params: {'p_employee_id': employeeId},
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$employeeId 비번 초기화 완료')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: SelectableText('초기화 실패: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
   }
 
   Future<void> _loadRounds() async {
@@ -93,7 +197,7 @@ class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage> {
           .from('users')
           .update({'is_master_admin': value})
           .eq('employee_id', employeeId);
-      await _loadAdmins();
+      await Future.wait([_loadAdmins(), _loadUsers()]);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(value
@@ -174,28 +278,453 @@ class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage> {
     final authState = ref.watch(authNotifierProvider);
     final user = authState.valueOrNull?.user;
     final isAdmin = user?.isAdminGroup ?? false;
+    final tabs = <Tab>[
+      const Tab(text: '시스템 설정', icon: Icon(Icons.settings, size: 18)),
+      const Tab(text: '유저 정보', icon: Icon(Icons.people, size: 18)),
+      if (isAdmin)
+        const Tab(text: '아이디 생성', icon: Icon(Icons.person_add, size: 18)),
+      if (isAdmin)
+        const Tab(text: '권한 관리', icon: Icon(Icons.shield, size: 18)),
+    ];
 
     return AppScaffold(
-      title: '에이전트 설정',
+      title: '설정',
       showPrimaryNav: false,
-      body: Builder(
-        builder: (ctx) {
-          try {
-            return _buildBody(ctx, isAdmin, user);
-          } catch (e, st) {
-            return AppErrorWidget(
-              message: '본문 빌드 실패: $e',
-              onRetry: () {
-                // ignore: avoid_print
-                print('[admin_settings] build error: $e\n$st');
-                _loadSettings();
-                _loadAdmins();
-              },
-            );
-          }
-        },
+      body: DefaultTabController(
+        length: tabs.length,
+        child: Column(
+          children: [
+            Container(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              child: TabBar(tabs: tabs),
+            ),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  _buildSystemTab(context, isAdmin, user),
+                  _buildUsersTab(context, user),
+                  if (isAdmin) _buildCreateUserTab(context, user),
+                  if (isAdmin) _buildPermissionsTab(context),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  // ── 권한 관리 탭 (관리자 그룹 전용) ────────────────────────────────────────
+  static const List<_Role> _roles = [
+    _Role('master', '마스터관리자', Colors.red),
+    _Role('admin', '관리자', Colors.blue),
+    _Role('operator1', '운영자1', Colors.teal),
+    _Role('operator2', '운영자2', Colors.teal),
+    _Role('user', '일반', Colors.grey),
+  ];
+
+  /// 권한 매트릭스 — 코드/RLS의 실제 검사 흐름을 토대로 정리.
+  /// 값: true=허용, false=차단, null=조건부 (셀에 △ 표시)
+  static const List<_Permission> _permissions = [
+    // 일반 사용
+    _Permission('자산 목록 조회', {
+      'master': true, 'admin': true, 'operator1': true,
+      'operator2': true, 'user': true,
+    }),
+    _Permission('자산 등록/수정/삭제', {
+      'master': true, 'admin': true, 'operator1': true,
+      'operator2': true, 'user': false,
+    }),
+    _Permission('자산 CSV 내보내기', {
+      'master': true, 'admin': true, 'operator1': true,
+      'operator2': true, 'user': false,
+    }),
+    _Permission('실사 회차 생성/시작/종료/삭제', {
+      'master': true, 'admin': true, 'operator1': false,
+      'operator2': false, 'user': false,
+    }),
+    _Permission('실사 등록 (잠금)', {
+      'master': true, 'admin': true, 'operator1': true,
+      'operator2': true, 'user': null,
+    }),
+    _Permission('실사 등록취소 (잠금 해제)', {
+      'master': true, 'admin': true, 'operator1': false,
+      'operator2': false, 'user': false,
+    }),
+    _Permission('재실사 요청', {
+      'master': true, 'admin': true, 'operator1': true,
+      'operator2': true, 'user': true,
+    }),
+    // 사용자/권한 관리
+    _Permission('사용자 생성', {
+      'master': true, 'admin': true, 'operator1': false,
+      'operator2': false, 'user': false,
+    }),
+    _Permission('사용자 비번 초기화', {
+      'master': true, 'admin': true, 'operator1': true,
+      'operator2': true, 'user': false,
+    }),
+    _Permission('사용자 권한 변경', {
+      'master': true, 'admin': true, 'operator1': true,
+      'operator2': true, 'user': false,
+    }),
+    _Permission('마스터 관리자 지정 (최대 4명)', {
+      'master': true, 'admin': null, 'operator1': false,
+      'operator2': false, 'user': false,
+    }),
+    // 시스템
+    _Permission('설정 페이지 접근', {
+      'master': true, 'admin': true, 'operator1': true,
+      'operator2': true, 'user': false,
+    }),
+    _Permission('Heartbeat/Agent 설정 변경', {
+      'master': true, 'admin': true, 'operator1': false,
+      'operator2': false, 'user': false,
+    }),
+    _Permission('알림(notifications) 발송', {
+      'master': true, 'admin': true, 'operator1': true,
+      'operator2': true, 'user': false,
+    }),
+  ];
+
+  Widget _buildPermissionsTab(BuildContext context) {
+    final theme = Theme.of(context);
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text(
+          '권한 그룹별 기능 매트릭스',
+          style: theme.textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          '○ 허용 / ✗ 차단 / △ 조건부 (활성 회차 등 추가 조건 필요)',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          clipBehavior: Clip.antiAlias,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              headingRowColor: WidgetStateProperty.all(
+                theme.colorScheme.surfaceContainerHighest,
+              ),
+              columns: [
+                const DataColumn(
+                  label: Text('기능',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                ..._roles.map(
+                  (r) => DataColumn(
+                    label: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: r.color.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            r.label,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: r.color,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              rows: _permissions.map((p) {
+                return DataRow(cells: [
+                  DataCell(Text(p.label,
+                      style: const TextStyle(fontSize: 13))),
+                  ..._roles.map((r) {
+                    final v = p.allowed[r.code];
+                    final label = v == true ? '○' : (v == false ? '✗' : '△');
+                    final color = v == true
+                        ? Colors.green
+                        : (v == false
+                            ? theme.colorScheme.outline
+                            : Colors.orange);
+                    return DataCell(
+                      Center(
+                        child: Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: color,
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ]);
+              }).toList(),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          color: theme.colorScheme.surfaceContainerLow,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('그룹 정의', style: theme.textTheme.titleSmall),
+                const SizedBox(height: 6),
+                _legendRow(theme, '마스터관리자',
+                    'role=admin AND is_master_admin=true. 최대 4명. 마스터 지정/해제 권한 보유.'),
+                _legendRow(theme, '관리자(admin)',
+                    'admin. 모든 운영 기능. 마스터관리자만이 마스터 지정 가능.'),
+                _legendRow(theme, '운영자(operator1/2)',
+                    'isAdminGroup에 포함. 일반 운영 — 회차/lock 해제 등 일부 제한.'),
+                _legendRow(theme, '일반(user)',
+                    '읽기 위주. 본인 실사는 회차 중에만 등록.'),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _legendRow(ThemeData theme, String name, String desc) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: RichText(
+        text: TextSpan(
+          style: theme.textTheme.bodySmall,
+          children: [
+            TextSpan(
+              text: '$name — ',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            TextSpan(
+              text: desc,
+              style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSystemTab(BuildContext ctx, bool isAdmin, app_user.User? user) {
+    try {
+      return _buildBody(ctx, isAdmin, user);
+    } catch (e, st) {
+      return AppErrorWidget(
+        message: '본문 빌드 실패: $e',
+        onRetry: () {
+          // ignore: avoid_print
+          print('[admin_settings] build error: $e\n$st');
+          _loadSettings();
+          _loadAdmins();
+        },
+      );
+    }
+  }
+
+  Widget _buildUsersTab(BuildContext context, app_user.User? me) {
+    final theme = Theme.of(context);
+    if (_usersLoading) {
+      return const LoadingWidget(message: '사용자 정보를 불러오는 중...');
+    }
+    if (_usersLoadError != null && _users.isEmpty) {
+      return AppErrorWidget(
+        message: '사용자 목록을 불러오지 못했습니다.\n$_usersLoadError',
+        onRetry: _loadUsers,
+      );
+    }
+
+    final isMine = (Map<String, dynamic> u) =>
+        me?.employeeId != null && u['employee_id'] == me!.employeeId;
+    final canManage = me?.isAdminGroup ?? false;
+    final visible = canManage
+        ? _users
+        : _users.where(isMine).toList();
+    final masterCount =
+        _users.where((u) => u['is_master_admin'] == true).length;
+    final df = (DateTime? d) =>
+        d == null ? '-' : d.toLocal().toString().substring(0, 10);
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Row(
+          children: [
+            Text('총 ${visible.length}명',
+                style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold)),
+            const Spacer(),
+            IconButton(
+              tooltip: '새로고침',
+              onPressed: _loadUsers,
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (visible.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(24),
+            child: Center(child: Text('표시할 사용자가 없습니다.')),
+          )
+        else
+          ...visible.map((u) {
+            final empId = u['employee_id'] as String? ?? '-';
+            final empName = u['employee_name'] as String? ?? '-';
+            final role = u['role'] as String? ?? 'user';
+            final isMaster = u['is_master_admin'] == true;
+            final dept = u['organization_dept'] as String? ?? '-';
+            final createdAt = u['created_at'] != null
+                ? DateTime.tryParse(u['created_at'] as String)
+                : null;
+            final roleLabel = isMaster
+                ? '마스터관리자'
+                : (role == 'admin'
+                    ? '관리자'
+                    : (role.startsWith('operator') ? '운영자' : '일반'));
+            return Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '$empName ($empId)',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: isMaster
+                                ? Colors.red.withValues(alpha: 0.15)
+                                : (role == 'admin'
+                                    ? Colors.blue.withValues(alpha: 0.15)
+                                    : theme.colorScheme.surfaceContainerHigh),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            roleLabel,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: isMaster
+                                  ? Colors.red
+                                  : (role == 'admin'
+                                      ? Colors.blue
+                                      : theme.colorScheme.onSurface),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 16,
+                      runSpacing: 4,
+                      children: [
+                        Text('사번: $empId',
+                            style: theme.textTheme.bodySmall),
+                        Text('부서: $dept',
+                            style: theme.textTheme.bodySmall),
+                        Text('가입일: ${df(createdAt)}',
+                            style: theme.textTheme.bodySmall),
+                      ],
+                    ),
+                    if (canManage) ...[
+                      const SizedBox(height: 8),
+                      // 권한 변경 (드롭다운)
+                      Row(
+                        children: [
+                          const Text('권한: ', style: TextStyle(fontSize: 13)),
+                          const SizedBox(width: 4),
+                          DropdownButton<String>(
+                            value: role,
+                            isDense: true,
+                            items: const [
+                              DropdownMenuItem(
+                                  value: 'user', child: Text('일반')),
+                              DropdownMenuItem(
+                                  value: 'operator1', child: Text('운영자1')),
+                              DropdownMenuItem(
+                                  value: 'operator2', child: Text('운영자2')),
+                              DropdownMenuItem(
+                                  value: 'admin', child: Text('관리자')),
+                            ],
+                            onChanged: (v) {
+                              if (v == null || v == role) return;
+                              _updateUserRole(empId, v);
+                            },
+                          ),
+                          const SizedBox(width: 12),
+                          // 마스터 관리자 스위치 (admin인 경우만)
+                          if (role == 'admin') ...[
+                            const Text('마스터:',
+                                style: TextStyle(fontSize: 13)),
+                            Switch(
+                              value: isMaster,
+                              onChanged: (!isMaster &&
+                                      masterCount >= _masterLimit)
+                                  ? null
+                                  : (v) => _toggleMaster(empId, v),
+                            ),
+                          ],
+                        ],
+                      ),
+                      if (role == 'admin' &&
+                          !isMaster &&
+                          masterCount >= _masterLimit)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            '마스터 관리자는 최대 $_masterLimit명까지 지정할 수 있습니다.',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: theme.colorScheme.outline,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: OutlinedButton.icon(
+                          onPressed: () => _resetUserPassword(empId),
+                          icon: const Icon(Icons.lock_reset, size: 16),
+                          label: Text('비번 초기화 ($empId' '1234!)'),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          }),
+      ],
+    );
+  }
+
+  Widget _buildCreateUserTab(BuildContext context, app_user.User? me) {
+    return _CreateUserForm(onCreated: _loadUsers);
   }
 
   Widget _buildBody(
@@ -218,10 +747,6 @@ class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage> {
         },
       );
     }
-
-    final masterCount = _admins
-        .where((admin) => admin['is_master_admin'] == true)
-        .length;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -337,54 +862,6 @@ class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage> {
                   const Padding(
                     padding: EdgeInsets.only(top: 8),
                     child: Text('표시할 설정이 없습니다.'),
-                  ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '마스터 관리자 지정',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text('최대 $_masterLimit명까지 지정할 수 있습니다. 현재 $masterCount명 선택됨'),
-                if (_adminsLoadError != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    '관리자 목록을 불러오지 못했습니다: $_adminsLoadError',
-                    style: TextStyle(color: theme.colorScheme.error),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                ..._admins.map((admin) {
-                  final employeeId = admin['employee_id'] as String? ?? '-';
-                  final employeeName = admin['employee_name'] as String? ?? '-';
-                  final isMaster = admin['is_master_admin'] == true;
-                  final disableEnable = !isMaster && masterCount >= _masterLimit;
-
-                  return SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text('$employeeName ($employeeId)'),
-                    subtitle: Text(isMaster ? '마스터 관리자' : '일반 관리자'),
-                    value: isMaster,
-                    onChanged: disableEnable
-                        ? null
-                        : (value) => _toggleMaster(employeeId, value),
-                  );
-                }),
-                if (_admins.isEmpty && _adminsLoadError == null)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8),
-                    child: Text('관리자 계정이 없습니다.'),
                   ),
               ],
             ),
@@ -880,7 +1357,175 @@ class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage> {
   }
 }
 
+// ── 신규 유저 생성 폼 ─────────────────────────────────────────────────────
+class _CreateUserForm extends StatefulWidget {
+  final VoidCallback onCreated;
+  const _CreateUserForm({required this.onCreated});
+
+  @override
+  State<_CreateUserForm> createState() => _CreateUserFormState();
+}
+
+class _CreateUserFormState extends State<_CreateUserForm> {
+  final _empIdCtrl = TextEditingController();
+  final _empNameCtrl = TextEditingController();
+  final _deptCtrl = TextEditingController();
+  String _role = 'user';
+  bool _busy = false;
+  String? _error;
+
+  static const _roles = [
+    ('user', '일반 사용자'),
+    ('operator1', '운영자1'),
+    ('operator2', '운영자2'),
+    ('admin', '관리자'),
+  ];
+
+  @override
+  void dispose() {
+    _empIdCtrl.dispose();
+    _empNameCtrl.dispose();
+    _deptCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    setState(() => _error = null);
+    final empId = _empIdCtrl.text.trim();
+    final empName = _empNameCtrl.text.trim();
+    final dept = _deptCtrl.text.trim();
+    if (empId.isEmpty || empName.isEmpty) {
+      setState(() => _error = '사번과 이름은 필수입니다.');
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await Supabase.instance.client.rpc(
+        'admin_create_user',
+        params: {
+          'p_employee_id': empId,
+          'p_employee_name': empName,
+          'p_role': _role,
+          'p_org_dept': dept.isEmpty ? null : dept,
+        },
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$empId 생성됨 (초기비번: $empId' '1234!)')),
+      );
+      _empIdCtrl.clear();
+      _empNameCtrl.clear();
+      _deptCtrl.clear();
+      setState(() => _role = 'user');
+      widget.onCreated();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '생성 실패: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  '신규 아이디 생성',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '초기 비밀번호는 [사번 + 1234!] 패턴으로 자동 부여됩니다.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _empIdCtrl,
+                  decoration: const InputDecoration(
+                    labelText: '사번 (employee_id) *',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _empNameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: '이름 *',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _deptCtrl,
+                  decoration: const InputDecoration(
+                    labelText: '부서 (선택)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: _role,
+                  decoration: const InputDecoration(
+                    labelText: '권한 *',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: _roles
+                      .map((r) =>
+                          DropdownMenuItem(value: r.$1, child: Text(r.$2)))
+                      .toList(),
+                  onChanged: (v) => setState(() => _role = v ?? 'user'),
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 8),
+                  Text(_error!,
+                      style: TextStyle(color: theme.colorScheme.error)),
+                ],
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: _busy ? null : _submit,
+                  icon: _busy
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.person_add),
+                  label: const Text('생성'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 enum _DeleteRoundChoice { cancel, normal, force }
+
+class _Role {
+  final String code;
+  final String label;
+  final Color color;
+  const _Role(this.code, this.label, this.color);
+}
+
+class _Permission {
+  final String label;
+  final Map<String, bool?> allowed; // value: true=○, false=✗, null=△
+  const _Permission(this.label, this.allowed);
+}
 
 class _NewRoundInput {
   final int year;

@@ -1,7 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../constants.dart';
 import '../models/asset_inspection.dart';
@@ -27,13 +30,22 @@ class InspectionListPage extends ConsumerStatefulWidget {
 class _InspectionListPageState extends ConsumerState<InspectionListPage> {
   final ApiService _api = ApiService();
   final DateFormat _dateFmt = DateFormat('yyyy-MM-dd');
+  final DateFormat _completeDateFmt = DateFormat('yyyy-MM-dd HH:mm');
   final TextEditingController _searchController = TextEditingController();
 
   List<AssetInspection> _inspections = [];
   int _totalCount = 0;
-  int _currentPage = 1;
   bool _isLoading = true;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  int _loadedPage = 0;
+  static const int _pageSize = 100; // 자산 목록과 동일
   String? _error;
+
+  final ScrollController _verticalScrollController = ScrollController();
+  final ScrollController _horizontalScrollController = ScrollController();
+  final ScrollController _verticalBarController = ScrollController();
+  bool _syncingScroll = false;
 
   // 라운드
   InspectionRound? _activeRound;
@@ -44,18 +56,51 @@ class _InspectionListPageState extends ConsumerState<InspectionListPage> {
   String _searchQuery = '';
   List<SearchCondition> _searchConditions = [];
 
-  int get _totalPages => (_totalCount / defaultPageSize).ceil().clamp(1, 9999);
+  // 정렬: null/asc/desc 3단계 cycle
+  String? _sortColumnLabel;
+  bool _sortAscending = true;
 
   @override
   void initState() {
     super.initState();
+    _orderedColumns = List<_ColumnSpec>.from(_allColumnSpecs);
+    _columnVisibility = {for (final c in _allColumnSpecs) c.label: true};
+    _columnWidths = {for (final c in _allColumnSpecs) c.label: c.width};
+    _loadColumnConfig();
     _loadRounds();
     _loadInspections();
+
+    _verticalScrollController.addListener(() {
+      if (!_syncingScroll) {
+        _syncingScroll = true;
+        if (_verticalBarController.hasClients) {
+          _verticalBarController.jumpTo(_verticalScrollController.offset);
+        }
+        _syncingScroll = false;
+      }
+      final pos = _verticalScrollController.position;
+      if (_hasMore &&
+          !_isLoadingMore &&
+          pos.pixels >= pos.maxScrollExtent - 200) {
+        _loadNextPage();
+      }
+    });
+    _verticalBarController.addListener(() {
+      if (_syncingScroll) return;
+      _syncingScroll = true;
+      if (_verticalScrollController.hasClients) {
+        _verticalScrollController.jumpTo(_verticalBarController.offset);
+      }
+      _syncingScroll = false;
+    });
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _verticalScrollController.dispose();
+    _horizontalScrollController.dispose();
+    _verticalBarController.dispose();
     super.dispose();
   }
 
@@ -72,43 +117,62 @@ class _InspectionListPageState extends ConsumerState<InspectionListPage> {
     } catch (_) {}
   }
 
+  /// 처음 로드 또는 필터 변경 시 — 누적 리셋 후 첫 페이지 fetch
   Future<void> _loadInspections() async {
     setState(() {
       _isLoading = true;
       _error = null;
+      _inspections = [];
+      _loadedPage = 0;
+      _hasMore = true;
     });
+    await _loadNextPage();
+  }
+
+  /// 무한 스크롤로 다음 페이지 누적 fetch
+  Future<void> _loadNextPage() async {
+    if (!_hasMore || _isLoadingMore) return;
+    setState(() => _isLoadingMore = true);
+    _loadedPage++;
 
     try {
+      // 정렬 — 라벨로 컬럼 찾고 DB 키 매핑
+      _ColumnSpec? sortSpec;
+      if (_sortColumnLabel != null) {
+        sortSpec = _columnSpecs.firstWhere(
+          (c) => c.label == _sortColumnLabel,
+          orElse: () => _columnSpecs.first,
+        );
+      }
       final result = await _api.fetchInspections(
-        page: _currentPage,
-        pageSize: defaultPageSize,
+        page: _loadedPage,
+        pageSize: _pageSize,
         status: _selectedStatus,
         search: _searchConditions.isEmpty && _searchQuery.isNotEmpty
             ? _searchQuery
             : null,
         conditions: _searchConditions,
-        // 활성 라운드의 미등록(locked=false) 실사만 표시.
-        // 활성 라운드가 없으면 일반 동작 (전체 조회).
         roundId: _activeRound?.id,
         onlyUnlocked: _activeRound != null ? true : null,
+        orderBy: sortSpec?.dbKey,
+        ascending: _sortAscending,
+        orderInAssets: sortSpec?.inAssets ?? false,
       );
 
       setState(() {
-        _inspections = result.data;
+        _inspections.addAll(result.data);
         _totalCount = result.total;
+        _hasMore = _inspections.length < result.total;
         _isLoading = false;
+        _isLoadingMore = false;
       });
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _error = e.toString();
+        _isLoadingMore = false;
+        _error = _inspections.isEmpty ? e.toString() : null;
       });
     }
-  }
-
-  void _onPageChanged(int page) {
-    setState(() => _currentPage = page);
-    _loadInspections();
   }
 
   bool get _isAdminGroup {
@@ -137,23 +201,33 @@ class _InspectionListPageState extends ConsumerState<InspectionListPage> {
           // ── 필터 바 ──
           _buildFilterBar(context),
           _buildAppliedConditionsBar(context),
-          // ── 카운터 ──
-          if (!_isLoading)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 2),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  '${_inspections.length} / 총 ${_totalCount}건',
-                  style: Theme.of(context).textTheme.bodySmall,
+          // ── 툴바 (열 표시 설정 + 카운터) ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 2),
+            child: Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => _openColumnConfigDialog(context),
+                  icon: const Icon(Icons.view_column, size: 16),
+                  label: const Text('열 표시 설정'),
+                  style: OutlinedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 0),
+                    textStyle: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ),
-              ),
+                const Spacer(),
+                if (!_isLoading)
+                  Text(
+                    '${_inspections.length} / 총 ${_totalCount}건',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+              ],
             ),
-          // ── 본문 ──
+          ),
+          // ── 본문 (무한 스크롤) ──
           Expanded(child: _buildBody(context)),
-          // ── 페이지네이션 ──
-          if (!_isLoading && _error == null && _inspections.isNotEmpty)
-            _buildPagination(context),
         ],
       ),
     );
@@ -221,33 +295,36 @@ class _InspectionListPageState extends ConsumerState<InspectionListPage> {
       ),
       child: Row(
         children: [
-          // 상태 필터
-          SizedBox(
+          // 상태 필터 — Container + DropdownButton (32px 정확)
+          Container(
             width: 90,
             height: 32,
-            child: DropdownButtonFormField<String>(
-              value: _selectedStatus,
-              decoration: const InputDecoration(
-                hintText: '상태',
-                floatingLabelBehavior: FloatingLabelBehavior.never,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            decoration: BoxDecoration(
+              border: Border.all(color: theme.colorScheme.outline),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String?>(
+                value: _selectedStatus,
+                hint: Text('상태', style: theme.textTheme.bodySmall),
+                isExpanded: true,
                 isDense: true,
-                contentPadding: dense,
-                border: OutlineInputBorder(),
+                icon: const Icon(Icons.arrow_drop_down, size: 16),
+                style: theme.textTheme.bodySmall,
+                items: const [
+                  DropdownMenuItem(value: null, child: Text('전체')),
+                  DropdownMenuItem(value: '완료', child: Text('완료')),
+                  DropdownMenuItem(value: '미완료', child: Text('미완료')),
+                ],
+                onChanged: (value) {
+                  setState(() {
+                    _selectedStatus = value;
+                    _loadedPage = 0;
+                  });
+                  _loadInspections();
+                },
               ),
-              style: theme.textTheme.bodySmall,
-              isExpanded: true,
-              items: const [
-                DropdownMenuItem(value: null, child: Text('전체')),
-                DropdownMenuItem(value: '완료', child: Text('완료')),
-                DropdownMenuItem(value: '미완료', child: Text('미완료')),
-              ],
-              onChanged: (value) {
-                setState(() {
-                  _selectedStatus = value;
-                  _currentPage = 1;
-                });
-                _loadInspections();
-              },
             ),
           ),
           const SizedBox(width: 4),
@@ -271,7 +348,7 @@ class _InspectionListPageState extends ConsumerState<InspectionListPage> {
                     onPressed: () {
                       setState(() {
                         _searchQuery = _searchController.text;
-                        _currentPage = 1;
+                        _loadedPage = 0;
                       });
                       _loadInspections();
                     },
@@ -282,7 +359,7 @@ class _InspectionListPageState extends ConsumerState<InspectionListPage> {
                 onSubmitted: (query) {
                   setState(() {
                     _searchQuery = query;
-                    _currentPage = 1;
+                    _loadedPage = 0;
                   });
                   _loadInspections();
                 },
@@ -329,7 +406,7 @@ class _InspectionListPageState extends ConsumerState<InspectionListPage> {
       _searchConditions = result;
       _searchQuery = '';
       _searchController.clear();
-      _currentPage = 1;
+      _loadedPage = 0;
     });
     _loadInspections();
   }
@@ -338,7 +415,7 @@ class _InspectionListPageState extends ConsumerState<InspectionListPage> {
     if (_searchConditions.isEmpty) return;
     setState(() {
       _searchConditions = [];
-      _currentPage = 1;
+      _loadedPage = 0;
     });
     _loadInspections();
   }
@@ -428,74 +505,398 @@ class _InspectionListPageState extends ConsumerState<InspectionListPage> {
 
     final theme = Theme.of(context);
 
-    final totalWidth = _columnSpecs.fold(0.0, (a, b) => a + b.width);
+    final totalWidth =
+        _visibleColumns.fold(0.0, (a, b) => a + _getColWidth(b.label));
 
     return RefreshIndicator(
       onRefresh: _loadInspections,
-      child: Scrollbar(
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SizedBox(
-            width: totalWidth < MediaQuery.of(context).size.width
-                ? MediaQuery.of(context).size.width
-                : totalWidth,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeaderRow(theme),
-                Divider(
-                    height: 1,
-                    thickness: 1,
-                    color: theme.dividerColor),
-                Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    itemCount: _inspections.length,
-                    separatorBuilder: (_, __) => Divider(
-                        height: 1,
-                        color: theme.dividerColor.withValues(alpha: 0.4)),
-                    itemBuilder: (context, index) =>
-                        _buildInspectionRow(context, _inspections[index]),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
+        child: Row(
+          children: [
+            // 메인 — 가로 스크롤
+            Expanded(
+              child: Scrollbar(
+                controller: _horizontalScrollController,
+                thumbVisibility: true,
+                trackVisibility: true,
+                child: SingleChildScrollView(
+                  controller: _horizontalScrollController,
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: totalWidth,
+                    child: Column(
+                      children: [
+                        _buildHeaderRow(theme),
+                        Expanded(
+                          child: ListView.builder(
+                            controller: _verticalScrollController,
+                            itemCount:
+                                _inspections.length + (_isLoadingMore ? 1 : 0),
+                            itemExtent: 42,
+                            itemBuilder: (context, index) {
+                              if (index >= _inspections.length) {
+                                return const Center(
+                                  child: SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  ),
+                                );
+                              }
+                              return _buildInspectionRow(
+                                  context, _inspections[index]);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
+            // 화면 우측 고정 세로 스크롤바
+            SizedBox(
+              width: 14,
+              child: Scrollbar(
+                controller: _verticalBarController,
+                thumbVisibility: true,
+                trackVisibility: true,
+                child: SingleChildScrollView(
+                  controller: _verticalBarController,
+                  child: SizedBox(
+                    height: _inspections.length * 42.0 + 44,
+                    width: 1,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+          ],
         ),
       ),
     );
   }
 
-  /// 컬럼 정의 (헤더와 row가 공유)
-  static const List<_ColumnSpec> _columnSpecs = [
-    _ColumnSpec('상태', 70),
-    _ColumnSpec('자산번호', 140),
-    _ColumnSpec('실사용자', 100),
-    _ColumnSpec('실사용자사번', 110),
-    _ColumnSpec('실사용자부서', 130),
-    _ColumnSpec('관리자', 90),
-    _ColumnSpec('관리자부서', 130),
-    _ColumnSpec('유형', 90),
-    _ColumnSpec('네트워크', 100),
-    _ColumnSpec('일반비고', 160),
-    _ColumnSpec('OA비고', 160),
+  /// 컬럼 정의 (헤더와 row가 공유). dbKey=null이면 정렬 비활성.
+  static final List<_ColumnSpec> _allColumnSpecs = [
+    _ColumnSpec('실사여부', 80,
+        builder: (s, ins) =>
+            s._statusBadge(Theme.of(s.context), ins.locked)),
+    _ColumnSpec('실사완료일', 130, dbKey: 'inspection_date',
+        builder: (s, ins) => s._txt(
+              Theme.of(s.context),
+              ins.inspectionDate != null
+                  ? s._completeDateFmt.format(ins.inspectionDate!)
+                  : null,
+            )),
+    _ColumnSpec('사진', 50,
+        builder: (s, ins) =>
+            s._boolMark(Theme.of(s.context), ins.inspectionPhoto != null)),
+    _ColumnSpec('사인', 50,
+        builder: (s, ins) =>
+            s._boolMark(Theme.of(s.context), ins.signatureImage != null)),
+    _ColumnSpec('자산번호', 140, dbKey: 'asset_uid', inAssets: true,
+        builder: (s, ins) => Text(
+              ins.assetAssetUid ?? ins.assetCode ?? 'ID: ${ins.id}',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+              overflow: TextOverflow.ellipsis,
+            )),
+    _ColumnSpec('실사용자', 100, dbKey: 'user_name', inAssets: true,
+        builder: (s, ins) => s._txt(Theme.of(s.context), ins.assetUserName)),
+    _ColumnSpec('실사용자사번', 110, dbKey: 'user_employee_id', inAssets: true,
+        builder: (s, ins) =>
+            s._txt(Theme.of(s.context), ins.assetUserEmployeeId)),
+    _ColumnSpec('실사용자부서', 130, dbKey: 'user_department', inAssets: true,
+        builder: (s, ins) =>
+            s._txt(Theme.of(s.context), ins.assetUserDepartment)),
+    _ColumnSpec('관리자', 90, dbKey: 'admin_name', inAssets: true,
+        builder: (s, ins) => s._txt(Theme.of(s.context), ins.assetAdminName)),
+    _ColumnSpec('관리자부서', 130, dbKey: 'admin_department', inAssets: true,
+        builder: (s, ins) =>
+            s._txt(Theme.of(s.context), ins.assetAdminDepartment)),
+    _ColumnSpec('자산종류', 90, dbKey: 'category', inAssets: true,
+        builder: (s, ins) => s._txt(Theme.of(s.context), ins.assetCategory)),
+    _ColumnSpec('네트워크', 100, dbKey: 'network', inAssets: true,
+        builder: (s, ins) => s._txt(Theme.of(s.context), ins.assetNetwork)),
+    _ColumnSpec('일반비고', 160, dbKey: 'normal_comment', inAssets: true,
+        builder: (s, ins) =>
+            s._txt(Theme.of(s.context), ins.assetNormalComment)),
+    _ColumnSpec('OA비고', 160, dbKey: 'oa_comment', inAssets: true,
+        builder: (s, ins) => s._txt(Theme.of(s.context), ins.assetOaComment)),
   ];
 
+  // 열표시 상태
+  late List<_ColumnSpec> _orderedColumns;
+  late Map<String, bool> _columnVisibility;
+  late Map<String, double> _columnWidths;
+  static const String _columnConfigPrefsKey =
+      'inspection_list_column_config_v1';
+
+  List<_ColumnSpec> get _visibleColumns => _orderedColumns
+      .where((c) => _columnVisibility[c.label] ?? false)
+      .toList();
+  double _getColWidth(String label) =>
+      _columnWidths[label] ??
+      _allColumnSpecs.firstWhere((c) => c.label == label).width;
+
+  /// 기존 코드 호환용 — _visibleColumns alias
+  List<_ColumnSpec> get _columnSpecs => _visibleColumns;
+
+  /// 헤더 클릭 — 같은 라벨 누르면 asc → desc → 해제(null) 순환
+  void _onSortColumn(_ColumnSpec spec) {
+    if (spec.dbKey == null) return;
+    setState(() {
+      if (_sortColumnLabel == spec.label) {
+        if (_sortAscending) {
+          _sortAscending = false;            // asc → desc
+        } else {
+          _sortColumnLabel = null;           // desc → 해제
+          _sortAscending = true;
+        }
+      } else {
+        _sortColumnLabel = spec.label;       // 새 컬럼 — asc
+        _sortAscending = true;
+      }
+    });
+    _loadInspections();
+  }
+
+  // ── 컬럼 설정 저장/로드 ──────────────────────────────────────────────────
+  Future<void> _loadColumnConfig() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_columnConfigPrefsKey);
+      if (raw == null) return;
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+
+      final byLabel = {for (final c in _allColumnSpecs) c.label: c};
+      final savedOrder = (json['order'] as List?)?.cast<String>() ?? [];
+      final newOrder = <_ColumnSpec>[];
+      final seen = <String>{};
+      for (final label in savedOrder) {
+        final c = byLabel[label];
+        if (c != null && !seen.contains(label)) {
+          newOrder.add(c);
+          seen.add(label);
+        }
+      }
+      for (final c in _allColumnSpecs) {
+        if (!seen.contains(c.label)) newOrder.add(c);
+      }
+
+      final visibility = (json['visibility'] as Map?) ?? {};
+      final widths = (json['widths'] as Map?) ?? {};
+
+      if (!mounted) return;
+      setState(() {
+        _orderedColumns = newOrder;
+        for (final entry in visibility.entries) {
+          final key = entry.key.toString();
+          if (_columnVisibility.containsKey(key)) {
+            _columnVisibility[key] = entry.value == true;
+          }
+        }
+        for (final entry in widths.entries) {
+          final key = entry.key.toString();
+          if (_columnWidths.containsKey(key) && entry.value is num) {
+            _columnWidths[key] = (entry.value as num).toDouble();
+          }
+        }
+      });
+    } catch (_) {/* 기본값 */}
+  }
+
+  Future<void> _saveColumnConfig() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final payload = {
+        'order': _orderedColumns.map((c) => c.label).toList(),
+        'visibility': _columnVisibility,
+        'widths': _columnWidths,
+      };
+      await prefs.setString(_columnConfigPrefsKey, jsonEncode(payload));
+    } catch (_) {}
+  }
+
+  Future<void> _resetColumnConfig() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_columnConfigPrefsKey);
+    } catch (_) {}
+    setState(() {
+      _orderedColumns = List<_ColumnSpec>.from(_allColumnSpecs);
+      _columnVisibility = {for (final c in _allColumnSpecs) c.label: true};
+      _columnWidths = {for (final c in _allColumnSpecs) c.label: c.width};
+    });
+  }
+
+  Future<void> _openColumnConfigDialog(BuildContext context) async {
+    final tempOrder = List<_ColumnSpec>.from(_orderedColumns);
+    final tempVisibility = Map<String, bool>.from(_columnVisibility);
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final visibleCount =
+                tempVisibility.values.where((v) => v).length;
+            return AlertDialog(
+              title: const Text('열 표시 설정'),
+              content: SizedBox(
+                width: 420,
+                height: 480,
+                child: ReorderableListView.builder(
+                  itemCount: tempOrder.length,
+                  onReorder: (oldIndex, newIndex) {
+                    if (newIndex > oldIndex) newIndex -= 1;
+                    final item = tempOrder.removeAt(oldIndex);
+                    tempOrder.insert(newIndex, item);
+                    setDialogState(() {});
+                  },
+                  itemBuilder: (context, index) {
+                    final col = tempOrder[index];
+                    final isVisible = tempVisibility[col.label] ?? false;
+                    final allowHide = visibleCount > 1 || !isVisible;
+                    return ListTile(
+                      key: ValueKey(col.label),
+                      leading: const Icon(Icons.drag_handle),
+                      title: Text(col.label),
+                      trailing: Checkbox(
+                        value: isVisible,
+                        onChanged: allowHide
+                            ? (v) {
+                                if (v == null) return;
+                                setDialogState(() {
+                                  tempVisibility[col.label] = v;
+                                });
+                              }
+                            : null,
+                      ),
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('취소'),
+                ),
+                TextButton.icon(
+                  onPressed: () {
+                    _resetColumnConfig();
+                    Navigator.of(context).pop();
+                  },
+                  icon: const Icon(Icons.restore, size: 16),
+                  label: const Text('기본값'),
+                ),
+                ElevatedButton(
+                  onPressed: visibleCount > 0
+                      ? () {
+                          setState(() {
+                            _orderedColumns = tempOrder;
+                            _columnVisibility = tempVisibility;
+                          });
+                          _saveColumnConfig();
+                          Navigator.of(context).pop();
+                        }
+                      : null,
+                  child: const Text('적용'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildHeaderRow(ThemeData theme) {
+    final cols = _visibleColumns;
     return Container(
       color: theme.colorScheme.surfaceContainerHigh,
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
       child: Row(
-        children: _columnSpecs.map((c) {
+        children: cols.map((c) {
+          final isActive = _sortColumnLabel == c.label;
+          final sortable = c.dbKey != null;
+          final isLast = c == cols.last;
           return SizedBox(
-            width: c.width,
-            child: Text(
-              c.label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.onSurface,
-              ),
+            width: _getColWidth(c.label),
+            height: 44,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fill(
+                  child: InkWell(
+                    onTap: sortable ? () => _onSortColumn(c) : null,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 12),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          right: isLast
+                              ? BorderSide.none
+                              : BorderSide(color: theme.dividerColor),
+                          bottom: BorderSide(color: theme.dividerColor),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              c.label,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color:
+                                    isActive ? theme.colorScheme.primary : null,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (sortable) ...[
+                            const SizedBox(width: 4),
+                            Icon(
+                              isActive
+                                  ? (_sortAscending
+                                      ? Icons.arrow_upward
+                                      : Icons.arrow_downward)
+                                  : Icons.unfold_more,
+                              size: 14,
+                              color: isActive
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.outline,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                // 드래그 핸들 (오른쪽 경계) — 마지막 컬럼은 제외
+                if (!isLast)
+                  Positioned(
+                    right: -3,
+                    top: 0,
+                    bottom: 0,
+                    width: 6,
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.resizeColumn,
+                      child: GestureDetector(
+                        onHorizontalDragUpdate: (details) {
+                          setState(() {
+                            final cur = _getColWidth(c.label);
+                            _columnWidths[c.label] =
+                                (cur + details.delta.dx).clamp(50.0, 600.0);
+                          });
+                        },
+                        onHorizontalDragEnd: (_) => _saveColumnConfig(),
+                        child: Container(color: Colors.transparent),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           );
         }).toList(),
@@ -503,63 +904,76 @@ class _InspectionListPageState extends ConsumerState<InspectionListPage> {
     );
   }
 
-  /// 1줄 row — 컬럼: 상태/자산번호/실사용자/실사용자사번/실사용자부서/관리자/관리자부서/유형/네트워크/일반비고/OA비고
+  /// 1줄 row — _visibleColumns 순회 + builder 호출
   Widget _buildInspectionRow(BuildContext context, AssetInspection ins) {
     final theme = Theme.of(context);
-    final isCompleted = ins.completed;
-    final widgets = <Widget>[
-      _statusBadge(theme, isCompleted),
-      Text(
-        ins.assetCode ?? 'ID: ${ins.id}',
-        style: const TextStyle(fontWeight: FontWeight.w600),
-        overflow: TextOverflow.ellipsis,
-      ),
-      _txt(theme, ins.assetUserName),
-      _txt(theme, ins.assetUserEmployeeId),
-      _txt(theme, ins.assetUserDepartment),
-      _txt(theme, ins.assetAdminName),
-      _txt(theme, ins.assetAdminDepartment),
-      _txt(theme, ins.assetCategory),
-      _txt(theme, ins.assetNetwork),
-      _txt(theme, ins.assetNormalComment),
-      _txt(theme, ins.assetOaComment),
-    ];
-
+    final cols = _visibleColumns;
     return InkWell(
       onTap: () => context.go('/inspection/${ins.id}'),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-        child: Row(
-          children: [
-            for (var i = 0; i < _columnSpecs.length; i++)
-              SizedBox(width: _columnSpecs[i].width, child: widgets[i]),
-          ],
-        ),
+      child: Row(
+        children: [
+          for (var i = 0; i < cols.length; i++)
+            SizedBox(
+              width: _getColWidth(cols[i].label),
+              height: 42,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  border: Border(
+                    right: i == cols.length - 1
+                        ? BorderSide.none
+                        : BorderSide(color: theme.dividerColor),
+                    bottom: BorderSide(
+                        color: theme.dividerColor.withValues(alpha: 0.55)),
+                  ),
+                ),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: cols[i].builder != null
+                      ? cols[i].builder!(this, ins)
+                      : const SizedBox.shrink(),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
 
   Widget _txt(ThemeData theme, String? value) {
     return Text(
-      value?.isNotEmpty == true ? value! : '-',
+      value ?? '',
       overflow: TextOverflow.ellipsis,
-      style: theme.textTheme.bodySmall,
+      style: theme.textTheme.bodyMedium,
     );
   }
 
-  Widget _statusBadge(ThemeData theme, bool isCompleted) {
+  Widget _boolMark(ThemeData theme, bool ok) {
+    return Text(
+      ok ? '○' : 'X',
+      textAlign: TextAlign.center,
+      style: theme.textTheme.bodyMedium?.copyWith(
+        fontWeight: FontWeight.bold,
+        color: ok ? Colors.green : theme.colorScheme.outline,
+      ),
+    );
+  }
+
+  /// 실사여부 뱃지 — 등록(locked=true)이면 "등록완료", 아니면 "미등록"
+  Widget _statusBadge(ThemeData theme, bool isRegistered) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: isCompleted
+        color: isRegistered
             ? Colors.green.withValues(alpha: 0.15)
             : Colors.orange.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
-        isCompleted ? '완료' : '미완료',
+        isRegistered ? '등록완료' : '미등록',
         style: TextStyle(
-          color: isCompleted ? Colors.green : Colors.orange,
+          color: isRegistered ? Colors.green : Colors.orange,
           fontSize: 11,
           fontWeight: FontWeight.w600,
         ),
@@ -567,49 +981,7 @@ class _InspectionListPageState extends ConsumerState<InspectionListPage> {
     );
   }
 
-  Widget _buildPagination(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        border: Border(
-          top: BorderSide(color: theme.dividerColor),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          IconButton(
-            icon: const Icon(Icons.chevron_left),
-            onPressed: _currentPage > 1
-                ? () => _onPageChanged(_currentPage - 1)
-                : null,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            '$_currentPage / $_totalPages',
-            style: theme.textTheme.bodyMedium,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            '(총 $_totalCount건)',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.outline,
-            ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: const Icon(Icons.chevron_right),
-            onPressed: _currentPage < _totalPages
-                ? () => _onPageChanged(_currentPage + 1)
-                : null,
-          ),
-        ],
-      ),
-    );
-  }
+  // _buildPagination 제거: 무한 스크롤로 대체
 
   // ═══════════════════════════════════════════════════════════════════════
   // 차수 관리 다이얼로그 (관리자 그룹 전용)
@@ -914,5 +1286,12 @@ class _RoundManageDialogState extends State<_RoundManageDialog> {
 class _ColumnSpec {
   final String label;
   final double width;
-  const _ColumnSpec(this.label, this.width);
+  /// DB 컬럼 키 (null이면 정렬 불가)
+  final String? dbKey;
+  /// true면 assets join 컬럼 (PostgREST embedded order 적용)
+  final bool inAssets;
+  /// 셀 위젯 빌더 — null이면 row 빌더에서 라벨 매칭으로 처리
+  final Widget Function(_InspectionListPageState, AssetInspection)? builder;
+  const _ColumnSpec(this.label, this.width,
+      {this.dbKey, this.inAssets = false, this.builder});
 }

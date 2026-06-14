@@ -62,7 +62,14 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/assets',
-        builder: (context, state) => const AssetListPage(),
+        builder: (context, state) {
+          final col = state.uri.queryParameters['col'];
+          final val = state.uri.queryParameters['val'];
+          return AssetListPage(
+            initialSearchColumnKey: col,
+            initialSearchValue: val,
+          );
+        },
       ),
       GoRoute(
         path: '/asset/new',

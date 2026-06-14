@@ -2,7 +2,6 @@ class Asset {
   final int id;
   final String assetUid;
   final String? name;
-  final String assetsStatus;
   final String supplyType;
   final DateTime? supplyEndDate;
   final String category;
@@ -27,6 +26,7 @@ class Asset {
   final String? adminName;
   final String? adminDepartment;
   final String? adminEmployeeId;
+  final String? adminAffiliation;
   final int? locationDrawingId;
   final int? locationRow;
   final int? locationCol;
@@ -46,7 +46,6 @@ class Asset {
     required this.id,
     required this.assetUid,
     this.name,
-    this.assetsStatus = '가용',
     this.supplyType = '지급',
     this.supplyEndDate,
     required this.category,
@@ -71,6 +70,7 @@ class Asset {
     this.adminName,
     this.adminDepartment,
     this.adminEmployeeId,
+    this.adminAffiliation,
     this.locationDrawingId,
     this.locationRow,
     this.locationCol,
@@ -92,7 +92,6 @@ class Asset {
       id: json['id'] as int,
       assetUid: json['asset_uid'] as String,
       name: json['name'] as String?,
-      assetsStatus: json['assets_status'] as String? ?? '가용',
       supplyType: json['supply_type'] as String? ?? '지급',
       supplyEndDate: json['supply_end_date'] != null
           ? DateTime.parse(json['supply_end_date'] as String).toLocal()
@@ -123,6 +122,7 @@ class Asset {
       adminName: json['admin_name'] as String?,
       adminDepartment: json['admin_department'] as String?,
       adminEmployeeId: json['admin_employee_id'] as String?,
+      adminAffiliation: json['admin_affiliation'] as String?,
       locationDrawingId: json['location_drawing_id'] as int?,
       locationRow: json['location_row'] as int?,
       locationCol: json['location_col'] as int?,
@@ -155,7 +155,6 @@ class Asset {
     return {
       'asset_uid': assetUid,
       'name': name,
-      'assets_status': assetsStatus,
       'supply_type': supplyType,
       if (supplyEndDate != null)
         'supply_end_date': supplyEndDate!.toIso8601String(),
@@ -183,6 +182,7 @@ class Asset {
       'admin_name': adminName,
       'admin_department': adminDepartment,
       'admin_employee_id': adminEmployeeId,
+      'admin_affiliation': adminAffiliation,
       'location_drawing_id': locationDrawingId,
       'location_row': locationRow,
       'location_col': locationCol,
@@ -196,7 +196,6 @@ class Asset {
     int? id,
     String? assetUid,
     String? name,
-    String? assetsStatus,
     String? supplyType,
     DateTime? supplyEndDate,
     String? category,
@@ -238,7 +237,6 @@ class Asset {
       id: id ?? this.id,
       assetUid: assetUid ?? this.assetUid,
       name: name ?? this.name,
-      assetsStatus: assetsStatus ?? this.assetsStatus,
       supplyType: supplyType ?? this.supplyType,
       supplyEndDate: supplyEndDate ?? this.supplyEndDate,
       category: category ?? this.category,

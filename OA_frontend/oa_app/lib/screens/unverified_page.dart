@@ -184,7 +184,7 @@ class _UnverifiedPageState extends ConsumerState<UnverifiedPage> {
             child: DropdownButtonFormField<String>(
               value: _selectedCategory,
               decoration: const InputDecoration(
-                labelText: '카테고리',
+                labelText: '자산종류',
                 isDense: true,
                 contentPadding:
                     EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -253,7 +253,7 @@ class _UnverifiedPageState extends ConsumerState<UnverifiedPage> {
         itemBuilder: (context, index) {
           final asset = _assets[index];
           final statusColor =
-              getStatusColor(asset.assetsStatus, brightness);
+              getStatusColor(asset.supplyType, brightness);
 
           return ListTile(
             contentPadding:
@@ -283,7 +283,7 @@ class _UnverifiedPageState extends ConsumerState<UnverifiedPage> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
-                asset.assetsStatus,
+                asset.supplyType,
                 style: TextStyle(
                   color: statusColor,
                   fontSize: 12,

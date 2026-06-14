@@ -19,6 +19,7 @@ import '../notifiers/auth_notifier.dart';
 import '../widgets/common/app_scaffold.dart';
 import '../widgets/common/loading_widget.dart';
 import '../utils/label_ocr.dart';
+import '../utils/os_security.dart';
 import '../utils/scan_feedback.dart';
 import '../utils/temp_file_cleaner.dart';
 import '../widgets/common/error_widget.dart';
@@ -86,10 +87,10 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
   late TextEditingController _oaCommentCtrl;
 
   String _selectedCategory = assetCategories.first;
-  String _selectedStatus = assetStatuses.first;
   String _selectedSupplyType = supplyTypes.first;
+  String? _selectedBuilding1;     // 위치 대분류 — building1Options
+  String? _selectedAdminAffiliation; // 담당자 소속 — adminAffiliationOptions
   DateTime? _supplyEndDate;
-  bool _useNewUidFormat = false; // false=현재기준, true=변경후 기준
 
   @override
   void initState() {
@@ -180,13 +181,86 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
     _selectedCategory = assetCategories.contains(asset.category)
         ? asset.category
         : assetCategories.first;
-    _selectedStatus = assetStatuses.contains(asset.assetsStatus)
-        ? asset.assetsStatus
-        : assetStatuses.first;
     _selectedSupplyType = supplyTypes.contains(asset.supplyType)
         ? asset.supplyType
         : supplyTypes.first;
     _supplyEndDate = asset.supplyEndDate;
+    _selectedBuilding1 = (asset.building1?.isNotEmpty ?? false) ? asset.building1 : null;
+    _selectedAdminAffiliation =
+        (asset.adminAffiliation?.isNotEmpty ?? false) ? asset.adminAffiliation : null;
+  }
+
+  /// "이 값으로 자산목록 검색" — 자산상세에서 값이 있는 필드 우측 🔍 아이콘.
+  /// 생성 모드에서는 비활성. 빈 값 필드도 비활성.
+  Widget? _searchSuffix(String columnKey, TextEditingController ctrl) {
+    if (widget.isCreateMode) return null;
+    return ListenableBuilder(
+      listenable: ctrl,
+      builder: (ctx, _) {
+        final v = ctrl.text.trim();
+        if (v.isEmpty) return const SizedBox.shrink();
+        return IconButton(
+          tooltip: '이 값으로 자산목록 검색',
+          icon: const Icon(Icons.search, size: 18),
+          padding: EdgeInsets.zero,
+          visualDensity: VisualDensity.compact,
+          onPressed: () => _gotoSearch(columnKey, v),
+        );
+      },
+    );
+  }
+
+  void _gotoSearch(String columnKey, String value) {
+    final encoded = Uri.encodeQueryComponent(value);
+    context.go('/assets?col=$columnKey&val=$encoded');
+  }
+
+  /// QR 등 다른 suffix와 함께 쓰는 경우 — Row로 묶어 반환
+  Widget? _suffixWithSearch(
+    String columnKey,
+    TextEditingController ctrl, {
+    Widget? qr,
+  }) {
+    final searchWidget = _searchSuffix(columnKey, ctrl);
+    if (qr == null && searchWidget == null) return null;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (searchWidget != null) searchWidget,
+        if (qr != null) qr,
+      ],
+    );
+  }
+
+  /// 드롭다운/날짜 필드 옆에 붙는 작은 🔍 IconButton.
+  /// value가 비거나 생성모드면 SizedBox.shrink.
+  Widget _searchIconButton(String columnKey, String? value) {
+    if (widget.isCreateMode) return const SizedBox.shrink();
+    final v = (value ?? '').trim();
+    if (v.isEmpty) return const SizedBox.shrink();
+    return IconButton(
+      tooltip: '이 값으로 자산목록 검색',
+      icon: const Icon(Icons.search, size: 20),
+      visualDensity: VisualDensity.compact,
+      onPressed: () => _gotoSearch(columnKey, v),
+    );
+  }
+
+  /// 자식 위젯(보통 Dropdown) + 우측 🔍 IconButton을 묶은 Row.
+  /// 값이 비어있거나 생성 모드면 아이콘은 SizedBox.shrink (자리만 차지하지 않음).
+  Widget _withSearchIcon({
+    required Widget child,
+    required String columnKey,
+    required String? value,
+  }) {
+    final icon = _searchIconButton(columnKey, value);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(child: child),
+        icon,
+      ],
+    );
   }
 
   Future<void> _loadAsset() async {
@@ -214,6 +288,15 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
   Future<void> _saveAsset() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // 지급형태가 만료일 필수 항목인 경우 _supplyEndDate가 비면 막음
+    final needsEndDate = supplyTypesRequireEndDate.contains(_selectedSupplyType);
+    if (needsEndDate && _supplyEndDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('지급형태에 따라 만료일을 입력해야 합니다.')),
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
 
     try {
@@ -221,13 +304,13 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
         'asset_uid': _assetUidCtrl.text.trim(),
         'name': _nameCtrl.text.trim(),
         'category': _selectedCategory,
-        'assets_status': _selectedStatus,
         'supply_type': _selectedSupplyType,
         'serial_number': _serialNumberCtrl.text.trim(),
         'model_name': _modelNameCtrl.text.trim(),
         'vendor': _vendorCtrl.text.trim(),
         'network': _networkCtrl.text.trim(),
         'mac_address': _macAddressCtrl.text.trim(),
+        'building1': _selectedBuilding1,
         'building': _buildingCtrl.text.trim(),
         'floor': _floorCtrl.text.trim(),
         'owner_name': _ownerNameCtrl.text.trim(),
@@ -239,10 +322,11 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
         'admin_name': _adminNameCtrl.text.trim(),
         'admin_department': _adminDeptCtrl.text.trim(),
         'admin_employee_id': _adminEmpIdCtrl.text.trim(),
+        'admin_affiliation': _selectedAdminAffiliation,
         'normal_comment': _normalCommentCtrl.text.trim(),
         'oa_comment': _oaCommentCtrl.text.trim(),
-        if (_supplyEndDate != null)
-          'supply_end_date': _supplyEndDate!.toIso8601String(),
+        'supply_end_date':
+            needsEndDate ? _supplyEndDate!.toIso8601String() : null,
       };
 
       if (widget.isCreateMode) {
@@ -434,52 +518,26 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
           _buildSectionTitle('기본 정보'),
           const SizedBox(height: 8),
 
-          // 자산번호 기준 선택 (생성 모드 + 관리자만)
-          if (widget.isCreateMode && _isAdminUser) ...[
-            Row(
-              children: [
-                const Text('자산번호 기준:', style: TextStyle(fontSize: 13)),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: const Text('현재기준'),
-                  selected: !_useNewUidFormat,
-                  onSelected: (_) => setState(() => _useNewUidFormat = false),
-                ),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: const Text('변경후'),
-                  selected: _useNewUidFormat,
-                  onSelected: (_) => setState(() => _useNewUidFormat = true),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-          ],
-
           // 자산번호
           TextFormField(
             controller: _assetUidCtrl,
             decoration: InputDecoration(
               labelText: '자산번호 *',
-              hintText: _useNewUidFormat ? 'BDT00001 형태' : 'D00001 형태',
+              hintText: 'D00001 형태 (영문 1~2자리 + 숫자 4~5자리)',
               border: const OutlineInputBorder(),
-              suffixIcon: _isEditing
-                  ? _buildQrScanSuffix(_assetUidCtrl)
-                  : null,
+              suffixIcon: _suffixWithSearch(
+                'asset_uid',
+                _assetUidCtrl,
+                qr: _isEditing ? _buildQrScanSuffix(_assetUidCtrl) : null,
+              ),
             ),
             readOnly: readOnly || !widget.isCreateMode,
             textCapitalization: TextCapitalization.characters,
             validator: (v) {
               if (v == null || v.trim().isEmpty) return '자산번호를 입력하세요.';
               final uid = v.trim().toUpperCase();
-              if (_useNewUidFormat) {
-                if (!assetUidNewRegex.hasMatch(uid)) {
-                  return '변경후 형식: BDT00001, STP22222 등 (8자리)';
-                }
-              } else {
-                if (!assetUidCurrentRegex.hasMatch(uid)) {
-                  return '현재기준 형식: D00001, TP0001 등';
-                }
+              if (!assetUidRegex.hasMatch(uid)) {
+                return '자산번호 형식: D00001, TP0001 등 (영문 1~2자리 + 숫자 4~5자리)';
               }
               return null;
             },
@@ -489,51 +547,95 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
           // 자산명
           TextFormField(
             controller: _nameCtrl,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: '자산명',
-              border: OutlineInputBorder(),
+              border: const OutlineInputBorder(),
+              suffixIcon: _searchSuffix('name', _nameCtrl),
             ),
             readOnly: readOnly,
           ),
           const SizedBox(height: 12),
 
-          // 카테고리 + 상태
+          // 카테고리 + 지급형태(필수)
           Row(
             children: [
               Expanded(
-                child: DropdownButtonFormField<String>(
+                child: _withSearchIcon(
+                  columnKey: 'category',
                   value: _selectedCategory,
-                  decoration: const InputDecoration(
-                    labelText: '카테고리 *',
-                    border: OutlineInputBorder(),
+                  child: DropdownButtonFormField<String>(
+                    value: _selectedCategory,
+                    decoration: const InputDecoration(
+                      labelText: '자산종류 *',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: assetCategories
+                        .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                        .toList(),
+                    onChanged: readOnly
+                        ? null
+                        : (v) => setState(() => _selectedCategory = v!),
                   ),
-                  items: assetCategories
-                      .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                      .toList(),
-                  onChanged: readOnly
-                      ? null
-                      : (v) => setState(() => _selectedCategory = v!),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: DropdownButtonFormField<String>(
-                  value: _selectedStatus,
-                  decoration: const InputDecoration(
-                    labelText: '상태 *',
-                    border: OutlineInputBorder(),
+                child: _withSearchIcon(
+                  columnKey: 'supply_type',
+                  value: _selectedSupplyType,
+                  child: DropdownButtonFormField<String>(
+                    value: _selectedSupplyType,
+                    decoration: const InputDecoration(
+                      labelText: '지급형태 *',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: supplyTypes
+                        .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                        .toList(),
+                    onChanged: readOnly
+                        ? null
+                        : (v) => setState(() => _selectedSupplyType = v!),
+                    validator: (v) =>
+                        (v == null || v.isEmpty) ? '지급형태를 선택하세요.' : null,
                   ),
-                  items: assetStatuses
-                      .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                      .toList(),
-                  onChanged: readOnly
-                      ? null
-                      : (v) => setState(() => _selectedStatus = v!),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
+
+          // 만료일 (렌탈/대여/도급/개인일 때만 표시)
+          if (supplyTypesRequireEndDate.contains(_selectedSupplyType)) ...[
+            _withSearchIcon(
+              columnKey: 'supply_end_date',
+              value:
+                  _supplyEndDate != null ? _dateFmt.format(_supplyEndDate!) : '',
+              child: InkWell(
+                onTap: readOnly
+                    ? null
+                    : () async {
+                        final picked = await _pickDate(_supplyEndDate);
+                        if (picked != null) {
+                          setState(() => _supplyEndDate = picked);
+                        }
+                      },
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: '만료일 *',
+                    border: OutlineInputBorder(),
+                    suffixIcon: Icon(Icons.calendar_today),
+                  ),
+                  child: Text(
+                    _supplyEndDate != null
+                        ? _dateFmt.format(_supplyEndDate!)
+                        : '날짜 선택',
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          const SizedBox(height: 8),
 
           // ── 제조/모델 정보 ──
           Row(
@@ -574,9 +676,10 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
               Expanded(
                 child: TextFormField(
                   controller: _vendorCtrl,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: '제조사',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: _searchSuffix('vendor', _vendorCtrl),
                   ),
                   readOnly: readOnly,
                 ),
@@ -585,9 +688,10 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
               Expanded(
                 child: TextFormField(
                   controller: _modelNameCtrl,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: '모델명',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: _searchSuffix('model_name', _modelNameCtrl),
                   ),
                   readOnly: readOnly,
                 ),
@@ -604,7 +708,11 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
                   decoration: InputDecoration(
                     labelText: '시리얼번호',
                     border: const OutlineInputBorder(),
-                    suffixIcon: _buildQrScanSuffix(_serialNumberCtrl),
+                    suffixIcon: _suffixWithSearch(
+                      'serial_number',
+                      _serialNumberCtrl,
+                      qr: _buildQrScanSuffix(_serialNumberCtrl),
+                    ),
                   ),
                   readOnly: readOnly,
                 ),
@@ -616,7 +724,11 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
                   decoration: InputDecoration(
                     labelText: 'MAC 주소',
                     border: const OutlineInputBorder(),
-                    suffixIcon: _buildQrScanSuffix(_macAddressCtrl),
+                    suffixIcon: _suffixWithSearch(
+                      'mac_address',
+                      _macAddressCtrl,
+                      qr: _buildQrScanSuffix(_macAddressCtrl),
+                    ),
                   ),
                   readOnly: readOnly,
                 ),
@@ -625,13 +737,35 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
           ),
           const SizedBox(height: 12),
 
-          TextFormField(
-            controller: _networkCtrl,
-            decoration: const InputDecoration(
-              labelText: '네트워크',
-              border: OutlineInputBorder(),
+          // 사용망 — 권장 옵션 드롭다운 (자유 입력 호환: 옛값이 옵션에 없으면 옵션 끝에 추가)
+          _withSearchIcon(
+            columnKey: 'network',
+            value: _networkCtrl.text.trim(),
+            child: DropdownButtonFormField<String>(
+              value: () {
+                final v = _networkCtrl.text.trim();
+                if (v.isEmpty) return null;
+                return networkOptions.contains(v) ? v : v;
+              }(),
+              decoration: const InputDecoration(
+                labelText: '사용망',
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                const DropdownMenuItem<String>(value: null, child: Text('-')),
+                ...networkOptions
+                    .map((n) => DropdownMenuItem(value: n, child: Text(n))),
+                if (_networkCtrl.text.trim().isNotEmpty &&
+                    !networkOptions.contains(_networkCtrl.text.trim()))
+                  DropdownMenuItem(
+                    value: _networkCtrl.text.trim(),
+                    child: Text('${_networkCtrl.text.trim()} (기타)'),
+                  ),
+              ],
+              onChanged: readOnly
+                  ? null
+                  : (v) => setState(() => _networkCtrl.text = v ?? ''),
             ),
-            readOnly: readOnly,
           ),
           const SizedBox(height: 20),
 
@@ -645,7 +779,11 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
               Expanded(
                 child: TextFormField(
                   controller: _userNameCtrl,
-                  decoration: const InputDecoration(labelText: '실사용자 *', border: OutlineInputBorder()),
+                  decoration: InputDecoration(
+                    labelText: '실사용자 *',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: _searchSuffix('user_name', _userNameCtrl),
+                  ),
                   readOnly: readOnly,
                 ),
               ),
@@ -653,7 +791,11 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
               Expanded(
                 child: TextFormField(
                   controller: _userDeptCtrl,
-                  decoration: const InputDecoration(labelText: '실사용 부서', border: OutlineInputBorder()),
+                  decoration: InputDecoration(
+                    labelText: '실사용 부서',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: _searchSuffix('user_department', _userDeptCtrl),
+                  ),
                   readOnly: readOnly,
                 ),
               ),
@@ -661,7 +803,11 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
               Expanded(
                 child: TextFormField(
                   controller: _userEmpIdCtrl,
-                  decoration: const InputDecoration(labelText: '실사용자 사번', border: OutlineInputBorder()),
+                  decoration: InputDecoration(
+                    labelText: '실사용자 사번',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: _searchSuffix('user_employee_id', _userEmpIdCtrl),
+                  ),
                   readOnly: readOnly,
                 ),
               ),
@@ -675,7 +821,11 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
               Expanded(
                 child: TextFormField(
                   controller: _ownerNameCtrl,
-                  decoration: const InputDecoration(labelText: '소유자', border: OutlineInputBorder()),
+                  decoration: InputDecoration(
+                    labelText: '소유자',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: _searchSuffix('owner_name', _ownerNameCtrl),
+                  ),
                   readOnly: readOnly,
                 ),
               ),
@@ -683,7 +833,11 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
               Expanded(
                 child: TextFormField(
                   controller: _ownerDeptCtrl,
-                  decoration: const InputDecoration(labelText: '소유 부서', border: OutlineInputBorder()),
+                  decoration: InputDecoration(
+                    labelText: '소유 부서',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: _searchSuffix('owner_department', _ownerDeptCtrl),
+                  ),
                   readOnly: readOnly,
                 ),
               ),
@@ -691,7 +845,11 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
               Expanded(
                 child: TextFormField(
                   controller: _ownerEmpIdCtrl,
-                  decoration: const InputDecoration(labelText: '소유자 사번', border: OutlineInputBorder()),
+                  decoration: InputDecoration(
+                    labelText: '소유자 사번',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: _searchSuffix('owner_employee_id', _ownerEmpIdCtrl),
+                  ),
                   readOnly: readOnly,
                 ),
               ),
@@ -705,7 +863,11 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
               Expanded(
                 child: TextFormField(
                   controller: _adminNameCtrl,
-                  decoration: const InputDecoration(labelText: '관리자', border: OutlineInputBorder()),
+                  decoration: InputDecoration(
+                    labelText: '관리자',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: _searchSuffix('admin_name', _adminNameCtrl),
+                  ),
                   readOnly: readOnly,
                 ),
               ),
@@ -713,7 +875,11 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
               Expanded(
                 child: TextFormField(
                   controller: _adminDeptCtrl,
-                  decoration: const InputDecoration(labelText: '관리 부서', border: OutlineInputBorder()),
+                  decoration: InputDecoration(
+                    labelText: '관리 부서',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: _searchSuffix('admin_department', _adminDeptCtrl),
+                  ),
                   readOnly: readOnly,
                 ),
               ),
@@ -721,11 +887,39 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
               Expanded(
                 child: TextFormField(
                   controller: _adminEmpIdCtrl,
-                  decoration: const InputDecoration(labelText: '관리자 사번', border: OutlineInputBorder()),
+                  decoration: InputDecoration(
+                    labelText: '관리자 사번',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: _searchSuffix('admin_employee_id', _adminEmpIdCtrl),
+                  ),
                   readOnly: readOnly,
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+
+          // 3-1. 담당자 소속 드롭다운
+          _withSearchIcon(
+            columnKey: 'admin_affiliation',
+            value: _selectedAdminAffiliation,
+            child: DropdownButtonFormField<String>(
+              value: adminAffiliationOptions.contains(_selectedAdminAffiliation)
+                  ? _selectedAdminAffiliation
+                  : null,
+              decoration: const InputDecoration(
+                labelText: '소속',
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                const DropdownMenuItem<String>(value: null, child: Text('-')),
+                ...adminAffiliationOptions
+                    .map((s) => DropdownMenuItem(value: s, child: Text(s))),
+              ],
+              onChanged: readOnly
+                  ? null
+                  : (v) => setState(() => _selectedAdminAffiliation = v),
+            ),
           ),
           const SizedBox(height: 20),
 
@@ -733,14 +927,39 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
           _buildSectionTitle('위치 정보'),
           const SizedBox(height: 8),
 
+          // 건물 대분류 드롭다운
+          _withSearchIcon(
+            columnKey: 'building1',
+            value: _selectedBuilding1,
+            child: DropdownButtonFormField<String>(
+              value: building1Options.contains(_selectedBuilding1)
+                  ? _selectedBuilding1
+                  : null,
+              decoration: const InputDecoration(
+                labelText: '건물(대)',
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                const DropdownMenuItem<String>(value: null, child: Text('-')),
+                ...building1Options
+                    .map((s) => DropdownMenuItem(value: s, child: Text(s))),
+              ],
+              onChanged: readOnly
+                  ? null
+                  : (v) => setState(() => _selectedBuilding1 = v),
+            ),
+          ),
+          const SizedBox(height: 12),
+
           Row(
             children: [
               Expanded(
                 child: TextFormField(
                   controller: _buildingCtrl,
-                  decoration: const InputDecoration(
-                    labelText: '건물',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: '건물(상세)',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: _searchSuffix('building', _buildingCtrl),
                   ),
                   readOnly: readOnly,
                 ),
@@ -749,56 +968,15 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
               Expanded(
                 child: TextFormField(
                   controller: _floorCtrl,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: '층',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
+                    suffixIcon: _searchSuffix('floor', _floorCtrl),
                   ),
                   readOnly: readOnly,
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 20),
-
-          // ── 지급 정보 ──
-          _buildSectionTitle('지급 정보'),
-          const SizedBox(height: 8),
-
-          DropdownButtonFormField<String>(
-            value: _selectedSupplyType,
-            decoration: const InputDecoration(
-              labelText: '지급형태',
-              border: OutlineInputBorder(),
-            ),
-            items: supplyTypes
-                .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                .toList(),
-            onChanged: readOnly
-                ? null
-                : (v) => setState(() => _selectedSupplyType = v!),
-          ),
-          const SizedBox(height: 12),
-
-          // 만료일
-          InkWell(
-            onTap: readOnly
-                ? null
-                : () async {
-                    final picked = await _pickDate(_supplyEndDate);
-                    if (picked != null) {
-                      setState(() => _supplyEndDate = picked);
-                    }
-                  },
-            child: InputDecorator(
-              decoration: const InputDecoration(
-                labelText: '만료일',
-                border: OutlineInputBorder(),
-                suffixIcon: Icon(Icons.calendar_today),
-              ),
-              child: Text(
-                _supplyEndDate != null ? _dateFmt.format(_supplyEndDate!) : '-',
-              ),
-            ),
           ),
           const SizedBox(height: 20),
 
@@ -808,9 +986,10 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
 
           TextFormField(
             controller: _normalCommentCtrl,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: '일반 메모',
-              border: OutlineInputBorder(),
+              border: const OutlineInputBorder(),
+              suffixIcon: _searchSuffix('normal_comment', _normalCommentCtrl),
             ),
             readOnly: readOnly,
             maxLines: 3,
@@ -819,9 +998,10 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
 
           TextFormField(
             controller: _oaCommentCtrl,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'OA 메모',
-              border: OutlineInputBorder(),
+              border: const OutlineInputBorder(),
+              suffixIcon: _searchSuffix('oa_comment', _oaCommentCtrl),
             ),
             readOnly: readOnly,
             maxLines: 3,
@@ -892,6 +1072,46 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
                 ),
               ],
             ),
+            if (!isPresenceConnected && asset.lastActiveAt != null) ...[
+              const SizedBox(height: 4),
+              Builder(
+                builder: (ctx) {
+                  final days = DateTime.now().difference(asset.lastActiveAt!).inDays;
+                  final isStale = days >= 31;
+                  return Padding(
+                    padding: const EdgeInsets.only(left: 20),
+                    child: Row(
+                      children: [
+                        Text(
+                          '미접속일: $days일',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: isStale ? Colors.red.shade700 : null,
+                          ),
+                        ),
+                        if (isStale) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade100,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              '장기 미접속',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.red.shade800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
             const SizedBox(height: 16),
 
             // 실사 회차
@@ -966,29 +1186,6 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
               ),
             const SizedBox(height: 16),
 
-            // 배정 수령 상태
-            Row(
-              children: [
-                Icon(Icons.assignment_turned_in, size: 20, color: theme.colorScheme.primary),
-                const SizedBox(width: 8),
-                Text('배정 수령 상태', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                _buildAssignmentBadge(asset.assignmentStatus),
-                if (asset.assignmentConfirmedAt != null) ...[
-                  const SizedBox(width: 8),
-                  Text(
-                    '확인: ${dateFmt.format(asset.assignmentConfirmedAt!)}',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 16),
-
             // 관리자 명령 버튼
             const Divider(),
             const SizedBox(height: 8),
@@ -996,9 +1193,9 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () => _sendAgentCommand('request_heartbeat'),
-                    icon: const Icon(Icons.sync, size: 18),
-                    label: const Text('즉시 Heartbeat'),
+                    onPressed: _resetUserVerification,
+                    icon: const Icon(Icons.restart_alt, size: 18),
+                    label: const Text('사용자 확인 초기화'),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1084,6 +1281,19 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
             _deviceRow('OS 버전', deviceStatus['os_version']),
             _deviceRow('OS 상세', deviceStatus['os_detail_version']),
             _deviceRow('가동시간', _formatUptime(deviceStatus['uptime_hours'])),
+            // 추가: OS 보안 (기기 종류별 기준 평가) ──────────
+            _buildOsSecurityRow(context, deviceStatus),
+            // OS별 보안패치 세부 항목
+            if ((deviceStatus['os_security_patch'] as String?)?.isNotEmpty == true)
+              _deviceRow('보안패치(Android)', deviceStatus['os_security_patch']),
+            if ((deviceStatus['os_vendor_security_patch'] as String?)?.isNotEmpty == true)
+              _deviceRow('벤더 패치', deviceStatus['os_vendor_security_patch']),
+            if ((deviceStatus['os_build_number'] as String?)?.isNotEmpty == true)
+              _deviceRow('OS 빌드 번호', deviceStatus['os_build_number']),
+            if ((deviceStatus['os_ubr'] as String?)?.isNotEmpty == true)
+              _deviceRow('UBR (Windows)', deviceStatus['os_ubr']),
+            if ((deviceStatus['os_kb_list'] as String?)?.isNotEmpty == true)
+              _deviceRow('적용 KB', _truncateKb(deviceStatus['os_kb_list'] as String)),
             const SizedBox(height: 12),
 
             // 성능
@@ -1113,6 +1323,68 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
         ),
       ),
     );
+  }
+
+  /// OS 보안 상태 한 줄 — 라벨 + 색상 칩 + 상세 텍스트
+  Widget _buildOsSecurityRow(
+      BuildContext context, Map<String, dynamic> ds) {
+    final v = evaluateOsSecurity(ds);
+    final color = v.color(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(
+            width: 100,
+            child: Text('OS 보안',
+                style: TextStyle(fontSize: 13, color: Colors.grey)),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(v.icon, color: color, size: 14),
+                    const SizedBox(width: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        v.label,
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (v.detail.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      v.detail,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _truncateKb(String kbList) {
+    if (kbList.length <= 60) return kbList;
+    return '${kbList.substring(0, 60)}... (${kbList.split(',').length}건)';
   }
 
   Widget _deviceHeader(ThemeData theme, IconData icon, String title) {
@@ -1195,31 +1467,6 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
     }
   }
 
-  Widget _buildAssignmentBadge(String? status) {
-    switch (status) {
-      case 'pending':
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.orange.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: const Text('수령 대기', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
-        );
-      case 'confirmed':
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.green.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: const Text('수령 완료', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-        );
-      default:
-        return const Text('배정 없음', style: TextStyle(color: Colors.grey));
-    }
-  }
-
   Future<void> _sendAgentCommand(String command) async {
     if (_asset == null) return;
     try {
@@ -1235,6 +1482,44 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
           SnackBar(content: Text('명령 전송 실패: $e')),
         );
       }
+    }
+  }
+
+  /// 사용자 확인 현황 초기화 — verification_status / last_verified_at만 리셋 (단말 알림 X)
+  Future<void> _resetUserVerification() async {
+    if (_asset == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('사용자 확인 초기화'),
+        content: const Text(
+          '이 자산의 사용자 확인 기록을 미확인 상태로 되돌립니다. 단말에 알림은 전송하지 않습니다. 계속할까요?',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('초기화')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await Supabase.instance.client
+          .from('assets')
+          .update({
+            'verification_status': null,
+            'last_verified_at': null,
+          })
+          .eq('id', _asset!.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('사용자 확인 기록 초기화 완료')),
+      );
+      await _loadAsset();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('초기화 실패: $e')),
+      );
     }
   }
 

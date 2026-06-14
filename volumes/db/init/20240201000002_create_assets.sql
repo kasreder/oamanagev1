@@ -4,8 +4,10 @@
 CREATE TABLE public.assets (
   id            bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   asset_uid     text UNIQUE NOT NULL
-    CHECK (asset_uid ~ '^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD|TP|ET|EH)[0-9]{5}$'),
+    CHECK (asset_uid ~ '^[A-Z]{1,2}[0-9]{4,5}$'),
   name          text,
+  -- assets_status: 2026-06-14 폐기 예정 (이후 마이그레이션에서 DROP).
+  -- dummy_data.sql 호환 위해 컬럼/체크는 init 단계에선 유지.
   assets_status text DEFAULT '가용'
     CHECK (assets_status IN ('사용', '가용', '이동', '점검필요', '고장')),
   supply_type   text DEFAULT '지급'
