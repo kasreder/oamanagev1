@@ -35,7 +35,6 @@ class ApiService {
     int page = 1,
     int pageSize = defaultPageSize,
     String? category,
-    String? status,
     String? search,
     String? building,
     List<SearchCondition> conditions = const [],
@@ -51,9 +50,6 @@ class ApiService {
     if (category != null && category.isNotEmpty) {
       query = query.eq('category', category);
     }
-    if (status != null && status.isNotEmpty) {
-      query = query.eq('assets_status', status);
-    }
     if (building != null && building.isNotEmpty) {
       query = query.eq('building', building);
     }
@@ -61,7 +57,7 @@ class ApiService {
     // 캐시 키 (필터 시그니처)
     final cacheKey = [
       'p$page', 's$pageSize',
-      'c${category ?? ''}', 'st${status ?? ''}', 'b${building ?? ''}',
+      'c${category ?? ''}', 'b${building ?? ''}',
       'sr${search ?? ''}',
       ...conditions.map((c) => c.signature),
       'o$orderBy:${ascending ? 'a' : 'd'}',
@@ -117,7 +113,6 @@ class ApiService {
   /// 자산 목록 조회 (전체 — 페이지네이션 없음)
   Future<List<Asset>> fetchAllAssets({
     String? category,
-    String? status,
     String? search,
     String? building,
   }) async {
@@ -125,9 +120,6 @@ class ApiService {
 
     if (category != null && category.isNotEmpty) {
       query = query.eq('category', category);
-    }
-    if (status != null && status.isNotEmpty) {
-      query = query.eq('assets_status', status);
     }
     if (building != null && building.isNotEmpty) {
       query = query.eq('building', building);
@@ -191,27 +183,18 @@ class ApiService {
     int? roundId,         // 특정 라운드만
     bool? onlyUnlocked,   // true=등록되지 않은 것만(locked=false)
     List<SearchCondition> conditions = const [],
+    String? orderBy,      // null이면 id desc 기본
+    bool ascending = false,
+    bool orderInAssets = false,  // true면 assets join 컬럼 기준 정렬
   }) async {
     final from = (page - 1) * pageSize;
     final to = from + pageSize - 1;
 
-    // 자산 join — UI 1줄 표시용 필드 모두 포함
-    const selectFields =
-        'id,asset_id,asset_code,asset_type,inspector_name,user_team,'
-        'inspection_count,inspection_date,maintenance_company_staff,'
-        'department_confirm,inspection_building,inspection_floor,'
-        'inspection_position,status,memo,inspection_photo,signature_image,'
-        'round_id,locked,synced,created_at,updated_at,'
-        'assets!inner('
-        'asset_uid,name,category,'
-        'user_name,user_employee_id,user_department,'
-        'owner_name,owner_employee_id,owner_department,'
-        'admin_name,admin_employee_id,admin_department,'
-        'building,floor,vendor,model_name,serial_number,'
-        'network,normal_comment,oa_comment'
-        ')';
-
-    var query = _client.from('asset_inspections').select(selectFields);
+    // view 기반 (평탄 자산 컬럼 포함) — 자산 컬럼으로 정렬 가능
+    const selectFields = '*';
+    var query = _client
+        .from('asset_inspections_with_asset')
+        .select(selectFields);
 
     if (status != null && status.isNotEmpty) {
       query = query.eq('status', status);
@@ -228,29 +211,31 @@ class ApiService {
 
     // 자산 컬럼 검색 (embedded filter)
     if (conditions.isNotEmpty) {
+      // view에서는 자산 컬럼이 asset_<key> prefix
+      String viewCol(String k) => 'asset_$k';
       final hasOr = conditions.skip(1).any((c) => c.joiner == Joiner.or);
       final filled = conditions.where((c) => c.value.isNotEmpty).toList();
       if (filled.isNotEmpty) {
         if (!hasOr) {
           for (final c in filled) {
-            final key = 'assets.${c.column.key}';
+            final key = viewCol(c.column.key);
             query = c.op == SearchOp.eq
                 ? query.eq(key, c.value)
                 : query.ilike(key, '%${c.value}%');
           }
         } else {
-          // OR가 섞이면 embedded resource or()
           final orStr = filled.map((c) {
             final v = c.value
                 .replaceAll(',', r'\,')
                 .replaceAll('(', r'\(')
                 .replaceAll(')', r'\)')
                 .replaceAll('*', r'\*');
+            final key = viewCol(c.column.key);
             return c.op == SearchOp.eq
-                ? '${c.column.key}.eq.$v'
-                : '${c.column.key}.ilike.*$v*';
+                ? '$key.eq.$v'
+                : '$key.ilike.*$v*';
           }).join(',');
-          query = query.or(orStr, referencedTable: 'assets');
+          query = query.or(orStr);
         }
       }
     } else if (search != null && search.isNotEmpty) {
@@ -261,10 +246,14 @@ class ApiService {
       );
     }
 
+    // view에서는 자산 컬럼이 asset_<key>
+    final effectiveOrder = orderBy == null
+        ? 'id'
+        : (orderInAssets ? 'asset_$orderBy' : orderBy);
     final response = await query
-        .order('id', ascending: false)
+        .order(effectiveOrder, ascending: ascending)
         .range(from, to)
-        .count(CountOption.exact);
+        .count(CountOption.planned);
 
     final total = response.count;
     final rows = response.data
@@ -274,19 +263,11 @@ class ApiService {
     return (data: rows, total: total);
   }
 
-  /// 실사 단건 조회 (자산 JOIN 포함)
+  /// 실사 단건 조회 (자산 + 회차 평탄 view)
   Future<AssetInspection> fetchInspection(int id) async {
-    const selectFields =
-        'id,asset_id,asset_code,asset_type,inspector_name,user_team,'
-        'inspection_count,inspection_date,maintenance_company_staff,'
-        'department_confirm,inspection_building,inspection_floor,'
-        'inspection_position,status,memo,inspection_photo,signature_image,'
-        'synced,created_at,updated_at,'
-        'assets!inner(user_name,user_department)';
-
     final response = await _client
-        .from('asset_inspections')
-        .select(selectFields)
+        .from('asset_inspections_with_asset')
+        .select()
         .eq('id', id)
         .single();
     return AssetInspection.fromJson(response);

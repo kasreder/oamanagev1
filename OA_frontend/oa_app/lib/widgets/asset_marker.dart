@@ -37,7 +37,7 @@ class AssetMarker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
-    final color = getStatusColor(asset.assetsStatus, brightness);
+    final color = getStatusColor(asset.supplyType, brightness);
     final label = Drawing.getGridLabel(gridRow, gridCol);
 
     return Tooltip(
@@ -49,7 +49,7 @@ class AssetMarker extends StatelessWidget {
           ),
           if (asset.name != null)
             TextSpan(text: '${asset.name}\n'),
-          TextSpan(text: '상태: ${asset.assetsStatus}\n'),
+          TextSpan(text: '지급형태: ${asset.supplyType}\n'),
           TextSpan(text: '위치: $label'),
         ],
       ),
@@ -121,8 +121,8 @@ class AssetMarker extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _infoRow('자산명', asset.name ?? '-'),
-            _infoRow('카테고리', asset.category),
-            _infoRow('상태', asset.assetsStatus),
+            _infoRow('자산종류', asset.category),
+            _infoRow('지급형태', asset.supplyType),
             _infoRow('위치', label),
             if (asset.building != null)
               _infoRow('건물', asset.building!),

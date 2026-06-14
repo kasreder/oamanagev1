@@ -49,7 +49,19 @@ actual class SystemInfoCollector(
             macAddress = getMacAddress(),
             serialNumber = getSerialNumber(),
             phoneNumber = getPhoneNumber(),
+            osSecurityPatch = Build.VERSION.SECURITY_PATCH ?: "",
+            osVendorSecurityPatch = readGetProp("ro.vendor.build.security_patch"),
+            osBuildNumber = Build.VERSION.SDK_INT.toString(),
         )
+    }
+
+    private fun readGetProp(key: String): String {
+        return try {
+            val p = Runtime.getRuntime().exec(arrayOf("/system/bin/getprop", key))
+            p.inputStream.bufferedReader().use { it.readLine()?.trim().orEmpty() }
+        } catch (_: Exception) {
+            ""
+        }
     }
 
     // ─── CPU ────────────────────────────────────────────────────────────

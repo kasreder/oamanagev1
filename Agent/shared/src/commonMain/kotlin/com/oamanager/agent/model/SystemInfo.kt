@@ -32,4 +32,16 @@ data class SystemInfo(
     @SerialName("mac_address")          val macAddress: String = "",
     @SerialName("serial_number")        val serialNumber: String = "",
     @SerialName("phone_number")         val phoneNumber: String = "",
+
+    // ─── 보안/패치 관리 필드 (2026-06-14 추가) ─────────────────────────────
+    /** Android: ro.build.version.security_patch (예: "2025-12-05") */
+    @SerialName("os_security_patch")        val osSecurityPatch: String = "",
+    /** Android: ro.vendor.build.security_patch — 벤더/SoC 패치 날짜 */
+    @SerialName("os_vendor_security_patch") val osVendorSecurityPatch: String = "",
+    /** Windows: OS Build (예: "19045"). macOS: 시스템 빌드 (예: "24A348") */
+    @SerialName("os_build_number")          val osBuildNumber: String = "",
+    /** Windows: Update Build Revision (예: "5247") — 최신 누적 패치 식별자 */
+    @SerialName("os_ubr")                   val osUbr: String = "",
+    /** Windows: 적용된 KB 목록 (HotFixID 콤마 구분) */
+    @SerialName("os_kb_list")               val osKbList: String = "",
 )

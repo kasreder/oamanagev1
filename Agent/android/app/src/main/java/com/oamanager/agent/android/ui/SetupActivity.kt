@@ -54,6 +54,19 @@ class SetupActivity : AppCompatActivity() {
     private lateinit var btnVerify: Button
     private lateinit var progressBar: ProgressBar
 
+    // OS 정보 (접기/펼치기)
+    private lateinit var headerOsInfo: LinearLayout
+    private lateinit var sectionOsInfo: LinearLayout
+    private lateinit var tvOsToggleIndicator: TextView
+    private lateinit var tvOsVersion: TextView
+    private lateinit var tvOsDetail: TextView
+    private lateinit var tvOsBuild: TextView
+    private lateinit var tvOsSecurityPatch: TextView
+    private lateinit var tvOsVendorPatch: TextView
+    private lateinit var tvOsUbr: TextView
+    private lateinit var tvOsKbList: TextView
+    private lateinit var tvOsPatchStatus: TextView
+
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
 
     override fun onResume() {
@@ -107,6 +120,24 @@ class SetupActivity : AppCompatActivity() {
         tvEmployeeId = findViewById(R.id.tv_employee_id)
         btnVerify = findViewById(R.id.btn_verify)
         progressBar = findViewById(R.id.progress_bar)
+
+        headerOsInfo = findViewById(R.id.header_os_info)
+        sectionOsInfo = findViewById(R.id.section_os_info)
+        tvOsToggleIndicator = findViewById(R.id.tv_os_toggle_indicator)
+        tvOsVersion = findViewById(R.id.tv_os_version)
+        tvOsDetail = findViewById(R.id.tv_os_detail)
+        tvOsBuild = findViewById(R.id.tv_os_build)
+        tvOsSecurityPatch = findViewById(R.id.tv_os_security_patch)
+        tvOsVendorPatch = findViewById(R.id.tv_os_vendor_patch)
+        tvOsUbr = findViewById(R.id.tv_os_ubr)
+        tvOsKbList = findViewById(R.id.tv_os_kb_list)
+        tvOsPatchStatus = findViewById(R.id.tv_os_patch_status)
+
+        headerOsInfo.setOnClickListener {
+            val expanded = sectionOsInfo.visibility == View.VISIBLE
+            sectionOsInfo.visibility = if (expanded) View.GONE else View.VISIBLE
+            tvOsToggleIndicator.text = if (expanded) "▼" else "▲"
+        }
     }
 
     private fun setupAssetUidValidation() {
@@ -227,6 +258,9 @@ class SetupActivity : AppCompatActivity() {
                     showAssignmentDialog()
                 }
 
+                // OS / 보안패치 정보
+                bindOsInfo(state.systemInfo)
+
                 // 로딩
                 progressBar.visibility = if (state.isLoading) View.VISIBLE else View.GONE
 
@@ -300,6 +334,59 @@ class SetupActivity : AppCompatActivity() {
             }
             startActivity(intent)
         } catch (_: Exception) { }
+    }
+
+    /** OS/보안패치 정보 바인딩 — null이면 "수집 중" 표시. */
+    private fun bindOsInfo(info: com.oamanager.agent.model.SystemInfo?) {
+        if (info == null) {
+            tvOsVersion.text = "OS 버전: 수집 중..."
+            return
+        }
+        tvOsVersion.text = "OS 버전: ${info.osVersion.ifEmpty { "-" }}"
+        tvOsDetail.text = "OS 상세: ${info.osDetailVersion.ifEmpty { "-" }}"
+        tvOsBuild.text = "빌드 번호: ${info.osBuildNumber.ifEmpty { "-" }}"
+        tvOsSecurityPatch.text =
+            "보안패치 날짜: ${info.osSecurityPatch.ifEmpty { "-" }}"
+        tvOsVendorPatch.text =
+            "벤더 패치: ${info.osVendorSecurityPatch.ifEmpty { "-" }}"
+        tvOsUbr.text = "UBR: ${info.osUbr}"
+        tvOsUbr.visibility = if (info.osUbr.isNotEmpty()) View.VISIBLE else View.GONE
+        val kbShort = if (info.osKbList.length > 80)
+            info.osKbList.substring(0, 80) + "..."
+        else info.osKbList
+        tvOsKbList.text = "적용 KB: $kbShort"
+        tvOsKbList.visibility =
+            if (info.osKbList.isNotEmpty()) View.VISIBLE else View.GONE
+
+        // 보안 패치 신선도 평가 (Android만 기준 — 6개월=빨강, 3개월=주황)
+        val patch = info.osSecurityPatch
+        if (patch.matches(Regex("^\\d{4}-\\d{2}-\\d{2}$"))) {
+            val now = System.currentTimeMillis()
+            val patchMs = try {
+                java.text.SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                    .parse(patch)?.time ?: 0L
+            } catch (_: Exception) { 0L }
+            val ageDays = if (patchMs > 0) (now - patchMs) / (1000L * 60 * 60 * 24) else -1
+            when {
+                ageDays < 0 -> {
+                    tvOsPatchStatus.text = ""
+                }
+                ageDays > 180 -> {
+                    tvOsPatchStatus.text = "⚠ 보안 패치 ${ageDays}일 경과 — 위험 (180일 초과)"
+                    tvOsPatchStatus.setTextColor(Color.parseColor("#D32F2F"))
+                }
+                ageDays > 90 -> {
+                    tvOsPatchStatus.text = "⚠ 보안 패치 ${ageDays}일 경과 — 주의 (90일 초과)"
+                    tvOsPatchStatus.setTextColor(Color.parseColor("#F57C00"))
+                }
+                else -> {
+                    tvOsPatchStatus.text = "✓ 보안 패치 양호 (${ageDays}일 경과)"
+                    tvOsPatchStatus.setTextColor(Color.parseColor("#388E3C"))
+                }
+            }
+        } else {
+            tvOsPatchStatus.text = ""
+        }
     }
 
     private fun getVersionName(): String {

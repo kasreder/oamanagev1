@@ -49,23 +49,50 @@ class SearchCondition {
 /// 검색 가능한 컬럼 목록.
 /// ilike 대상은 텍스트 검색(자유 입력), eq 대상은 정확 일치(드롭다운 후보 권장).
 const kSearchableColumns = <SearchableColumn>[
-  SearchableColumn('asset_uid',        '자산번호',     SearchOp.ilike),
-  SearchableColumn('name',             '자산명',       SearchOp.ilike),
-  SearchableColumn('serial_number',    '시리얼',       SearchOp.ilike),
-  SearchableColumn('user_name',        '실사용자',     SearchOp.ilike),
-  SearchableColumn('user_employee_id', '사용자사번',   SearchOp.ilike),
-  SearchableColumn('user_department',  '실사용자부서', SearchOp.ilike),
-  SearchableColumn('owner_name',       '소유자',       SearchOp.ilike),
-  SearchableColumn('owner_department', '소유자부서',   SearchOp.ilike),
-  SearchableColumn('admin_name',       '관리자',       SearchOp.ilike),
-  SearchableColumn('admin_department', '관리자부서',   SearchOp.ilike),
-  SearchableColumn('vendor',           '제조사',       SearchOp.ilike),
-  SearchableColumn('model_name',       '모델명',       SearchOp.ilike),
-  SearchableColumn('building',         '건물',         SearchOp.eq),
-  SearchableColumn('floor',            '층',           SearchOp.eq),
-  SearchableColumn('category',         '유형',         SearchOp.eq),
-  SearchableColumn('assets_status',    '상태',         SearchOp.eq),
-  SearchableColumn('supply_type',      '지급형태',     SearchOp.eq),
+  // 기본 식별/이름
+  SearchableColumn('asset_uid',           '자산번호',       SearchOp.ilike),
+  SearchableColumn('name',                '자산명',         SearchOp.ilike),
+  SearchableColumn('category',            '자산종류',       SearchOp.eq),
+  SearchableColumn('supply_type',         '지급형태',       SearchOp.eq),
+  SearchableColumn('serial_number',       '시리얼번호',     SearchOp.ilike),
+  SearchableColumn('model_name',          '모델명',         SearchOp.ilike),
+  SearchableColumn('vendor',              '제조사',         SearchOp.ilike),
+  SearchableColumn('mac_address',         'MAC주소',        SearchOp.ilike),
+  SearchableColumn('network',             '네트워크',       SearchOp.ilike),
+  // 위치
+  SearchableColumn('building1',           '건물(대)',       SearchOp.eq),
+  SearchableColumn('building',            '건물',           SearchOp.eq),
+  SearchableColumn('floor',               '층',             SearchOp.eq),
+  // 사람
+  SearchableColumn('user_name',           '실사용자',       SearchOp.ilike),
+  SearchableColumn('user_employee_id',    '실사용자사번',   SearchOp.ilike),
+  SearchableColumn('user_department',     '실사용자부서',   SearchOp.ilike),
+  SearchableColumn('owner_name',          '소유자',         SearchOp.ilike),
+  SearchableColumn('owner_employee_id',   '소유자사번',     SearchOp.ilike),
+  SearchableColumn('owner_department',    '소유자부서',     SearchOp.ilike),
+  SearchableColumn('admin_name',          '관리자',         SearchOp.ilike),
+  SearchableColumn('admin_employee_id',   '관리자사번',     SearchOp.ilike),
+  SearchableColumn('admin_department',    '관리자부서',     SearchOp.ilike),
+  SearchableColumn('admin_affiliation',   '담당자 소속',    SearchOp.eq),
+  // 비고
+  SearchableColumn('normal_comment',      '일반비고',       SearchOp.ilike),
+  SearchableColumn('oa_comment',          'OA비고',         SearchOp.ilike),
+  // 일자
+  SearchableColumn('physical_check_date', '실사일',         SearchOp.ilike),
+  SearchableColumn('confirmation_date',   '확인일',         SearchOp.ilike),
+  SearchableColumn('supply_end_date',     '지급만료일',     SearchOp.ilike),
+  // 도면/위치
+  SearchableColumn('location_drawing_id', '도면ID',         SearchOp.eq),
+  SearchableColumn('location_row',        '위치(행)',       SearchOp.eq),
+  SearchableColumn('location_col',        '위치(열)',       SearchOp.eq),
+  SearchableColumn('location_drawing_file','도면파일',      SearchOp.ilike),
+  // OS / 에이전트 (JSONB path)
+  SearchableColumn('specifications->device_status->>os_version',
+      'OS종류/버전', SearchOp.ilike),
+  SearchableColumn('specifications->device_status->>os_detail_version',
+      'OS상세', SearchOp.ilike),
+  SearchableColumn('specifications->device_status->>os_security_patch',
+      'OS보안패치', SearchOp.ilike),
 ];
 
 /// PostgREST `or()` 문자열 빌더.

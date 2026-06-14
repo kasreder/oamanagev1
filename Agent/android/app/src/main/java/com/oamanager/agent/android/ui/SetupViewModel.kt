@@ -6,8 +6,10 @@ import androidx.lifecycle.viewModelScope
 import com.oamanager.agent.AgentConfig
 import com.oamanager.agent.android.OAAgentApp
 import com.oamanager.agent.android.data.AgentPreferences
+import com.oamanager.agent.model.SystemInfo
 import com.oamanager.agent.network.AuthManager
 import com.oamanager.agent.network.SupabaseClient
+import com.oamanager.agent.platform.SystemInfoCollector
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,6 +44,7 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
         val isLoading: Boolean = false,
         val message: String? = null,
         val highlightHeartbeat: Boolean = false,  // 관리자 명령 직후 3초간 강조
+        val systemInfo: SystemInfo? = null,        // OS/보안패치 정보 표시용
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -50,6 +53,26 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
     init {
         loadSavedState()
         fetchServerInterval()
+        collectSystemInfo()
+    }
+
+    /** OS/보안패치 정보 수집 — UI 표시 전용. 백그라운드 1회. */
+    fun collectSystemInfo() {
+        viewModelScope.launch {
+            try {
+                val app = getApplication<Application>()
+                val agentVer = try {
+                    app.packageManager.getPackageInfo(app.packageName, 0).versionName ?: ""
+                } catch (_: Exception) { "" }
+                val info = SystemInfoCollector(
+                    context = app,
+                    assetUserName = prefs.assetUserName ?: "",
+                    employeeId = prefs.employeeId ?: "",
+                    agentVersion = agentVer,
+                ).collect()
+                _uiState.value = _uiState.value.copy(systemInfo = info)
+            } catch (_: Exception) { /* 표시 실패는 무시 */ }
+        }
     }
 
     private fun loadSavedState() {

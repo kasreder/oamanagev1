@@ -14,6 +14,7 @@ import '../models/asset.dart';
 import '../models/search_condition.dart';
 import '../services/api_service.dart';
 import '../notifiers/agent_presence_notifier.dart';
+import '../utils/os_security.dart';
 import '../widgets/asset_search_dialog.dart';
 import '../widgets/common/app_scaffold.dart';
 import '../widgets/common/loading_widget.dart';
@@ -28,7 +29,15 @@ import '../widgets/common/empty_state_widget.dart';
 /// - 행 클릭 -> /asset/:id
 /// - 앱바 ? 아이콘 -> 자산번호 부여 기준 안내
 class AssetListPage extends ConsumerStatefulWidget {
-  const AssetListPage({super.key});
+  /// `/assets?col=vendor&val=Dell` 같은 진입 시 자동 검색 적용
+  final String? initialSearchColumnKey;
+  final String? initialSearchValue;
+
+  const AssetListPage({
+    super.key,
+    this.initialSearchColumnKey,
+    this.initialSearchValue,
+  });
 
   @override
   ConsumerState<AssetListPage> createState() => _AssetListPageState();
@@ -55,7 +64,6 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
 
   // 필터 상태
   String? _selectedCategory;
-  String? _selectedStatus;
   String _searchQuery = '';
   List<SearchCondition> _searchConditions = [];
 
@@ -64,30 +72,55 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
   bool _sortAscending = true;
 
   // 서버 정렬 가능 컬럼 화이트리스트 (라벨 → DB 컬럼)
+  // 제외: 접속현황/사용자확인/배정상태 — 클라이언트 계산
+  //       OS종류/OS버전/OS상세 — specifications JSONB 안의 값
+  //       도면파일 — text라 정렬 의미 약함
   static const Map<String, String> _serverSortKeys = {
     'ID': 'id',
     '자산번호': 'asset_uid',
     '자산명': 'name',
-    '상태': 'assets_status',
-    '유형': 'category',
+    '자산종류': 'category',
     '지급형태': 'supply_type',
-    '시리얼': 'serial_number',
+    '지급만료일': 'supply_end_date',
+    '시리얼번호': 'serial_number',
     '모델명': 'model_name',
     '제조사': 'vendor',
+    '네트워크': 'network',
+    'MAC주소': 'mac_address',
+    '실사일': 'physical_check_date',
+    '확인일': 'confirmation_date',
+    '일반비고': 'normal_comment',
+    'OA비고': 'oa_comment',
+    '건물(대)': 'building1',
     '건물': 'building',
     '층': 'floor',
     '실사용자': 'user_name',
+    '실사용부서': 'user_department',
+    '실사용자사번': 'user_employee_id',
     '소유자': 'owner_name',
+    '소유부서': 'owner_department',
+    '소유자사번': 'owner_employee_id',
     '관리자': 'admin_name',
+    '관리부서': 'admin_department',
+    '관리자사번': 'admin_employee_id',
+    '도면ID': 'location_drawing_id',
+    '위치(행)': 'location_row',
+    '위치(열)': 'location_col',
+    '등록자ID': 'user_id',
+    '실사회차': 'inspection_round_no',
     '등록일': 'created_at',
     '수정일': 'updated_at',
-    '마지막 접속': 'last_active_at',
+    // JSONB path (PostgREST 정렬 가능). OS종류는 OS버전 첫 단어 기준이라 같은 키 사용.
+    'OS종류': 'specifications->device_status->>os_version',
+    'OS버전': 'specifications->device_status->>os_version',
+    'OS상세': 'specifications->device_status->>os_detail_version',
+    // OS보안: Android만 의미 있는 패치 날짜 기준 — 다른 OS는 NULL 그룹화됨
+    'OS보안': 'specifications->device_status->>os_security_patch',
   };
 
   static const double _colId = 80;
   static const double _colAssetUid = 170;
   static const double _colName = 230;
-  static const double _colStatus = 130;
   static const double _colSupplyType = 130;
   static const double _colSupplyEndDate = 170;
   static const double _colCategory = 130;
@@ -127,10 +160,9 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
     _AssetColumnMeta(label: 'ID', width: _colId, value: _assetId),
     _AssetColumnMeta(label: '자산번호', width: _colAssetUid, value: _assetUid),
     _AssetColumnMeta(label: '자산명', width: _colName, value: _assetName),
-    _AssetColumnMeta(label: '상태', width: _colStatus, value: _assetStatus),
     _AssetColumnMeta(label: '지급형태', width: _colSupplyType, value: _assetSupplyType),
     _AssetColumnMeta(label: '지급만료일', width: _colSupplyEndDate, value: _assetSupplyEndDate),
-    _AssetColumnMeta(label: '유형', width: _colCategory, value: _assetCategory),
+    _AssetColumnMeta(label: '자산종류', width: _colCategory, value: _assetCategory),
     _AssetColumnMeta(label: '시리얼번호', width: _colSerial, value: _assetSerialNumber),
     _AssetColumnMeta(label: '모델명', width: _colModelName, value: _assetModelName),
     _AssetColumnMeta(label: '제조사', width: _colVendor, value: _assetVendor),
@@ -166,7 +198,44 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
     _AssetColumnMeta(label: '사용자확인', width: _colVerificationStatus, value: _assetVerificationStatusText, widgetBuilder: _verificationStatusWidget),
     _AssetColumnMeta(label: '배정상태', width: _colAssignmentStatus, value: _assetAssignmentStatusText, widgetBuilder: _assignmentStatusWidget),
     _AssetColumnMeta(label: '실사회차', width: 80, value: _assetInspectionRoundNo),
+    _AssetColumnMeta(label: 'OS보안', width: 120, value: _assetOsSecurityText, widgetBuilder: _osSecurityWidget),
   ];
+
+  static String _assetOsSecurityText(Asset asset, DateFormat _) {
+    final ds = asset.specifications['device_status'] as Map<String, dynamic>?;
+    return evaluateOsSecurity(ds).label;
+  }
+
+  static Widget _osSecurityWidget(Asset asset, BuildContext context) {
+    final ds = asset.specifications['device_status'] as Map<String, dynamic>?;
+    final v = evaluateOsSecurity(ds);
+    final color = v.color(context);
+    return Tooltip(
+      message: v.detail,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(v.icon, color: color, size: 12),
+            const SizedBox(width: 4),
+            Text(
+              v.label,
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   static String _assetInspectionRoundNo(Asset asset, DateFormat _) =>
       '${asset.inspectionRoundNo}차';
@@ -195,6 +264,9 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
     _columnVisibility = {for (final column in _allColumns) column.label: true};
     _columnWidths = {for (final column in _allColumns) column.label: column.width};
     _loadColumnConfig(); // 저장된 컬럼 설정 복원 (async, 즉시 반환)
+
+    // 자산상세에서 [이 값으로 검색]으로 진입 시 자동 검색 조건 적용
+    _applyInitialSearch();
     _loadAssets();
 
     // 세로 스크롤 동기화 + 무한스크롤 (끝 200px 도달 시 다음 페이지)
@@ -261,7 +333,6 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
         page: _loadedPage,
         pageSize: _pageSize,
         category: _selectedCategory,
-        status: _selectedStatus,
         search: _searchConditions.isEmpty && _searchQuery.isNotEmpty
             ? _searchQuery
             : null,
@@ -298,9 +369,14 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
     if (!_serverSortKeys.containsKey(label)) return; // 서버 정렬 미지원 컬럼은 무시
     setState(() {
       if (_sortColumnLabel == label) {
-        _sortAscending = !_sortAscending;
+        if (_sortAscending) {
+          _sortAscending = false;        // asc → desc
+        } else {
+          _sortColumnLabel = null;       // desc → 해제
+          _sortAscending = true;
+        }
       } else {
-        _sortColumnLabel = label;
+        _sortColumnLabel = label;        // 새 컬럼 — asc부터
         _sortAscending = true;
       }
     });
@@ -309,11 +385,6 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
 
   void _onCategoryChanged(String? category) {
     _selectedCategory = category;
-    _loadAssets();
-  }
-
-  void _onStatusChanged(String? status) {
-    _selectedStatus = status;
     _loadAssets();
   }
 
@@ -406,6 +477,25 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
       _searchController.clear();
     });
     _loadAssets();
+  }
+
+  void _applyInitialSearch() {
+    final col = widget.initialSearchColumnKey;
+    final val = widget.initialSearchValue;
+    if (col == null || val == null || val.trim().isEmpty) return;
+    SearchableColumn? sc;
+    for (final c in kSearchableColumns) {
+      if (c.key == col) { sc = c; break; }
+    }
+    if (sc == null) return;
+    _searchConditions = [
+      SearchCondition(
+        column: sc,
+        op: sc.defaultOp,
+        value: val.trim(),
+        joiner: Joiner.and,
+      ),
+    ];
   }
 
   void _clearSearchConditions() {
@@ -571,55 +661,15 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
       ),
       child: Row(
         children: [
-          // 카테고리 드롭다운
-          SizedBox(
+          // 카테고리 드롭다운 — Container + DropdownButton (FormField 미사용으로 정확한 높이 32)
+          _CompactDropdown<String>(
             width: compact ? 90 : 110,
-            height: 32,
-            child: DropdownButtonFormField<String>(
-              value: _selectedCategory,
-              decoration: const InputDecoration(
-                hintText: '카테고리',
-                floatingLabelBehavior: FloatingLabelBehavior.never,
-                isDense: true,
-                contentPadding: dense,
-                border: OutlineInputBorder(),
-              ),
-              style: theme.textTheme.bodySmall,
-              isExpanded: true,
-              items: [
-                const DropdownMenuItem(value: null, child: Text('전체')),
-                ...assetCategories.map(
-                  (c) => DropdownMenuItem(value: c, child: Text(c)),
-                ),
-              ],
-              onChanged: _onCategoryChanged,
-            ),
-          ),
-          const SizedBox(width: 4),
-
-          // 상태 드롭다운
-          SizedBox(
-            width: compact ? 70 : 90,
-            height: 32,
-            child: DropdownButtonFormField<String>(
-              value: _selectedStatus,
-              decoration: const InputDecoration(
-                hintText: '상태',
-                floatingLabelBehavior: FloatingLabelBehavior.never,
-                isDense: true,
-                contentPadding: dense,
-                border: OutlineInputBorder(),
-              ),
-              style: theme.textTheme.bodySmall,
-              isExpanded: true,
-              items: [
-                const DropdownMenuItem(value: null, child: Text('전체')),
-                ...assetStatuses.map(
-                  (s) => DropdownMenuItem(value: s, child: Text(s)),
-                ),
-              ],
-              onChanged: _onStatusChanged,
-            ),
+            value: _selectedCategory,
+            hint: '자산종류',
+            items: [null, ...assetCategories],
+            labelOf: (v) => v ?? '전체',
+            onChanged: _onCategoryChanged,
+            theme: theme,
           ),
           const SizedBox(width: 4),
 
@@ -700,14 +750,15 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
     final theme = Theme.of(context);
 
     return Padding(
-      padding: const EdgeInsets.only(top: 8, left: 16, right: 16),
+      padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
       child: Row(
         children: [
-          // ── 메인 테이블 영역 ──
+          // 메인 테이블 영역 — 가로 스크롤
           Expanded(
             child: Scrollbar(
               controller: _horizontalScrollController,
               thumbVisibility: true,
+              trackVisibility: true,
               child: SingleChildScrollView(
                 controller: _horizontalScrollController,
                 scrollDirection: Axis.horizontal,
@@ -734,12 +785,13 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
               ),
             ),
           ),
-          // ── 세로 스크롤바 (화면 오른쪽 고정) ──
+          // 화면 우측 고정 세로 스크롤바
           SizedBox(
             width: 14,
             child: Scrollbar(
               controller: _verticalBarController,
               thumbVisibility: true,
+              trackVisibility: true,
               child: SingleChildScrollView(
                 controller: _verticalBarController,
                 child: SizedBox(
@@ -749,6 +801,7 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
               ),
             ),
           ),
+          const SizedBox(width: 4),
         ],
       ),
     );
@@ -933,17 +986,24 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w700,
+                          color: _sortColumnLabel == label
+                              ? theme.colorScheme.primary
+                              : null,
                         ),
                       ),
                     ),
-                    if (_sortColumnLabel == label) ...[
+                    if (_serverSortKeys.containsKey(label)) ...[
                       const SizedBox(width: 4),
                       Icon(
-                        _sortAscending
-                            ? Icons.arrow_upward
-                            : Icons.arrow_downward,
+                        _sortColumnLabel == label
+                            ? (_sortAscending
+                                ? Icons.arrow_upward
+                                : Icons.arrow_downward)
+                            : Icons.unfold_more,
                         size: 14,
-                        color: theme.colorScheme.primary,
+                        color: _sortColumnLabel == label
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.outline,
                       ),
                     ],
                   ],
@@ -1038,9 +1098,7 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
 
   static String _assetUid(Asset asset, DateFormat _) => asset.assetUid;
 
-  static String _assetName(Asset asset, DateFormat _) => asset.name ?? '[NULL]';
-
-  static String _assetStatus(Asset asset, DateFormat _) => asset.assetsStatus;
+  static String _assetName(Asset asset, DateFormat _) => asset.name ?? '';
 
   static String _assetSupplyType(Asset asset, DateFormat _) => asset.supplyType;
 
@@ -1050,16 +1108,16 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
   static String _assetCategory(Asset asset, DateFormat _) => asset.category;
 
   static String _assetSerialNumber(Asset asset, DateFormat _) =>
-      asset.serialNumber ?? '[NULL]';
+      asset.serialNumber ?? '';
 
   static String _assetModelName(Asset asset, DateFormat _) =>
-      asset.modelName ?? '[NULL]';
+      asset.modelName ?? '';
 
   static String _assetVendor(Asset asset, DateFormat _) =>
-      asset.vendor ?? '[NULL]';
+      asset.vendor ?? '';
 
   static String _assetNetwork(Asset asset, DateFormat _) =>
-      asset.network ?? '[NULL]';
+      asset.network ?? '';
 
   static String _assetPhysicalCheckDate(Asset asset, DateFormat dateFormat) =>
       _formatStaticDate(asset.physicalCheckDate, dateFormat);
@@ -1068,55 +1126,55 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
       _formatStaticDate(asset.confirmationDate, dateFormat);
 
   static String _assetNormalComment(Asset asset, DateFormat _) =>
-      asset.normalComment ?? '[NULL]';
+      asset.normalComment ?? '';
 
   static String _assetOaComment(Asset asset, DateFormat _) =>
-      asset.oaComment ?? '[NULL]';
+      asset.oaComment ?? '';
 
   static String _assetMacAddress(Asset asset, DateFormat _) =>
-      asset.macAddress ?? '[NULL]';
+      asset.macAddress ?? '';
 
   static String _assetBuilding1(Asset asset, DateFormat _) =>
-      asset.building1 ?? '[NULL]';
+      asset.building1 ?? '';
 
   static String _assetBuilding(Asset asset, DateFormat _) =>
-      asset.building ?? '[NULL]';
+      asset.building ?? '';
 
   static String _assetFloor(Asset asset, DateFormat _) =>
-      asset.floor ?? '[NULL]';
+      asset.floor ?? '';
 
   static String _assetOwnerName(Asset asset, DateFormat _) =>
-      asset.ownerName ?? '[NULL]';
+      asset.ownerName ?? '';
 
   static String _assetOwnerDepartment(Asset asset, DateFormat _) =>
-      asset.ownerDepartment ?? '[NULL]';
+      asset.ownerDepartment ?? '';
 
   static String _assetUserName(Asset asset, DateFormat _) =>
-      asset.userName ?? '[NULL]';
+      asset.userName ?? '';
 
   static String _assetUserDepartment(Asset asset, DateFormat _) =>
-      asset.userDepartment ?? '[NULL]';
+      asset.userDepartment ?? '';
 
   static String _assetAdminName(Asset asset, DateFormat _) =>
-      asset.adminName ?? '[NULL]';
+      asset.adminName ?? '';
 
   static String _assetAdminDepartment(Asset asset, DateFormat _) =>
-      asset.adminDepartment ?? '[NULL]';
+      asset.adminDepartment ?? '';
 
   static String _assetLocationDrawingId(Asset asset, DateFormat _) =>
-      asset.locationDrawingId?.toString() ?? '[NULL]';
+      asset.locationDrawingId?.toString() ?? '';
 
   static String _assetLocationRow(Asset asset, DateFormat _) =>
-      asset.locationRow?.toString() ?? '[NULL]';
+      asset.locationRow?.toString() ?? '';
 
   static String _assetLocationCol(Asset asset, DateFormat _) =>
-      asset.locationCol?.toString() ?? '[NULL]';
+      asset.locationCol?.toString() ?? '';
 
   static String _assetLocationDrawingFile(Asset asset, DateFormat _) =>
-      asset.locationDrawingFile ?? '[NULL]';
+      asset.locationDrawingFile ?? '';
 
   static String _assetUserId(Asset asset, DateFormat _) =>
-      asset.userId?.toString() ?? '[NULL]';
+      asset.userId?.toString() ?? '';
 
   static String _assetCreatedAt(Asset asset, DateFormat dateFormat) =>
       _formatStaticDate(asset.createdAt, dateFormat);
@@ -1125,35 +1183,34 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
       _formatStaticDate(asset.updatedAt, dateFormat);
 
   static String _assetUserEmployeeId(Asset asset, DateFormat _) =>
-      asset.userEmployeeId ?? '[NULL]';
+      asset.userEmployeeId ?? '';
 
   static String _assetOwnerEmployeeId(Asset asset, DateFormat _) =>
-      asset.ownerEmployeeId ?? '[NULL]';
+      asset.ownerEmployeeId ?? '';
 
   static String _assetAdminEmployeeId(Asset asset, DateFormat _) =>
-      asset.adminEmployeeId ?? '[NULL]';
+      asset.adminEmployeeId ?? '';
 
   // ── OS 정보 (에이전트 전송 데이터) ──────────────────────────────────────
 
   static String _assetOsType(Asset asset, DateFormat _) {
     final ds = asset.specifications['device_status'] as Map<String, dynamic>?;
-    if (ds == null) return '[NULL]';
+    if (ds == null) return '';
     final osVer = ds['os_version'] as String?;
-    if (osVer == null || osVer.isEmpty) return '[NULL]';
-    // "Android 16 (API 36)" → "Android"
+    if (osVer == null || osVer.isEmpty) return '';
     return osVer.split(' ').first;
   }
 
   static String _assetOsVersion(Asset asset, DateFormat _) {
     final ds = asset.specifications['device_status'] as Map<String, dynamic>?;
-    if (ds == null) return '[NULL]';
-    return (ds['os_version'] as String?) ?? '[NULL]';
+    if (ds == null) return '';
+    return (ds['os_version'] as String?) ?? '';
   }
 
   static String _assetOsDetail(Asset asset, DateFormat _) {
     final ds = asset.specifications['device_status'] as Map<String, dynamic>?;
-    if (ds == null) return '[NULL]';
-    return (ds['os_detail_version'] as String?) ?? '[NULL]';
+    if (ds == null) return '';
+    return (ds['os_detail_version'] as String?) ?? '';
   }
 
   // ── 접속현황 (Access Status Indicator) ──────────────────────────────────
@@ -1331,7 +1388,7 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
   }
 
   static String _formatStaticDate(DateTime? value, DateFormat dateFormat) {
-    if (value == null) return '[NULL]';
+    if (value == null) return '';
     return dateFormat.format(value);
   }
 
@@ -1508,6 +1565,59 @@ class _CompactButton extends StatelessWidget {
         icon: iconWidget,
         label: text,
         style: style,
+      ),
+    );
+  }
+}
+
+/// 정확히 32px 높이로 그리는 컴팩트 드롭다운 (DropdownButtonFormField의 baseline 제약을 우회).
+class _CompactDropdown<T> extends StatelessWidget {
+  final double width;
+  final T? value;
+  final String hint;
+  final List<T?> items;
+  final String Function(T?) labelOf;
+  final void Function(T?) onChanged;
+  final ThemeData theme;
+  final double height;
+
+  const _CompactDropdown({
+    required this.width,
+    required this.value,
+    required this.hint,
+    required this.items,
+    required this.labelOf,
+    required this.onChanged,
+    required this.theme,
+    this.height = 32,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      decoration: BoxDecoration(
+        border: Border.all(color: theme.colorScheme.outline),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T?>(
+          value: value,
+          hint: Text(hint, style: theme.textTheme.bodySmall),
+          isExpanded: true,
+          isDense: true,
+          icon: const Icon(Icons.arrow_drop_down, size: 16),
+          style: theme.textTheme.bodySmall,
+          items: items
+              .map((v) => DropdownMenuItem<T?>(
+                    value: v,
+                    child: Text(labelOf(v), overflow: TextOverflow.ellipsis),
+                  ))
+              .toList(),
+          onChanged: onChanged,
+        ),
       ),
     );
   }

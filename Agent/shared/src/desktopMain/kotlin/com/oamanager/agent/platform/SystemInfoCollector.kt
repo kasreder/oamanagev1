@@ -42,7 +42,47 @@ actual class SystemInfoCollector(
             macAddress = getMacAddress(),
             serialNumber = getSerialNumber(),
             phoneNumber = "",
+            osBuildNumber = getOsBuildNumber(),
+            osUbr = if (isMac) "" else getWindowsUbr(),
+            osKbList = if (isMac) "" else getWindowsKbList(),
         )
+    }
+
+    // ─── 취약점 관리 (Build/UBR/KB) ─────────────────────────────────────────
+
+    /** Windows: OS Build (예: "19045").  macOS: 시스템 빌드 (예: "24A348") */
+    private fun getOsBuildNumber(): String {
+        return try {
+            if (isMac) {
+                runShell("sh", "-c", "sw_vers -buildVersion").trim()
+            } else {
+                runPowerShell("(Get-CimInstance Win32_OperatingSystem).BuildNumber").trim()
+            }
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    /** Windows UBR (HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\UBR) */
+    private fun getWindowsUbr(): String {
+        return try {
+            runPowerShell(
+                "(Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion').UBR"
+            ).trim()
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    /** Windows 적용 KB 목록 — Get-HotFix 결과를 콤마로 join. 실패 시 빈 문자열. */
+    private fun getWindowsKbList(): String {
+        return try {
+            runPowerShell(
+                "(Get-HotFix | Sort-Object InstalledOn -Descending | Select-Object -ExpandProperty HotFixID) -join ','"
+            ).trim()
+        } catch (_: Exception) {
+            ""
+        }
     }
 
     // ─── CPU ────────────────────────────────────────────────────────────

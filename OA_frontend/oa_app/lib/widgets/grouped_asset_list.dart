@@ -87,8 +87,8 @@ class GroupedAssetList extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
 
-                // 상태 뱃지
-                StatusBadge(status: asset.assetsStatus),
+                // 지급형태 뱃지
+                StatusBadge(status: asset.supplyType),
               ],
             ),
           ),

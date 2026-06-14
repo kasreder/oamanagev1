@@ -46,21 +46,23 @@ class AppColorsDark {
   static const headerText = Color(0xFF9E9E9E);
 }
 
-/// 자산 상태별 색상 반환
+/// 자산 지급형태별 색상 반환
+/// (옛 assets_status는 2026-06-14 폐기. status 인자 이름은 호환성 유지.)
 Color getStatusColor(String status, Brightness brightness) {
   final isLight = brightness == Brightness.light;
   switch (status) {
-    case '사용':
+    case '지급':
       return isLight ? AppColorsLight.statusUsing : AppColorsDark.statusUsing;
-    case '가용':
+    case '렌탈':
+    case '대여':
       return isLight
           ? AppColorsLight.statusAvailable
           : AppColorsDark.statusAvailable;
-    case '점검필요':
+    case '창고(점검)':
       return isLight
           ? AppColorsLight.statusNeedCheck
           : AppColorsDark.statusNeedCheck;
-    case '고장':
+    case '폐기':
       return isLight ? AppColorsLight.statusBroken : AppColorsDark.statusBroken;
     case '이동':
       return isLight ? AppColorsLight.statusMoving : AppColorsDark.statusMoving;

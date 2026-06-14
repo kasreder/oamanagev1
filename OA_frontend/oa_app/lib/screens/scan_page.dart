@@ -433,7 +433,7 @@ class _ScanPageState extends ConsumerState<ScanPage> {
                 controller: _manualInputCtrl,
                 decoration: InputDecoration(
                   labelText: '자산번호',
-                  hintText: '예) BDT00001, D00123',
+                  hintText: '예) D00123, TP0012',
                   border: const OutlineInputBorder(),
                   prefixIcon: const Icon(Icons.search),
                   suffixIcon: IconButton(
