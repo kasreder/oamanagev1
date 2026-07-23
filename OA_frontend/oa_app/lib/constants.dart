@@ -61,6 +61,13 @@ const List<String> adminAffiliationOptions = [
   '롯데카드 외',
 ];
 
+/// 층 옵션 — assets.floor, drawings.floor 등 공통
+const List<String> floorOptions = [
+  'B2', 'B1',
+  '1F', '2F', '3F', '4F', '5F', '6F',
+  '옥상',
+];
+
 /// 사용망 목록 (네트워크 컬럼 — UI 드롭다운용. DB는 텍스트라 자유 입력도 허용)
 const List<String> networkOptions = [
   '업무망',

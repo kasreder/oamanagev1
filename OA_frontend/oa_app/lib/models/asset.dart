@@ -27,6 +27,7 @@ class Asset {
   final String? adminDepartment;
   final String? adminEmployeeId;
   final String? adminAffiliation;
+  final String? adminCompany;
   final int? locationDrawingId;
   final int? locationRow;
   final int? locationCol;
@@ -71,6 +72,7 @@ class Asset {
     this.adminDepartment,
     this.adminEmployeeId,
     this.adminAffiliation,
+    this.adminCompany,
     this.locationDrawingId,
     this.locationRow,
     this.locationCol,
@@ -123,6 +125,7 @@ class Asset {
       adminDepartment: json['admin_department'] as String?,
       adminEmployeeId: json['admin_employee_id'] as String?,
       adminAffiliation: json['admin_affiliation'] as String?,
+      adminCompany: json['admin_company'] as String?,
       locationDrawingId: json['location_drawing_id'] as int?,
       locationRow: json['location_row'] as int?,
       locationCol: json['location_col'] as int?,
@@ -183,6 +186,7 @@ class Asset {
       'admin_department': adminDepartment,
       'admin_employee_id': adminEmployeeId,
       'admin_affiliation': adminAffiliation,
+      'admin_company': adminCompany,
       'location_drawing_id': locationDrawingId,
       'location_row': locationRow,
       'location_col': locationCol,

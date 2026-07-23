@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -285,6 +286,8 @@ class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage>
         const Tab(text: '아이디 생성', icon: Icon(Icons.person_add, size: 18)),
       if (isAdmin)
         const Tab(text: '권한 관리', icon: Icon(Icons.shield, size: 18)),
+      if (isAdmin)
+        const Tab(text: '세부선택', icon: Icon(Icons.tune, size: 18)),
     ];
 
     return AppScaffold(
@@ -305,6 +308,7 @@ class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage>
                   _buildUsersTab(context, user),
                   if (isAdmin) _buildCreateUserTab(context, user),
                   if (isAdmin) _buildPermissionsTab(context),
+                  if (isAdmin) const _DropdownOptionsTab(),
                 ],
               ),
             ),
@@ -1706,6 +1710,440 @@ class _NewRoundDialogState extends State<_NewRoundDialog> {
           child: const Text('생성'),
         ),
       ],
+    );
+  }
+}
+
+// ── 세부선택(드롭다운 옵션) 탭 ─────────────────────────────────────────────
+// 페이지별 sub-tab 4개:
+//   자산상세 / 자산목록 / 실사목록 / 실사상세
+// 자산목록은 자산상세와 동일 옵션을 공유(읽기 뷰), 실사목록도 실사상세와 공유.
+// CRUD: 항목 추가 / 항목 삭제 (RLS로 admin 그룹만 가능)
+class _DropdownOptionsTab extends StatefulWidget {
+  const _DropdownOptionsTab();
+
+  @override
+  State<_DropdownOptionsTab> createState() => _DropdownOptionsTabState();
+}
+
+class _DropdownOptionsTabState extends State<_DropdownOptionsTab>
+    with SingleTickerProviderStateMixin {
+  late final TabController _ctrl;
+
+  // 페이지별 (sub-tab) → 표시할 카테고리 묶음
+  /// 카테고리 단위로 통합 (페이지간 공통 항목 1회만 노출).
+  /// 각 카드에 "사용 페이지" 안내를 표시 — 한 곳에서 수정하면 모든 페이지에 반영됨.
+  static const _pages = [
+    _OptionPage('자산 관련 옵션', 'asset_detail', [
+      ('category',          '자산종류',     '자산상세 / 자산목록'),
+      ('supply_type',       '지급형태',     '자산상세 / 자산목록'),
+      ('network',           '사용망',       '자산상세 / 자산목록'),
+      ('building1',         '건물(대)',     '자산상세 / 자산목록 / 도면관리'),
+      ('floor',             '층',           '자산상세 / 자산목록 / 도면관리'),
+      ('admin_affiliation', '담당자 소속',  '자산상세'),
+    ]),
+    _OptionPage('실사 관련 옵션', 'inspection_detail', [
+      ('inspection_status', '실사 상태',    '실사상세 / 실사목록'),
+    ]),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TabController(length: _pages.length, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Material(
+          color: Theme.of(context).colorScheme.surfaceContainerHigh,
+          child: TabBar(
+            controller: _ctrl,
+            isScrollable: true,
+            tabs: _pages
+                .map((p) => Tab(text: p.label))
+                .toList(growable: false),
+          ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _ctrl,
+            children: _pages
+                .map((p) => _OptionPageView(page: p))
+                .toList(growable: false),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _OptionPage {
+  final String label;
+  final String scope;
+  /// (db_category_key, ui_label, 사용 페이지 안내)
+  final List<(String, String, String)> categories;
+  const _OptionPage(this.label, this.scope, this.categories);
+}
+
+class _OptionPageView extends StatelessWidget {
+  final _OptionPage page;
+  const _OptionPageView({required this.page});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        // ── 입력 방법 안내 ──
+        Card(
+          color: theme.colorScheme.surfaceContainerLow,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline,
+                    color: theme.colorScheme.primary, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '입력 방법',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '여러 항목을 한 번에 추가할 수 있습니다.\n'
+                        '구분자: 세미콜론(;) · 쉼표(,) · 줄바꿈\n'
+                        '각 항목당 최대 20자 (한글·영문 동일)\n'
+                        '항목이 10개 이상이면 기본적으로 접힙니다. 헤더를 클릭하여 펼치세요.',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        ...page.categories.map((c) {
+          return _CategoryEditor(
+            scope: page.scope,
+            category: c.$1,
+            uiLabel: c.$2,
+            usageHint: c.$3,
+          );
+        }),
+      ],
+    );
+  }
+}
+
+class _CategoryEditor extends StatefulWidget {
+  final String scope;
+  final String category;
+  final String uiLabel;
+  final String usageHint;
+  const _CategoryEditor({
+    required this.scope,
+    required this.category,
+    required this.uiLabel,
+    this.usageHint = '',
+  });
+
+  @override
+  State<_CategoryEditor> createState() => _CategoryEditorState();
+}
+
+class _CategoryEditorState extends State<_CategoryEditor> {
+  final _newCtrl = TextEditingController();
+  List<Map<String, dynamic>> _items = [];
+  bool _loading = true;
+  String? _error;
+  // 10개 이상이면 기본 접기 — _load 직후 자동 세팅. 사용자가 토글하면 그 상태 유지.
+  bool? _expanded;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _newCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final rows = await Supabase.instance.client
+          .from('dropdown_options')
+          .select('id, value, sort_order')
+          .eq('scope', widget.scope)
+          .eq('category', widget.category)
+          .order('value');  // 가나다순(사전순) 자동 정렬
+      if (!mounted) return;
+      setState(() {
+        _items = List<Map<String, dynamic>>.from(rows as List);
+        _loading = false;
+        _error = null;
+        // 첫 로드 시에만 자동 결정 — 사용자가 토글 안 했다면 10건 기준으로 접기
+        _expanded ??= _items.length < 10;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.toString();
+      });
+    }
+  }
+
+  Future<void> _add() async {
+    // 줄바꿈/콤마/세미콜론으로 구분된 여러 항목을 한 번에 추가
+    const maxLen = 20;
+    final raw = _newCtrl.text;
+    final tokens = raw
+        .split(RegExp(r'[\n,;]+'))
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toSet(); // 입력 내 중복 제거
+
+    // 각 항목당 최대 길이 검증
+    final tooLong = tokens.where((t) => t.length > maxLen).toList();
+    if (tooLong.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '항목당 최대 $maxLen자까지 입력 가능합니다. 초과: ${tooLong.join(", ")}',
+          ),
+        ),
+      );
+      return;
+    }
+
+    // 이미 DB에 있는 값과 중복 제거
+    final existing = _items.map((e) => e['value'] as String).toSet();
+    final newOnes = tokens.where((v) => !existing.contains(v)).toList();
+
+    if (newOnes.isEmpty) {
+      if (raw.trim().isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('추가할 새 항목이 없습니다 (모두 이미 존재).')),
+        );
+      }
+      return;
+    }
+
+    final baseOrder = _items.isEmpty
+        ? 0
+        : ((_items.last['sort_order'] as int?) ?? _items.length);
+    final rows = <Map<String, dynamic>>[
+      for (var i = 0; i < newOnes.length; i++)
+        {
+          'scope': widget.scope,
+          'category': widget.category,
+          'value': newOnes[i],
+          'sort_order': baseOrder + i + 1,
+        }
+    ];
+    try {
+      await Supabase.instance.client.from('dropdown_options').insert(rows);
+      _newCtrl.clear();
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${newOnes.length}개 항목 추가됨')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: SelectableText('추가 실패: $e')),
+      );
+    }
+  }
+
+  Future<void> _copyAll() async {
+    if (_items.isEmpty) return;
+    // 세미콜론으로 join — 이 박스에 그대로 다시 붙여넣어도 동작
+    final text = _items.map((e) => e['value'] as String).join('; ');
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${_items.length}개 항목을 클립보드에 복사했습니다.')),
+    );
+  }
+
+  Future<void> _delete(int id, String value) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('"$value" 삭제'),
+        content: const Text(
+          '이 항목을 드롭다운 목록에서 제거합니다.\n이미 자산/실사에 저장된 값은 그대로 남습니다.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await Supabase.instance.client.from('dropdown_options').delete().eq('id', id);
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: SelectableText('삭제 실패: $e')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            InkWell(
+              onTap: () => setState(() => _expanded = !(_expanded ?? true)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Icon(
+                      (_expanded ?? true)
+                          ? Icons.expand_more
+                          : Icons.chevron_right,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${widget.uiLabel}  (${_items.length})',
+                            style: theme.textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          if (widget.usageHint.isNotEmpty)
+                            Text(
+                              '사용: ${widget.usageHint}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.outline,
+                                fontSize: 11,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    IconButton.filledTonal(
+                      tooltip: '전체 복사 (세미콜론 구분)',
+                      icon: const Icon(Icons.content_copy, size: 18),
+                      onPressed: _items.isEmpty ? null : _copyAll,
+                      style: IconButton.styleFrom(
+                        backgroundColor: theme.colorScheme.primaryContainer,
+                        foregroundColor: theme.colorScheme.onPrimaryContainer,
+                        minimumSize: const Size(36, 36),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton.filledTonal(
+                      tooltip: '새로고침',
+                      icon: const Icon(Icons.refresh, size: 18),
+                      onPressed: _load,
+                      style: IconButton.styleFrom(
+                        backgroundColor: theme.colorScheme.secondaryContainer,
+                        foregroundColor: theme.colorScheme.onSecondaryContainer,
+                        minimumSize: const Size(36, 36),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if ((_expanded ?? true)) const SizedBox(height: 8),
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_error != null)
+              Text(_error!, style: TextStyle(color: theme.colorScheme.error))
+            else if (_expanded ?? true) ...[
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: _items.map((it) {
+                  final id = it['id'] as int;
+                  final v = it['value'] as String;
+                  return InputChip(
+                    label: Text(v),
+                    deleteIcon: const Icon(Icons.close, size: 16),
+                    onDeleted: () => _delete(id, v),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _newCtrl,
+                      decoration: const InputDecoration(
+                        labelText: '새 항목 추가 (여러 개 가능)',
+                        hintText: '줄바꿈 / 쉼표(,) / 세미콜론(;) 구분 · 항목당 최대 20자',
+                        border: OutlineInputBorder(),
+                      ),
+                      minLines: 1,
+                      maxLines: 5,
+                      keyboardType: TextInputType.multiline,
+                      textInputAction: TextInputAction.newline,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: FilledButton.icon(
+                      onPressed: _add,
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('추가'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

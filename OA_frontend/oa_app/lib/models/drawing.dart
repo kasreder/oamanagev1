@@ -50,10 +50,22 @@ class Drawing {
     };
   }
 
-  /// 격자 좌표 → 자리번호 변환 (예: row=2, col=3 → "C-4")
+  /// 격자 좌표 → 자리번호 변환
+  /// 예: row=0,col=0 → "A-1" / row=2,col=3 → "C-4" / row=26,col=0 → "AA-1"
+  /// 행은 엑셀 컬럼 스타일(A..Z, AA..AZ, BA..)로 26개 초과도 지원.
   static String getGridLabel(int row, int col) {
-    final rowLabel = String.fromCharCode('A'.codeUnitAt(0) + row);
-    return '$rowLabel-${col + 1}';
+    return '${_excelLabel(row)}-${col + 1}';
+  }
+
+  static String _excelLabel(int n) {
+    var s = '';
+    var v = n + 1;
+    while (v > 0) {
+      v--;
+      s = String.fromCharCode(65 + v % 26) + s;
+      v ~/= 26;
+    }
+    return s;
   }
 
   Drawing copyWith({

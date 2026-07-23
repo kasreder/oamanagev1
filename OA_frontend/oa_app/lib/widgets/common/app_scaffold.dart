@@ -150,8 +150,6 @@ class AppScaffold extends ConsumerWidget {
           _buildDrawerItem(context, Icons.list_alt, '자산목록', '/assets'),
           _buildDrawerItem(context, Icons.fact_check, '실사목록', '/inspections'),
           _buildDrawerItem(context, Icons.map, '도면관리', '/drawings'),
-          _buildDrawerItem(
-              context, Icons.warning_amber, '미검증자산', '/unverified'),
           if (user != null && user.isAdminGroup) ...[
             const Divider(),
             _buildDrawerItem(

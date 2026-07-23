@@ -13,7 +13,6 @@ import 'screens/inspection_detail_page.dart';
 import 'screens/signature_page.dart';
 import 'screens/drawing_manager_page.dart';
 import 'screens/drawing_viewer_page.dart';
-import 'screens/unverified_page.dart';
 import 'screens/admin_settings_page.dart';
 
 /// GoRouter Provider (Riverpod)
@@ -118,10 +117,6 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
           return DrawingViewerPage(drawingId: id);
         },
-      ),
-      GoRoute(
-        path: '/unverified',
-        builder: (context, state) => const UnverifiedPage(),
       ),
       GoRoute(
         path: '/admin/settings',

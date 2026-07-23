@@ -401,12 +401,6 @@ class ApiService {
         .toList();
   }
 
-  /// 대시보드 통계 (Edge Function)
-  Future<Map<String, dynamic>> fetchDashboardStats() async {
-    final response = await _client.functions.invoke('dashboard-stats');
-    return response.data as Map<String, dynamic>;
-  }
-
   /// 에이전트 푸시 알림 발송 (Edge Function)
   Future<Map<String, dynamic>> sendNotification({
     String? assetUid,
