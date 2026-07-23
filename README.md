@@ -99,6 +99,7 @@ supabase functions serve
 ## 문서 체계
 - `OA_frontend/README.md` : 프론트엔드 실행/개발 가이드
 - `OA_backend/README.md` : 백엔드(Supabase) 실행/운영 가이드
+- `docs/asset_uid_spec.md` : 자산번호(`asset_uid`) 형식 규격 (현재기준 + 폐기된 변경후 규칙 보존)
 
 ## Supabase 환경 변수 주입
 - `OA_frontend/oa_app/lib/main.dart`의 `SUPABASE_URL`, `SUPABASE_ANON_KEY`는 `String.fromEnvironment`로 읽습니다.

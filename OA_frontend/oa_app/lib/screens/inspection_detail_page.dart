@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,7 +10,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../constants.dart';
 import '../main.dart';
+import '../models/asset.dart';
 import '../models/asset_inspection.dart';
+import '../models/drawing.dart';
+import '../notifiers/dropdown_options_provider.dart';
 import '../models/inspection_round.dart';
 import '../notifiers/auth_notifier.dart';
 import '../services/api_service.dart';
@@ -42,6 +47,8 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
   final DateFormat _dateFmt = DateFormat('yyyy-MM-dd HH:mm');
 
   AssetInspection? _inspection;
+  Asset? _asset;
+  Drawing? _drawing;
   InspectionRound? _activeRound;
   bool _isLoading = true;
   bool _isSaving = false;
@@ -53,19 +60,25 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
   String? _photoSignedUrl;
   String? _signatureSignedUrl;
 
-  // 편집 가능한 필드 컨트롤러
+  // 실사정보 입력 컨트롤러 (자산번호/건물/층/위치/실사용자/실사용부서)
+  late TextEditingController _inspAssetUidCtrl;
   late TextEditingController _buildingCtrl;
   late TextEditingController _floorCtrl;
   late TextEditingController _positionCtrl;
+  late TextEditingController _inspUserNameCtrl;
+  late TextEditingController _inspUserDeptCtrl;
   late TextEditingController _memoCtrl;
   late TextEditingController _statusCtrl;
 
   @override
   void initState() {
     super.initState();
+    _inspAssetUidCtrl = TextEditingController();
     _buildingCtrl = TextEditingController();
     _floorCtrl = TextEditingController();
     _positionCtrl = TextEditingController();
+    _inspUserNameCtrl = TextEditingController();
+    _inspUserDeptCtrl = TextEditingController();
     _memoCtrl = TextEditingController();
     _statusCtrl = TextEditingController();
     _loadInspection();
@@ -73,20 +86,63 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
 
   @override
   void dispose() {
+    _inspAssetUidCtrl.dispose();
     _buildingCtrl.dispose();
     _floorCtrl.dispose();
     _positionCtrl.dispose();
+    _inspUserNameCtrl.dispose();
+    _inspUserDeptCtrl.dispose();
     _memoCtrl.dispose();
     _statusCtrl.dispose();
     super.dispose();
   }
 
   void _populateForm(AssetInspection ins) {
+    _inspAssetUidCtrl.text = ins.assetCode ?? '';
     _buildingCtrl.text = ins.inspectionBuilding ?? '';
     _floorCtrl.text = ins.inspectionFloor ?? '';
     _positionCtrl.text = ins.inspectionPosition ?? '';
+    _inspUserNameCtrl.text = ins.inspectorName ?? '';
+    _inspUserDeptCtrl.text = ins.userTeam ?? '';
     _memoCtrl.text = ins.memo ?? '';
     _statusCtrl.text = ins.status ?? '';
+  }
+
+  /// 자산 master "위치" 표시용 — row/col 1-based.
+  String _assetLocationLabel() {
+    final r = _asset?.locationRow;
+    final c = _asset?.locationCol;
+    if (r == null || c == null) return '-';
+    return '${r + 1}행 / ${c + 1}열';
+  }
+
+  /// [자산정보와 동일] — 자산 master 6필드를 실사정보 컨트롤러로 복사
+  void _copyAssetToInspection() {
+    final a = _asset;
+    if (a == null) return;
+    setState(() {
+      _inspAssetUidCtrl.text = a.assetUid;
+      _buildingCtrl.text = a.building ?? '';
+      _floorCtrl.text = a.floor ?? '';
+      _positionCtrl.text =
+          (a.locationRow != null && a.locationCol != null)
+              ? '${a.locationRow! + 1}행 / ${a.locationCol! + 1}열'
+              : '';
+      _inspUserNameCtrl.text = a.userName ?? '';
+      _inspUserDeptCtrl.text = a.userDepartment ?? '';
+    });
+  }
+
+  /// [초기화] — 실사정보 6필드 컨트롤러 비우기
+  void _clearInspectionFields() {
+    setState(() {
+      _inspAssetUidCtrl.clear();
+      _buildingCtrl.clear();
+      _floorCtrl.clear();
+      _positionCtrl.clear();
+      _inspUserNameCtrl.clear();
+      _inspUserDeptCtrl.clear();
+    });
   }
 
   Future<void> _loadInspection() async {
@@ -98,8 +154,22 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
     try {
       final inspection = await _api.fetchInspection(widget.inspectionId);
       final activeRound = await _api.fetchActiveRound();
+      Asset? asset;
+      if (inspection.assetId != null) {
+        try {
+          asset = await _api.fetchAsset(inspection.assetId!);
+        } catch (_) {}
+      }
+      Drawing? drawing;
+      if (asset?.locationDrawingId != null) {
+        try {
+          drawing = await _api.fetchDrawing(asset!.locationDrawingId!);
+        } catch (_) {}
+      }
       setState(() {
         _inspection = inspection;
+        _asset = asset;
+        _drawing = drawing;
         _activeRound = activeRound;
         _isLoading = false;
       });
@@ -159,12 +229,18 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
     setState(() => _isSaving = true);
 
     try {
-      // 건물/층은 자산 마스터(assets.building/floor) 기준값을 그대로 저장 — UI 입력 없음
-      final ins = _inspection;
+      // 실사 정보 — 사용자가 입력한 6필드 그대로 저장
+      String? t(TextEditingController c) {
+        final v = c.text.trim();
+        return v.isEmpty ? null : v;
+      }
       await _api.updateInspection(widget.inspectionId, {
-        'inspection_building': ins?.assetBuilding,
-        'inspection_floor': ins?.assetFloor,
-        'inspection_position': _positionCtrl.text.trim(),
+        'asset_code': t(_inspAssetUidCtrl),
+        'inspection_building': t(_buildingCtrl),
+        'inspection_floor': t(_floorCtrl),
+        'inspection_position': t(_positionCtrl),
+        'inspector_name': t(_inspUserNameCtrl),
+        'user_team': t(_inspUserDeptCtrl),
         'status': _statusCtrl.text.trim(),
         'memo': _memoCtrl.text.trim(),
       });
@@ -612,8 +688,8 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
             ),
           ),
 
-        // ── 자산 정보 섹션 ──
-        _buildSectionTitle('자산 정보'),
+        // ── 자산 정보 섹션 (전산데이터 = 자산상세 기준) ──
+        _buildSectionTitle('자산 정보 (자산상세 기준)'),
         const SizedBox(height: 8),
         Card(
           child: Padding(
@@ -621,58 +697,73 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _infoRow('자산번호', ins.assetAssetUid ?? ins.assetCode ?? '-'),
-                _infoRow('자산유형', ins.assetType ?? ins.assetCategory ?? '-'),
-                _infoRow('실사용자', ins.assetUserName ?? '-'),
-                _infoRow('사용자부서', ins.assetUserDepartment ?? '-'),
-                _infoRow('담당자', ins.assetAdminName ?? '-'),
-                _infoRow('담당자부서', ins.assetAdminDepartment ?? '-'),
+                _infoRow('자산번호',
+                    _asset?.assetUid ?? ins.assetAssetUid ?? '-'),
+                _infoRow('건물', _asset?.building ?? ins.assetBuilding ?? '-'),
+                _infoRow('층', _asset?.floor ?? ins.assetFloor ?? '-'),
+                _infoLocationRow(),
+                _infoRow('실사용자',
+                    _asset?.userName ?? ins.assetUserName ?? '-'),
+                _infoRow('실사용부서',
+                    _asset?.userDepartment ?? ins.assetUserDepartment ?? '-'),
               ],
             ),
           ),
         ),
         const SizedBox(height: 20),
 
-        // ── 실사 정보 섹션 ──
-        _buildSectionTitle('실사 정보'),
-        const SizedBox(height: 8),
-
-        // 건물 / 층 — 자산 마스터(assets) 값 표시. 수정 불가.
+        // ── 실사 정보 섹션 (실사 시점 입력값) ──
         Row(
           children: [
-            Expanded(
-              child: InputDecorator(
-                decoration: const InputDecoration(
-                  labelText: '건물 (자산기준)',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-                child: Text(ins.assetBuilding ?? '-'),
+            _buildSectionTitle('실사 정보 (실사기준)'),
+            const Spacer(),
+            if (!readOnly) ...[
+              TextButton.icon(
+                onPressed: _asset == null ? null : _copyAssetToInspection,
+                icon: const Icon(Icons.content_copy, size: 16),
+                label: const Text('자산정보와 동일'),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: InputDecorator(
-                decoration: const InputDecoration(
-                  labelText: '층 (자산기준)',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-                child: Text(ins.assetFloor ?? '-'),
+              const SizedBox(width: 4),
+              TextButton.icon(
+                onPressed: _clearInspectionFields,
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('초기화'),
               ),
-            ),
+            ],
           ],
+        ),
+        const SizedBox(height: 8),
+
+        // 자산번호 (실사 시점)
+        TextFormField(
+          controller: _inspAssetUidCtrl,
+          decoration: const InputDecoration(
+            labelText: '자산번호',
+            border: OutlineInputBorder(),
+          ),
+          readOnly: readOnly,
         ),
         const SizedBox(height: 12),
 
-        // 위치 — 실사 자체에서 별도 관리
+        // 건물 / 층
         Row(
           children: [
             Expanded(
               child: TextFormField(
-                controller: _positionCtrl,
+                controller: _buildingCtrl,
                 decoration: const InputDecoration(
-                  labelText: '위치',
+                  labelText: '건물',
+                  border: OutlineInputBorder(),
+                ),
+                readOnly: readOnly,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextFormField(
+                controller: _floorCtrl,
+                decoration: const InputDecoration(
+                  labelText: '층',
                   border: OutlineInputBorder(),
                 ),
                 readOnly: readOnly,
@@ -682,25 +773,71 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
         ),
         const SizedBox(height: 12),
 
-        // 상태 (위치/메모 사이)
-        DropdownButtonFormField<String>(
-          value: inspectionStatusOptions.contains(_statusCtrl.text)
-              ? _statusCtrl.text
-              : null,
+        // 위치
+        TextFormField(
+          controller: _positionCtrl,
           decoration: const InputDecoration(
-            labelText: '상태',
+            labelText: '위치',
             border: OutlineInputBorder(),
           ),
-          items: [
-            const DropdownMenuItem<String>(value: null, child: Text('-')),
-            ...inspectionStatusOptions.map(
-              (s) => DropdownMenuItem(value: s, child: Text(s)),
+          readOnly: readOnly,
+        ),
+        const SizedBox(height: 12),
+
+        // 실사용자 / 실사용부서
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _inspUserNameCtrl,
+                decoration: const InputDecoration(
+                  labelText: '실사용자',
+                  border: OutlineInputBorder(),
+                ),
+                readOnly: readOnly,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextFormField(
+                controller: _inspUserDeptCtrl,
+                decoration: const InputDecoration(
+                  labelText: '실사용부서',
+                  border: OutlineInputBorder(),
+                ),
+                readOnly: readOnly,
+              ),
             ),
           ],
-          onChanged: readOnly
-              ? null
-              : (v) => setState(() => _statusCtrl.text = v ?? ''),
         ),
+        const SizedBox(height: 12),
+
+        // 상태 (위치/메모 사이) — DB dropdown_options 동적
+        Builder(builder: (ctx) {
+          final statusList = ref
+                  .watch(dropdownOptionsProvider(const DropdownKey(
+                      'inspection_detail', 'inspection_status')))
+                  .valueOrNull ??
+              inspectionStatusOptions;
+          return DropdownButtonFormField<String>(
+            value: statusList.contains(_statusCtrl.text)
+                ? _statusCtrl.text
+                : null,
+            decoration: const InputDecoration(
+              labelText: '상태',
+              border: OutlineInputBorder(),
+            ),
+            items: [
+              const DropdownMenuItem<String>(value: null, child: Text('-')),
+              ...statusList.map(
+                (s) => DropdownMenuItem(value: s, child: Text(s)),
+              ),
+            ],
+            onChanged: readOnly
+                ? null
+                : (v) => setState(() => _statusCtrl.text = v ?? ''),
+          );
+        }),
         const SizedBox(height: 12),
 
         // 메모
@@ -1136,4 +1273,186 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
       ),
     );
   }
+
+  Widget _infoLocationRow() {
+    final theme = Theme.of(context);
+    final canPreview = _drawing != null &&
+        _asset?.locationRow != null &&
+        _asset?.locationCol != null;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(
+              '위치',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(_assetLocationLabel(),
+                style: theme.textTheme.bodyMedium),
+          ),
+          TextButton.icon(
+            onPressed: canPreview ? _showDrawingPreview : null,
+            icon: const Icon(Icons.map_outlined, size: 16),
+            label: const Text('도면으로 보기'),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showDrawingPreview() async {
+    final drawing = _drawing;
+    final r = _asset?.locationRow;
+    final c = _asset?.locationCol;
+    if (drawing == null || r == null || c == null) return;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _DrawingPreviewDialog(drawing: drawing, row: r, col: c),
+    );
+  }
 }
+
+/// 자산 위치를 도면 위에 표시하는 팝업 — 줌/팬 + 빨간 셀 박스 + 닫기 버튼
+class _DrawingPreviewDialog extends StatelessWidget {
+  final Drawing drawing;
+  final int row;
+  final int col;
+
+  const _DrawingPreviewDialog({
+    required this.drawing,
+    required this.row,
+    required this.col,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final url = drawing.drawingFile != null
+        ? supabase.storage
+            .from('drawing-images')
+            .getPublicUrl(drawing.drawingFile!)
+        : null;
+
+    return Dialog(
+      insetPadding: const EdgeInsets.all(16),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 900, maxHeight: 700),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 헤더
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+              child: Row(
+                children: [
+                  Icon(Icons.map, color: theme.colorScheme.primary, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${drawing.building} ${drawing.floor}  ·  '
+                      '${Drawing.getGridLabel(row, col)}',
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '닫기',
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            // 도면 + 위치 박스
+            Expanded(
+              child: LayoutBuilder(
+                builder: (ctx, c2) {
+                  final cellSize = math.min(
+                    c2.maxWidth / drawing.gridRows,
+                    c2.maxHeight / drawing.gridCols,
+                  );
+                  final gridW = cellSize * drawing.gridRows;
+                  final gridH = cellSize * drawing.gridCols;
+                  return InteractiveViewer(
+                    minScale: 0.5,
+                    maxScale: 8.0,
+                    boundaryMargin: const EdgeInsets.all(100),
+                    constrained: false,
+                    child: SizedBox(
+                      width: gridW,
+                      height: gridH,
+                      child: Stack(
+                        children: [
+                          if (url != null)
+                            Positioned.fill(
+                              child: CachedNetworkImage(
+                                imageUrl: url,
+                                fit: BoxFit.fill,
+                                placeholder: (_, __) => const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                                errorWidget: (_, __, ___) => Center(
+                                  child: Icon(Icons.broken_image,
+                                      size: 48,
+                                      color: theme.colorScheme.outline),
+                                ),
+                              ),
+                            )
+                          else
+                            Positioned.fill(
+                              child: Container(
+                                color: theme
+                                    .colorScheme.surfaceContainerHighest,
+                                child: const Center(
+                                    child: Text('도면 이미지가 없습니다.')),
+                              ),
+                            ),
+                          Positioned(
+                            left: row * cellSize,
+                            top: col * cellSize,
+                            width: cellSize,
+                            height: cellSize,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.red.withValues(alpha: 0.35),
+                                border:
+                                    Border.all(color: Colors.red, width: 2),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('닫기'),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+

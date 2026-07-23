@@ -21,7 +21,7 @@ import '../widgets/common/empty_state_widget.dart';
 
 /// 5.1.2 홈 화면 (/)
 ///
-/// - 상단 카드: 총 자산 수, 실사 완료율, 미검증 자산 수
+/// - 상단 카드: 총 자산 수
 /// - 최신 등록 자산 10건
 /// - 만료 임박 자산 (D-7 이내, supply_type ∈ supplyTypesRequireEndDate = 렌탈/대여/도급/개인)
 class HomePage extends ConsumerStatefulWidget {
@@ -40,8 +40,6 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   // 대시보드 통계
   int _totalAssets = 0;
-  double _inspectionRate = 0.0;
-  int _unverifiedCount = 0;
 
   // 최신 등록 자산
   List<Asset> _recentAssets = [];
@@ -80,18 +78,14 @@ class _HomePageState extends ConsumerState<HomePage> {
     });
 
     try {
-      // 대시보드 통계 (Edge Function)
-      Map<String, dynamic> stats;
+      // 총 자산 수
       try {
-        stats = await _api.fetchDashboardStats();
+        final countResult =
+            await supabase.from('assets').select('id').count(CountOption.exact);
+        _totalAssets = countResult.count;
       } catch (_) {
-        // Edge Function 미구성 시 fallback
-        stats = {};
+        _totalAssets = 0;
       }
-
-      _totalAssets = (stats['total_assets'] as num?)?.toInt() ?? 0;
-      _inspectionRate = (stats['inspection_rate'] as num?)?.toDouble() ?? 0.0;
-      _unverifiedCount = (stats['unverified_count'] as num?)?.toInt() ?? 0;
 
       // 최신 등록 자산 10건
       final recentResult = await supabase
@@ -102,13 +96,6 @@ class _HomePageState extends ConsumerState<HomePage> {
       _recentAssets = (recentResult as List<dynamic>)
           .map((e) => Asset.fromJson(e as Map<String, dynamic>))
           .toList();
-
-      // Edge Function 실패 시 총 자산 수 보정
-      if (_totalAssets == 0 && _recentAssets.isNotEmpty) {
-        final countResult =
-            await supabase.from('assets').select('id').count(CountOption.exact);
-        _totalAssets = countResult.count;
-      }
 
       // 대여일 만료예정 (D-7 이내) + 대여일 초과 자산
       try {
@@ -573,44 +560,15 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
-  /// 상단 통계 카드 3개
+  /// 상단 통계 카드 — 총 자산
   Widget _buildStatsRow(BuildContext context, Brightness brightness) {
-    return Row(
-      children: [
-        Expanded(
-          child: _StatCard(
-            title: '총 자산',
-            value: '$_totalAssets',
-            icon: Icons.inventory_2,
-            color: brightness == Brightness.light
-                ? AppColorsLight.statusAvailable
-                : AppColorsDark.statusAvailable,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _StatCard(
-            title: '실사 완료율',
-            value: '${(_inspectionRate * 100).toStringAsFixed(1)}%',
-            icon: Icons.fact_check,
-            color: brightness == Brightness.light
-                ? AppColorsLight.statusUsing
-                : AppColorsDark.statusUsing,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _StatCard(
-            title: '미검증',
-            value: '$_unverifiedCount',
-            icon: Icons.warning_amber,
-            color: brightness == Brightness.light
-                ? AppColorsLight.statusNeedCheck
-                : AppColorsDark.statusNeedCheck,
-            onTap: () => context.go('/unverified'),
-          ),
-        ),
-      ],
+    return _StatCard(
+      title: '총 자산',
+      value: '$_totalAssets',
+      icon: Icons.inventory_2,
+      color: brightness == Brightness.light
+          ? AppColorsLight.statusAvailable
+          : AppColorsDark.statusAvailable,
     );
   }
 

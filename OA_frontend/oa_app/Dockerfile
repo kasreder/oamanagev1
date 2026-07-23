@@ -21,6 +21,7 @@ ARG SUPABASE_ANON_KEY
 
 # Flutter 웹 빌드
 RUN flutter build web --release \
+    --no-tree-shake-icons \
     --dart-define=SUPABASE_URL=${SUPABASE_URL} \
     --dart-define=SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
 

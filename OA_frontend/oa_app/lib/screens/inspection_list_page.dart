@@ -597,20 +597,28 @@ class _InspectionListPageState extends ConsumerState<InspectionListPage> {
     _ColumnSpec('사인', 50,
         builder: (s, ins) =>
             s._boolMark(Theme.of(s.context), ins.signatureImage != null)),
-    _ColumnSpec('자산번호', 140, dbKey: 'asset_uid', inAssets: true,
+    _ColumnSpec('자산번호', 140, dbKey: 'asset_code',
         builder: (s, ins) => Text(
-              ins.assetAssetUid ?? ins.assetCode ?? 'ID: ${ins.id}',
+              ins.assetCode ?? '-',
               style: const TextStyle(fontWeight: FontWeight.w600),
               overflow: TextOverflow.ellipsis,
             )),
-    _ColumnSpec('실사용자', 100, dbKey: 'user_name', inAssets: true,
-        builder: (s, ins) => s._txt(Theme.of(s.context), ins.assetUserName)),
+    _ColumnSpec('건물', 100, dbKey: 'inspection_building',
+        builder: (s, ins) =>
+            s._txt(Theme.of(s.context), ins.inspectionBuilding)),
+    _ColumnSpec('층', 70, dbKey: 'inspection_floor',
+        builder: (s, ins) =>
+            s._txt(Theme.of(s.context), ins.inspectionFloor)),
+    _ColumnSpec('위치', 110, dbKey: 'inspection_position',
+        builder: (s, ins) =>
+            s._txt(Theme.of(s.context), ins.inspectionPosition)),
+    _ColumnSpec('실사용자', 100, dbKey: 'inspector_name',
+        builder: (s, ins) => s._txt(Theme.of(s.context), ins.inspectorName)),
     _ColumnSpec('실사용자사번', 110, dbKey: 'user_employee_id', inAssets: true,
         builder: (s, ins) =>
             s._txt(Theme.of(s.context), ins.assetUserEmployeeId)),
-    _ColumnSpec('실사용자부서', 130, dbKey: 'user_department', inAssets: true,
-        builder: (s, ins) =>
-            s._txt(Theme.of(s.context), ins.assetUserDepartment)),
+    _ColumnSpec('실사용부서', 130, dbKey: 'user_team',
+        builder: (s, ins) => s._txt(Theme.of(s.context), ins.userTeam)),
     _ColumnSpec('관리자', 90, dbKey: 'admin_name', inAssets: true,
         builder: (s, ins) => s._txt(Theme.of(s.context), ins.assetAdminName)),
     _ColumnSpec('관리자부서', 130, dbKey: 'admin_department', inAssets: true,

@@ -12,9 +12,11 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../main.dart';
 import '../constants.dart';
 import '../models/asset.dart';
+import '../models/drawing.dart';
 import '../services/api_service.dart';
 import '../services/realtime_service.dart';
 import '../notifiers/agent_presence_notifier.dart';
+import '../notifiers/dropdown_options_provider.dart';
 import '../notifiers/auth_notifier.dart';
 import '../widgets/common/app_scaffold.dart';
 import '../widgets/common/loading_widget.dart';
@@ -83,6 +85,7 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
   late TextEditingController _adminNameCtrl;
   late TextEditingController _adminDeptCtrl;
   late TextEditingController _adminEmpIdCtrl;
+  late TextEditingController _adminCompanyCtrl;
   late TextEditingController _normalCommentCtrl;
   late TextEditingController _oaCommentCtrl;
 
@@ -91,11 +94,17 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
   String? _selectedBuilding1;     // 위치 대분류 — building1Options
   String? _selectedAdminAffiliation; // 담당자 소속 — adminAffiliationOptions
   DateTime? _supplyEndDate;
+  // 도면 좌표
+  List<Drawing> _drawings = [];
+  int? _selectedDrawingId;
+  int? _selectedRow;
+  int? _selectedCol;
 
   @override
   void initState() {
     super.initState();
     _initControllers();
+    _loadDrawings();
 
     if (widget.isCreateMode) {
       _isEditing = true;
@@ -105,6 +114,32 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
     } else if (widget.assetId != null) {
       _loadAsset();
     }
+  }
+
+  Drawing? get _selectedDrawing {
+    for (final d in _drawings) {
+      if (d.id == _selectedDrawingId) return d;
+    }
+    return null;
+  }
+
+  // 행/열 입력은 1-based 텍스트, 저장은 0-based int
+  final TextEditingController _rowInputCtrl = TextEditingController();
+  final TextEditingController _colInputCtrl = TextEditingController();
+
+  void _syncRowColControllers() {
+    _rowInputCtrl.text =
+        _selectedRow == null ? '' : '${_selectedRow! + 1}';
+    _colInputCtrl.text =
+        _selectedCol == null ? '' : '${_selectedCol! + 1}';
+  }
+
+  Future<void> _loadDrawings() async {
+    try {
+      final list = await _api.fetchDrawings();
+      if (!mounted) return;
+      setState(() => _drawings = list);
+    } catch (_) {/* 도면 로드 실패는 무시 — 위치 입력만 비활성 */}
   }
 
   void _initControllers() {
@@ -126,6 +161,7 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
     _adminNameCtrl = TextEditingController();
     _adminDeptCtrl = TextEditingController();
     _adminEmpIdCtrl = TextEditingController();
+    _adminCompanyCtrl = TextEditingController();
     _normalCommentCtrl = TextEditingController();
     _oaCommentCtrl = TextEditingController();
   }
@@ -150,8 +186,11 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
     _adminNameCtrl.dispose();
     _adminDeptCtrl.dispose();
     _adminEmpIdCtrl.dispose();
+    _adminCompanyCtrl.dispose();
     _normalCommentCtrl.dispose();
     _oaCommentCtrl.dispose();
+    _rowInputCtrl.dispose();
+    _colInputCtrl.dispose();
     super.dispose();
   }
 
@@ -175,6 +214,7 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
     _adminNameCtrl.text = asset.adminName ?? '';
     _adminDeptCtrl.text = asset.adminDepartment ?? '';
     _adminEmpIdCtrl.text = asset.adminEmployeeId ?? '';
+    _adminCompanyCtrl.text = asset.adminCompany ?? '';
     _normalCommentCtrl.text = asset.normalComment ?? '';
     _oaCommentCtrl.text = asset.oaComment ?? '';
 
@@ -188,6 +228,10 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
     _selectedBuilding1 = (asset.building1?.isNotEmpty ?? false) ? asset.building1 : null;
     _selectedAdminAffiliation =
         (asset.adminAffiliation?.isNotEmpty ?? false) ? asset.adminAffiliation : null;
+    _selectedDrawingId = asset.locationDrawingId;
+    _selectedRow = asset.locationRow;
+    _selectedCol = asset.locationCol;
+    _syncRowColControllers();
   }
 
   /// "이 값으로 자산목록 검색" — 자산상세에서 값이 있는 필드 우측 🔍 아이콘.
@@ -323,6 +367,12 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
         'admin_department': _adminDeptCtrl.text.trim(),
         'admin_employee_id': _adminEmpIdCtrl.text.trim(),
         'admin_affiliation': _selectedAdminAffiliation,
+        'admin_company': _selectedAdminAffiliation == '롯데카드 외'
+            ? _adminCompanyCtrl.text.trim()
+            : null,
+        'location_drawing_id': _selectedDrawingId,
+        'location_row': _selectedRow,
+        'location_col': _selectedCol,
         'normal_comment': _normalCommentCtrl.text.trim(),
         'oa_comment': _oaCommentCtrl.text.trim(),
         'supply_end_date':
@@ -480,6 +530,38 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
     final theme = Theme.of(context);
     final readOnly = !_isEditing;
 
+    // ── DB에서 드롭다운 옵션 가져오기 (실패시 const fallback) ─────────────
+    final categories = ref
+            .watch(dropdownOptionsProvider(
+                const DropdownKey('asset_detail', 'category')))
+            .valueOrNull ??
+        assetCategories;
+    final supplyTypeList = ref
+            .watch(dropdownOptionsProvider(
+                const DropdownKey('asset_detail', 'supply_type')))
+            .valueOrNull ??
+        supplyTypes;
+    final networkList = ref
+            .watch(dropdownOptionsProvider(
+                const DropdownKey('asset_detail', 'network')))
+            .valueOrNull ??
+        networkOptions;
+    final building1List = ref
+            .watch(dropdownOptionsProvider(
+                const DropdownKey('asset_detail', 'building1')))
+            .valueOrNull ??
+        building1Options;
+    final affiliationList = ref
+            .watch(dropdownOptionsProvider(
+                const DropdownKey('asset_detail', 'admin_affiliation')))
+            .valueOrNull ??
+        adminAffiliationOptions;
+    final floorList = ref
+            .watch(dropdownOptionsProvider(
+                const DropdownKey('asset_detail', 'floor')))
+            .valueOrNull ??
+        floorOptions;
+
     return Form(
       key: _formKey,
       child: ListView(
@@ -569,7 +651,7 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
                       labelText: '자산종류 *',
                       border: OutlineInputBorder(),
                     ),
-                    items: assetCategories
+                    items: categories
                         .map((c) => DropdownMenuItem(value: c, child: Text(c)))
                         .toList(),
                     onChanged: readOnly
@@ -589,7 +671,7 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
                       labelText: '지급형태 *',
                       border: OutlineInputBorder(),
                     ),
-                    items: supplyTypes
+                    items: supplyTypeList
                         .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                         .toList(),
                     onChanged: readOnly
@@ -745,7 +827,7 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
               value: () {
                 final v = _networkCtrl.text.trim();
                 if (v.isEmpty) return null;
-                return networkOptions.contains(v) ? v : v;
+                return networkList.contains(v) ? v : v;
               }(),
               decoration: const InputDecoration(
                 labelText: '사용망',
@@ -753,10 +835,10 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
               ),
               items: [
                 const DropdownMenuItem<String>(value: null, child: Text('-')),
-                ...networkOptions
+                ...networkList
                     .map((n) => DropdownMenuItem(value: n, child: Text(n))),
                 if (_networkCtrl.text.trim().isNotEmpty &&
-                    !networkOptions.contains(_networkCtrl.text.trim()))
+                    !networkList.contains(_networkCtrl.text.trim()))
                   DropdownMenuItem(
                     value: _networkCtrl.text.trim(),
                     child: Text('${_networkCtrl.text.trim()} (기타)'),
@@ -904,7 +986,7 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
             columnKey: 'admin_affiliation',
             value: _selectedAdminAffiliation,
             child: DropdownButtonFormField<String>(
-              value: adminAffiliationOptions.contains(_selectedAdminAffiliation)
+              value: affiliationList.contains(_selectedAdminAffiliation)
                   ? _selectedAdminAffiliation
                   : null,
               decoration: const InputDecoration(
@@ -913,7 +995,7 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
               ),
               items: [
                 const DropdownMenuItem<String>(value: null, child: Text('-')),
-                ...adminAffiliationOptions
+                ...affiliationList
                     .map((s) => DropdownMenuItem(value: s, child: Text(s))),
               ],
               onChanged: readOnly
@@ -921,6 +1003,28 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
                   : (v) => setState(() => _selectedAdminAffiliation = v),
             ),
           ),
+
+          // 3-2. 소속이 '롯데카드 외'일 때만 표시되는 회사명
+          if (_selectedAdminAffiliation == '롯데카드 외') ...[
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _adminCompanyCtrl,
+              decoration: InputDecoration(
+                labelText: '회사명 *',
+                hintText: '소속 회사명을 입력하세요',
+                border: const OutlineInputBorder(),
+                suffixIcon: _searchSuffix('admin_company', _adminCompanyCtrl),
+              ),
+              readOnly: readOnly,
+              validator: (v) {
+                if (_selectedAdminAffiliation != '롯데카드 외') return null;
+                if (v == null || v.trim().isEmpty) {
+                  return '소속이 [롯데카드 외]일 때 회사명을 입력하세요.';
+                }
+                return null;
+              },
+            ),
+          ],
           const SizedBox(height: 20),
 
           // ── 위치 정보 ──
@@ -932,7 +1036,7 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
             columnKey: 'building1',
             value: _selectedBuilding1,
             child: DropdownButtonFormField<String>(
-              value: building1Options.contains(_selectedBuilding1)
+              value: building1List.contains(_selectedBuilding1)
                   ? _selectedBuilding1
                   : null,
               decoration: const InputDecoration(
@@ -941,7 +1045,7 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
               ),
               items: [
                 const DropdownMenuItem<String>(value: null, child: Text('-')),
-                ...building1Options
+                ...building1List
                     .map((s) => DropdownMenuItem(value: s, child: Text(s))),
               ],
               onChanged: readOnly
@@ -966,16 +1070,136 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: TextFormField(
-                  controller: _floorCtrl,
-                  decoration: InputDecoration(
-                    labelText: '층',
-                    border: const OutlineInputBorder(),
-                    suffixIcon: _searchSuffix('floor', _floorCtrl),
+                child: _withSearchIcon(
+                  columnKey: 'floor',
+                  value: _floorCtrl.text.trim(),
+                  child: DropdownButtonFormField<String>(
+                    value: floorList.contains(_floorCtrl.text.trim())
+                        ? _floorCtrl.text.trim()
+                        : null,
+                    decoration: const InputDecoration(
+                      labelText: '층',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      const DropdownMenuItem<String>(value: null, child: Text('-')),
+                      ...floorList
+                          .map((f) => DropdownMenuItem(value: f, child: Text(f))),
+                      if (_floorCtrl.text.trim().isNotEmpty &&
+                          !floorList.contains(_floorCtrl.text.trim()))
+                        DropdownMenuItem(
+                          value: _floorCtrl.text.trim(),
+                          child: Text('${_floorCtrl.text.trim()} (기타)'),
+                        ),
+                    ],
+                    onChanged: readOnly
+                        ? null
+                        : (v) => setState(() => _floorCtrl.text = v ?? ''),
                   ),
-                  readOnly: readOnly,
                 ),
               ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // 도면 좌표 (도면 / 행 / 열) — 자리 단위 자산 배치
+          Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: DropdownButtonFormField<int?>(
+                  value: _drawings.any((d) => d.id == _selectedDrawingId)
+                      ? _selectedDrawingId
+                      : null,
+                  decoration: const InputDecoration(
+                    labelText: '도면',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    const DropdownMenuItem<int?>(value: null, child: Text('-')),
+                    ..._drawings.map((d) => DropdownMenuItem<int?>(
+                          value: d.id,
+                          child: Text('${d.building} ${d.floor}'),
+                        )),
+                  ],
+                  onChanged: readOnly
+                      ? null
+                      : (v) => setState(() {
+                            _selectedDrawingId = v;
+                            _selectedRow = null;
+                            _selectedCol = null;
+                            _rowInputCtrl.clear();
+                            _colInputCtrl.clear();
+                          }),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  controller: _rowInputCtrl,
+                  decoration: InputDecoration(
+                    labelText: '행 (가로, 1~${_selectedDrawing?.gridRows ?? "-"})',
+                    border: const OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
+                  readOnly: readOnly || _selectedDrawingId == null,
+                  onChanged: (v) {
+                    final n = int.tryParse(v.trim());
+                    final max = _selectedDrawing?.gridRows ?? 0;
+                    setState(() => _selectedRow =
+                        (n == null || n < 1 || n > max) ? null : n - 1);
+                  },
+                  validator: (v) {
+                    if (_selectedDrawingId == null) return null;
+                    if (v == null || v.trim().isEmpty) return null;
+                    final n = int.tryParse(v.trim());
+                    final max = _selectedDrawing!.gridRows;
+                    if (n == null || n < 1 || n > max) {
+                      return '1~$max 사이 숫자';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  controller: _colInputCtrl,
+                  decoration: InputDecoration(
+                    labelText: '열 (세로, 1~${_selectedDrawing?.gridCols ?? "-"})',
+                    border: const OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
+                  readOnly: readOnly || _selectedDrawingId == null,
+                  onChanged: (v) {
+                    final n = int.tryParse(v.trim());
+                    final max = _selectedDrawing?.gridCols ?? 0;
+                    setState(() => _selectedCol =
+                        (n == null || n < 1 || n > max) ? null : n - 1);
+                  },
+                  validator: (v) {
+                    if (_selectedDrawingId == null) return null;
+                    if (v == null || v.trim().isEmpty) return null;
+                    final n = int.tryParse(v.trim());
+                    final max = _selectedDrawing!.gridCols;
+                    if (n == null || n < 1 || n > max) {
+                      return '1~$max 사이 숫자';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+              if (!readOnly)
+                TextButton(
+                  onPressed: () => setState(() {
+                    _selectedDrawingId = null;
+                    _selectedRow = null;
+                    _selectedCol = null;
+                    _rowInputCtrl.clear();
+                    _colInputCtrl.clear();
+                  }),
+                  child: const Text('지우기'),
+                ),
             ],
           ),
           const SizedBox(height: 20),
