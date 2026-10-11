@@ -32,7 +32,7 @@ class AppErrorWidget extends StatelessWidget {
               color: theme.colorScheme.error,
             ),
             const SizedBox(height: 16),
-            Text(
+            SelectableText(
               message,
               style: theme.textTheme.bodyLarge?.copyWith(
                 color: theme.colorScheme.error,

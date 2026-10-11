@@ -12,6 +12,7 @@ import '../utils/csv_downloader_stub.dart'
 import '../constants.dart';
 import '../models/asset.dart';
 import '../models/search_condition.dart';
+import '../notifiers/auth_notifier.dart';
 import '../services/api_service.dart';
 import '../notifiers/agent_presence_notifier.dart';
 import '../utils/os_security.dart';
@@ -61,6 +62,9 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
   int _loadedPage = 0;
   static const int _pageSize = 100;  // 500→100, 무한스크롤로 추가 로드
   String? _error;
+
+  bool get _canManageAssets =>
+      ref.read(authNotifierProvider).valueOrNull?.user?.isAdminGroup ?? false;
 
   // 필터 상태
   String? _selectedCategory;
@@ -717,15 +721,16 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
           ),
           const SizedBox(width: 4),
 
-          // 자산등록 버튼 (FilledButton)
-          _CompactButton(
-            compact: compact,
-            filled: true,
-            icon: Icons.add,
-            label: '등록',
-            tooltip: '자산 등록',
-            onPressed: () => context.go('/asset/new'),
-          ),
+          // 자산 마스터 등록은 관리자 그룹만 가능 (DB RLS도 동일하게 강제).
+          if (_canManageAssets)
+            _CompactButton(
+              compact: compact,
+              filled: true,
+              icon: Icons.add,
+              label: '등록',
+              tooltip: '자산 등록',
+              onPressed: () => context.go('/asset/new'),
+            ),
         ],
       ),
     );
@@ -1622,4 +1627,3 @@ class _CompactDropdown<T> extends StatelessWidget {
     );
   }
 }
-

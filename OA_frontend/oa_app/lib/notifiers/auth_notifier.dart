@@ -16,6 +16,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
 
     final authStateSub = _authService.onAuthStateChange().listen((event) async {
       if (event.event == supabase.AuthChangeEvent.signedOut) {
+        await ref.read(realtimeServiceProvider).unsubscribeAll();
         state = const AsyncData(AuthState.unauthenticated());
         return;
       }
@@ -30,17 +31,21 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       if (currentAuth != null && currentAuth.isAuthenticated) {
         // 토큰만 갱신
         final user = await _authService.fetchCurrentUser();
+        final effectiveUser = user ?? currentAuth.user;
         state = AsyncData(AuthState(
           isAuthenticated: true,
           accessToken: session.accessToken,
           refreshToken: session.refreshToken,
-          user: user ?? currentAuth.user,
+          user: effectiveUser,
         ));
+        if (effectiveUser != null) {
+          _subscribeRealtime(effectiveUser);
+        }
         return;
       }
 
       state = const AsyncValue.loading();
-      state = await AsyncValue.guard(() async {
+      final nextState = await AsyncValue.guard(() async {
         final user = await _authService.fetchCurrentUser();
         if (user == null) {
           return const AuthState.unauthenticated();
@@ -53,6 +58,11 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
           user: user,
         );
       });
+      state = nextState;
+      final user = nextState.valueOrNull?.user;
+      if (user != null) {
+        _subscribeRealtime(user);
+      }
     });
     ref.onDispose(authStateSub.cancel);
 
@@ -69,7 +79,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     }
 
     // 세션 복원 성공 시 Realtime 구독 시작
-    ref.read(realtimeServiceProvider).subscribeAll();
+    _subscribeRealtime(user);
 
     return AuthState(
       isAuthenticated: true,
@@ -77,6 +87,20 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       refreshToken: session.refreshToken,
       user: user,
     );
+  }
+
+  /// 프로필 재조회 — must_change_password 등 플래그 갱신 후 라우터 재평가
+  Future<void> refreshUser() async {
+    final current = state.valueOrNull;
+    if (current == null || !current.isAuthenticated) return;
+    final user = await _authService.fetchCurrentUser();
+    if (user == null) return;
+    state = AsyncData(AuthState(
+      isAuthenticated: true,
+      accessToken: current.accessToken,
+      refreshToken: current.refreshToken,
+      user: user,
+    ));
   }
 
   /// 사번 + 비밀번호 로그인
@@ -111,7 +135,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     ));
 
     // Realtime 구독 시작
-    ref.read(realtimeServiceProvider).subscribeAll();
+    _subscribeRealtime(user);
   }
 
   /// Google OAuth 로그인
@@ -133,8 +157,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   Future<void> loginWithKakao(String kakaoAccessToken) async {
     state = const AsyncValue.loading();
 
-    final authResponse =
-        await _authService.signInWithKakao(kakaoAccessToken);
+    final authResponse = await _authService.signInWithKakao(kakaoAccessToken);
 
     final session = authResponse.session;
     if (session == null) {
@@ -161,6 +184,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       refreshToken: session.refreshToken,
       user: user,
     ));
+    _subscribeRealtime(user);
   }
 
   /// 로그아웃
@@ -173,6 +197,12 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
 
   /// 현재 로그인된 사용자 정보
   User? get currentUser => state.value?.user;
+
+  void _subscribeRealtime(User user) {
+    ref
+        .read(realtimeServiceProvider)
+        .subscribeAll(isAdminGroup: user.isAdminGroup);
+  }
 }
 
 /// 인증 상태 Provider

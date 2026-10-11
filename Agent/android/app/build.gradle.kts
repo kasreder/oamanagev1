@@ -3,6 +3,36 @@ plugins {
     kotlin("android")
 }
 
+/**
+ * Release signing material is intentionally supplied out of band. Gradle
+ * properties can be passed with -P or kept in the operator Gradle directory;
+ * CI may instead inject environment variables.
+ */
+fun signingInput(name: String): String? =
+    providers.gradleProperty(name)
+        .orElse(providers.environmentVariable(name))
+        .orNull
+        ?.takeIf { it.isNotBlank() }
+
+val releaseStoreFile = signingInput("OA_AGENT_SIGNING_STORE_FILE")
+val releaseStorePassword = signingInput("OA_AGENT_SIGNING_STORE_PASSWORD")
+val releaseKeyAlias = signingInput("OA_AGENT_SIGNING_KEY_ALIAS")
+val releaseKeyPassword = signingInput("OA_AGENT_SIGNING_KEY_PASSWORD")
+val releaseSigningConfigured = listOf(
+    releaseStoreFile,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { it != null }
+
+val releaseSigningHelp = """
+    Android release signing requires OA_AGENT_SIGNING_STORE_FILE,
+    OA_AGENT_SIGNING_STORE_PASSWORD, OA_AGENT_SIGNING_KEY_ALIAS, and
+    OA_AGENT_SIGNING_KEY_PASSWORD. Provide them as Gradle properties or
+    environment variables through CI/secure local Gradle configuration; never
+    add them to this repository.
+""".trimIndent()
+
 android {
     namespace = "com.oamanager.agent"
     compileSdk = 36
@@ -17,10 +47,12 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("oaagent-release.jks")
-            storePassword = "oaagent2026"
-            keyAlias = "oaagent"
-            keyPassword = "oaagent2026"
+            if (releaseSigningConfigured) {
+                storeFile = file(requireNotNull(releaseStoreFile))
+                storePassword = requireNotNull(releaseStorePassword)
+                keyAlias = requireNotNull(releaseKeyAlias)
+                keyPassword = requireNotNull(releaseKeyPassword)
+            }
         }
     }
 
@@ -31,7 +63,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfig = signingConfigs.getByName("release")
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
@@ -42,6 +76,20 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+}
+
+gradle.taskGraph.whenReady {
+    val releaseArtifactRequested = allTasks.any { task ->
+        task.project == project &&
+            task.name.contains("Release", ignoreCase = true) &&
+            listOf("assemble", "bundle", "package", "sign").any { prefix ->
+                task.name.startsWith(prefix, ignoreCase = true)
+            }
+    }
+
+    check(!releaseArtifactRequested || releaseSigningConfigured) {
+        releaseSigningHelp
     }
 }
 

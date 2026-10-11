@@ -45,8 +45,21 @@ object TrayIconManager {
         setupItem.addActionListener { showSetupDialog(app) }
         popup.add(setupItem)
 
+        val loginItem = MenuItem("OA 계정 로그인...")
+        loginItem.addActionListener { showSetupDialog(app) }
+        popup.add(loginItem)
+
         val sendNowItem = MenuItem("즉시 전송")
         sendNowItem.addActionListener {
+            if (!app.hasPersonalSession) {
+                trayIcon?.displayMessage(
+                    "OA Agent",
+                    "개인 OA 계정 로그인이 필요합니다.",
+                    TrayIcon.MessageType.WARNING,
+                )
+                showSetupDialog(app)
+                return@addActionListener
+            }
             Thread {
                 try {
                     kotlinx.coroutines.runBlocking { app.sendHeartbeatOnce() }

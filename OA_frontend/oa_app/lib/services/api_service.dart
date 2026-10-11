@@ -4,8 +4,10 @@ import '../models/asset.dart';
 import '../models/asset_inspection.dart';
 import '../models/drawing.dart';
 import '../models/inspection_round.dart';
+import '../models/receipt.dart';
 import '../models/search_condition.dart';
 import '../models/user.dart';
+import '../models/vendor.dart';
 import '../constants.dart';
 
 class ApiService {
@@ -546,6 +548,114 @@ class ApiService {
         .from('asset_inspections')
         .update({'locked': locked})
         .eq('id', inspectionId);
+  }
+
+  // ==================== 인수증 (Receipts) ====================
+
+  /// 거래처 목록 (활성만)
+  Future<List<Vendor>> fetchVendors({bool includeInactive = false}) async {
+    var q = _client.from('vendors').select();
+    if (!includeInactive) q = q.eq('is_active', true);
+    final rows =
+        await q.order('display_order').order('name');
+    return (rows as List)
+        .map((e) => Vendor.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<Vendor> createVendor(Map<String, dynamic> data) async {
+    final row = await _client.from('vendors').insert(data).select().single();
+    return Vendor.fromJson(row);
+  }
+
+  Future<Vendor> updateVendor(int id, Map<String, dynamic> data) async {
+    final row = await _client
+        .from('vendors')
+        .update(data)
+        .eq('id', id)
+        .select()
+        .single();
+    return Vendor.fromJson(row);
+  }
+
+  Future<void> deleteVendor(int id) async {
+    await _client.from('vendors').delete().eq('id', id);
+  }
+
+  /// 인수증 서명 담당자 후보 — users.receipt_team이 지정된 사용자 (helpdesk / it_plan)
+  Future<List<User>> fetchReceiptTeamUsers() async {
+    final rows = await _client
+        .from('users')
+        .select()
+        .not('receipt_team', 'is', null)
+        .order('employee_name');
+    return (rows as List)
+        .map((e) => User.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// 인수증 목록 (조인: 거래처)
+  Future<List<Receipt>> fetchReceipts({int limit = 50}) async {
+    final rows = await _client
+        .from('receipts')
+        .select('*, vendors(*), receipt_items(*)')
+        .order('issued_at', ascending: false)
+        .order('id', ascending: false)
+        .limit(limit);
+    return (rows as List)
+        .map((e) => Receipt.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// 인수증 단건 (거래처 + 항목 조인)
+  Future<Receipt> fetchReceipt(int id) async {
+    final row = await _client
+        .from('receipts')
+        .select('*, vendors(*), receipt_items(*)')
+        .eq('id', id)
+        .single();
+    return Receipt.fromJson(row);
+  }
+
+  Future<Receipt> createReceipt(Map<String, dynamic> data) async {
+    final row = await _client
+        .from('receipts')
+        .insert(data)
+        .select('*, vendors(*), receipt_items(*)')
+        .single();
+    return Receipt.fromJson(row);
+  }
+
+  Future<Receipt> updateReceipt(int id, Map<String, dynamic> data) async {
+    final row = await _client
+        .from('receipts')
+        .update(data)
+        .eq('id', id)
+        .select('*, vendors(*), receipt_items(*)')
+        .single();
+    return Receipt.fromJson(row);
+  }
+
+  Future<void> deleteReceipt(int id) async {
+    await _client.from('receipts').delete().eq('id', id);
+  }
+
+  /// 인수증 항목 — 전량 교체 (삭제 후 삽입). 소규모 문서라 이 방식이 가장 단순.
+  Future<void> replaceReceiptItems(
+    int receiptId,
+    List<ReceiptItem> items,
+  ) async {
+    await _client.from('receipt_items').delete().eq('receipt_id', receiptId);
+    if (items.isEmpty) return;
+    final rows = items
+        .asMap()
+        .entries
+        .map((e) => {
+              ...e.value.copyWith(rowNo: e.key + 1).toJson(),
+              'receipt_id': receiptId,
+            })
+        .toList();
+    await _client.from('receipt_items').insert(rows);
   }
 }
 

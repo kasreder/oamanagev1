@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../constants.dart';
 import '../models/drawing.dart';
+import '../notifiers/auth_notifier.dart';
 import '../notifiers/drawing_notifier.dart';
 import '../notifiers/dropdown_options_provider.dart';
 import '../services/api_service.dart';
@@ -34,6 +35,9 @@ class _DrawingManagerPageState extends ConsumerState<DrawingManagerPage> {
   List<Drawing> _drawings = [];
   bool _isLoading = true;
   String? _error;
+
+  bool get _canManageDrawings =>
+      ref.read(authNotifierProvider).valueOrNull?.user?.isAdminGroup ?? false;
 
   @override
   void initState() {
@@ -410,7 +414,7 @@ class _DrawingManagerPageState extends ConsumerState<DrawingManagerPage> {
             message: '등록된 도면이 없습니다.',
             subMessage: '우측 하단 버튼으로 새 도면을 등록하세요.',
           ),
-          _buildFab(),
+          if (_canManageDrawings) _buildFab(),
         ],
       );
     }
@@ -481,17 +485,19 @@ class _DrawingManagerPageState extends ConsumerState<DrawingManagerPage> {
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            IconButton(
-                              tooltip: '도면 수정',
-                              icon: const Icon(Icons.edit, size: 18),
-                              onPressed: () => _showEditDialog(drawing),
-                            ),
-                            IconButton(
-                              tooltip: '도면 삭제',
-                              icon: Icon(Icons.delete_outline,
-                                  size: 18, color: theme.colorScheme.error),
-                              onPressed: () => _confirmDelete(drawing),
-                            ),
+                            if (_canManageDrawings) ...[
+                              IconButton(
+                                tooltip: '도면 수정',
+                                icon: const Icon(Icons.edit, size: 18),
+                                onPressed: () => _showEditDialog(drawing),
+                              ),
+                              IconButton(
+                                tooltip: '도면 삭제',
+                                icon: Icon(Icons.delete_outline,
+                                    size: 18, color: theme.colorScheme.error),
+                                onPressed: () => _confirmDelete(drawing),
+                              ),
+                            ],
                             const Icon(Icons.chevron_right),
                           ],
                         ),
@@ -504,7 +510,7 @@ class _DrawingManagerPageState extends ConsumerState<DrawingManagerPage> {
             }).toList(),
           ),
         ),
-        _buildFab(),
+        if (_canManageDrawings) _buildFab(),
       ],
     );
   }

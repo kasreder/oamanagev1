@@ -26,11 +26,16 @@ class RealtimeService {
   // 전체 구독 관리
   // ---------------------------------------------------------------------------
 
-  /// 모든 Realtime 채널 구독 시작
-  void subscribeAll() {
+  /// Realtime 채널 구독 시작.
+  ///
+  /// 자산/실사 Postgres Changes는 각 사용자에게 필요한 데이터이므로 모두
+  /// 구독한다. Presence와 운영 알림은 관리자 그룹에만 노출한다.
+  void subscribeAll({required bool isAdminGroup}) {
     _subscribePostgresChanges();
-    _subscribePresence();
-    _subscribeAlerts();
+    if (isAdminGroup) {
+      _subscribePresence();
+      _subscribeAlerts();
+    }
   }
 
   /// 모든 Realtime 채널 구독 해제
@@ -51,8 +56,11 @@ class RealtimeService {
 
   void _subscribePostgresChanges() {
     // assets 테이블 UPDATE/INSERT/DELETE 이벤트
-    _assetsChannel = _client
-        .channel('assets-realtime')
+    _assetsChannel ??= _client
+        .channel(
+          'assets-realtime',
+          opts: const RealtimeChannelConfig(private: true),
+        )
         .onPostgresChanges(
           event: PostgresChangeEvent.update,
           schema: 'public',
@@ -87,7 +95,9 @@ class RealtimeService {
             try {
               final deletedUid = payload.oldRecord['asset_uid'] as String?;
               if (deletedUid != null) {
-                _ref.read(assetNotifierProvider.notifier).removeLocal(deletedUid);
+                _ref
+                    .read(assetNotifierProvider.notifier)
+                    .removeLocal(deletedUid);
               }
               ApiService.invalidateAssetsCache();
             } catch (_) {}
@@ -96,8 +106,11 @@ class RealtimeService {
         .subscribe();
 
     // asset_inspections INSERT 이벤트
-    _inspectionsChannel = _client
-        .channel('inspections-realtime')
+    _inspectionsChannel ??= _client
+        .channel(
+          'inspections-realtime',
+          opts: const RealtimeChannelConfig(private: true),
+        )
         .onPostgresChanges(
           event: PostgresChangeEvent.insert,
           schema: 'public',
@@ -114,25 +127,23 @@ class RealtimeService {
   // ---------------------------------------------------------------------------
 
   void _subscribePresence() {
-    _presenceChannel = _client.channel('agent-presence:global');
-    _presenceChannel!
-        .onPresenceSync((payload) {
-          final presences = _presenceChannel!.presenceState();
-          _ref
-              .read(agentPresenceNotifierProvider.notifier)
-              .syncAll(presences);
-        })
-        .onPresenceJoin((payload) {
-          _ref
-              .read(agentPresenceNotifierProvider.notifier)
-              .addAgents(payload.newPresences);
-        })
-        .onPresenceLeave((payload) {
-          _ref
-              .read(agentPresenceNotifierProvider.notifier)
-              .removeAgents(payload.leftPresences);
-        })
-        .subscribe();
+    if (_presenceChannel != null) return;
+    _presenceChannel = _client.channel(
+      'agent-presence:global',
+      opts: const RealtimeChannelConfig(private: true),
+    );
+    _presenceChannel!.onPresenceSync((payload) {
+      final presences = _presenceChannel!.presenceState();
+      _ref.read(agentPresenceNotifierProvider.notifier).syncAll(presences);
+    }).onPresenceJoin((payload) {
+      _ref
+          .read(agentPresenceNotifierProvider.notifier)
+          .addAgents(payload.newPresences);
+    }).onPresenceLeave((payload) {
+      _ref
+          .read(agentPresenceNotifierProvider.notifier)
+          .removeAgents(payload.leftPresences);
+    }).subscribe();
   }
 
   // ---------------------------------------------------------------------------
@@ -140,8 +151,12 @@ class RealtimeService {
   // ---------------------------------------------------------------------------
 
   void _subscribeAlerts() {
+    if (_alertsChannel != null) return;
     _alertsChannel = _client
-        .channel('agent-alerts:global')
+        .channel(
+          'agent-alerts:global',
+          opts: const RealtimeChannelConfig(private: true),
+        )
         .onBroadcast(
           event: 'alert',
           callback: (payload) {
@@ -161,17 +176,25 @@ class RealtimeService {
     String command, {
     Map<String, dynamic>? params,
   }) async {
-    final channel = _client.channel('agent-commands:$assetUid');
-    await channel.sendBroadcastMessage(
-      event: 'command',
-      payload: {
-        'command': command,
-        'requested_by': _client.auth.currentUser?.email ?? '',
-        'requested_at': DateTime.now().toUtc().toIso8601String(),
-        'params': params ?? {},
-      },
+    final channel = _client.channel(
+      'agent-commands:$assetUid',
+      opts: const RealtimeChannelConfig(private: true),
     );
-    await channel.unsubscribe();
+    try {
+      // A one-shot command does not need a WebSocket join.  Use the Realtime
+      // REST path explicitly so only the INSERT policy is required.
+      await channel.httpSend(
+        event: 'command',
+        payload: {
+          'command': command,
+          'requested_by': _client.auth.currentUser?.email ?? '',
+          'requested_at': DateTime.now().toUtc().toIso8601String(),
+          'params': params ?? {},
+        },
+      );
+    } finally {
+      await channel.unsubscribe();
+    }
   }
 }
 

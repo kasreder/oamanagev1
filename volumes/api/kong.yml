@@ -9,9 +9,28 @@ consumers:
   - username: anon
     keyauth_credentials:
       - key: $SUPABASE_ANON_KEY
+    # Shared public key: cap aggregate anonymous-client load without relying on
+    # a source IP that is obscured by the reverse proxy.
+    plugins:
+      - name: rate-limiting
+        config:
+          second: 30
+          minute: 600
+          hour: 10000
+          policy: local
+          limit_by: consumer
   - username: service_role
     keyauth_credentials:
       - key: $SUPABASE_SERVICE_KEY
+    # Internal server-side traffic gets a higher, but still bounded, allowance.
+    plugins:
+      - name: rate-limiting
+        config:
+          second: 60
+          minute: 1200
+          hour: 30000
+          policy: local
+          limit_by: consumer
 
 ###
 ### Access Control List
@@ -77,12 +96,19 @@ services:
       - name: key-auth
         config:
           hide_credentials: false
+          key_in_query: false
       - name: acl
         config:
           hide_groups_header: true
           allow:
             - admin
             - anon
+      # Auth payloads are credentials/JSON only; reject oversized bodies before
+      # GoTrue or its database can buffer them.
+      - name: request-size-limiting
+        config:
+          allowed_payload_size: 1
+          size_unit: megabytes
 
   ## REST (PostgREST)
   - name: rest-v1
@@ -98,6 +124,7 @@ services:
       - name: key-auth
         config:
           hide_credentials: true
+          key_in_query: false
       - name: acl
         config:
           hide_groups_header: true
@@ -120,6 +147,10 @@ services:
       - name: key-auth
         config:
           hide_credentials: false
+          # Browser Supabase Realtime clients authenticate their WebSocket
+          # handshake with `apikey` in the query string. Keep this narrow
+          # compatibility exception until those clients are migrated.
+          key_in_query: true
       - name: acl
         config:
           hide_groups_header: true
@@ -142,6 +173,7 @@ services:
       - name: key-auth
         config:
           hide_credentials: false
+          key_in_query: false
       - name: acl
         config:
           hide_groups_header: true
@@ -161,18 +193,6 @@ services:
     plugins:
       - name: cors
 
-  ## Edge Functions
-  - name: functions-v1
-    _comment: 'Edge Functions: /functions/v1/* -> http://oa-functions:9000/*'
-    url: http://oa-functions:9000/
-    routes:
-      - name: functions-v1-all
-        strip_path: true
-        paths:
-          - /functions/v1/
-    plugins:
-      - name: cors
-
   ## Meta
   - name: meta
     _comment: 'pg-meta: /pg/* -> http://oa-meta:8080/*'
@@ -186,6 +206,7 @@ services:
       - name: key-auth
         config:
           hide_credentials: false
+          key_in_query: false
       - name: acl
         config:
           hide_groups_header: true

@@ -28,8 +28,16 @@ object TrayIconManager {
         setupItem.addActionListener { showSetupDialog(app) }
         popup.add(setupItem)
 
+        val loginItem = MenuItem("OA 계정 로그인...")
+        loginItem.addActionListener { showPersonalLoginDialog(app) }
+        popup.add(loginItem)
+
         val sendItem = MenuItem("즉시 전송")
         sendItem.addActionListener {
+            if (!app.hasPersonalSession) {
+                showMessage("개인 OA 계정 로그인이 필요합니다.")
+                return@addActionListener
+            }
             GlobalScope.launch(Dispatchers.IO) {
                 try {
                     app.sendHeartbeatOnce()
@@ -63,6 +71,11 @@ object TrayIconManager {
     }
 
     fun showSetupDialog(app: MacAgentApp) {
+        if (!app.hasPersonalSession) {
+            showPersonalLoginDialog(app) { showSetupDialog(app) }
+            return
+        }
+
         val uid = JOptionPane.showInputDialog(
             null,
             "자산번호를 입력하세요 (예: D00001, BDT00001)",
@@ -74,8 +87,86 @@ object TrayIconManager {
         if (trimmed.isEmpty()) return
 
         app.prefs.assetUid = trimmed
-        app.start()
-        showMessage("에이전트 시작: $trimmed")
+        if (app.start()) {
+            showMessage("에이전트 시작: $trimmed")
+        } else {
+            JOptionPane.showMessageDialog(
+                null,
+                "Heartbeat를 시작하려면 개인 OA 계정 로그인이 필요합니다.",
+                "OA 계정 로그인 필요",
+                JOptionPane.WARNING_MESSAGE,
+            )
+        }
+    }
+
+    /**
+     * 자산 담당자 또는 관리자 개인 OA 계정 로그인 화면.
+     * 비밀번호는 UI 입력과 인증 요청 사이에서만 사용하고 저장하지 않는다.
+     */
+    private fun showPersonalLoginDialog(app: MacAgentApp, onSuccess: (() -> Unit)? = null) {
+        val tfAccount = javax.swing.JTextField(24)
+        val pfPassword = javax.swing.JPasswordField(24)
+        val form = javax.swing.JPanel(java.awt.GridLayout(0, 1, 0, 6)).apply {
+            add(javax.swing.JLabel("자산 담당자 또는 관리자 개인 OA 계정으로 로그인하세요."))
+            add(javax.swing.JLabel("사번 또는 OA 계정 이메일"))
+            add(tfAccount)
+            add(javax.swing.JLabel("비밀번호"))
+            add(pfPassword)
+        }
+
+        val choice = JOptionPane.showConfirmDialog(
+            null,
+            form,
+            "OA 계정 로그인",
+            JOptionPane.OK_CANCEL_OPTION,
+            JOptionPane.PLAIN_MESSAGE,
+        )
+        if (choice != JOptionPane.OK_OPTION) return
+
+        val account = tfAccount.text
+        val password = pfPassword.password
+        if (account.isBlank() || password.isEmpty()) {
+            password.fill('\u0000')
+            JOptionPane.showMessageDialog(
+                null,
+                "OA 계정과 비밀번호를 모두 입력하세요.",
+                "입력 확인",
+                JOptionPane.WARNING_MESSAGE,
+            )
+            return
+        }
+
+        Thread {
+            val signedIn = try {
+                val passwordText = password.concatToString()
+                kotlinx.coroutines.runBlocking {
+                    app.signInWithPersonalAccount(account, passwordText)
+                }
+            } catch (_: Exception) {
+                false
+            } finally {
+                password.fill('\u0000')
+            }
+
+            EventQueue.invokeLater {
+                if (signedIn) {
+                    JOptionPane.showMessageDialog(
+                        null,
+                        "개인 OA 계정으로 로그인했습니다.",
+                        "로그인 완료",
+                        JOptionPane.INFORMATION_MESSAGE,
+                    )
+                    onSuccess?.invoke()
+                } else {
+                    JOptionPane.showMessageDialog(
+                        null,
+                        "로그인에 실패했습니다. 계정 또는 자산 담당자/관리자 권한을 확인하세요.",
+                        "로그인 실패",
+                        JOptionPane.ERROR_MESSAGE,
+                    )
+                }
+            }
+        }.start()
     }
 
     private fun showMessage(msg: String) {

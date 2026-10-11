@@ -31,24 +31,14 @@ class AssetUidGuideDialog extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primaryContainer.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '형식: 문자 1자리 + 숫자 5자리  또는  문자 2자리 + 숫자 4자리',
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(fontWeight: FontWeight.w600),
-                ),
-              ),
-              const SizedBox(height: 16),
               Text(
-                '코드 목록',
-                style: theme.textTheme.titleSmall
-                    ?.copyWith(fontWeight: FontWeight.bold),
+                '두 형식 모두 등록 가능합니다.',
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(fontWeight: FontWeight.w600),
               ),
+              const SizedBox(height: 12),
+              _formatBox(theme,
+                  '① 현재기준: 문자 1자리 + 숫자 5자리  또는  문자 2자리 + 숫자 4자리'),
               const SizedBox(height: 8),
               _guideTable(theme, const [
                 ['D', '데스크탑', 'D00001'],
@@ -62,9 +52,27 @@ class AssetUidGuideDialog extends StatelessWidget {
                 ['EH', '법인폰', 'EH0001'],
                 ['ET', '현장업무 태블릿', 'ET0001'],
               ]),
+              const SizedBox(height: 20),
+              _formatBox(theme, '② 변경후: 등록경로 1자리 + 장비코드 2자리 + 숫자 5자리'),
+              const SizedBox(height: 8),
+              _guideTable(theme, const [
+                ['B', '구매', 'BDT00001'],
+                ['R', '임대', 'RNB00001'],
+                ['C', '도급', 'CMN00001'],
+                ['L', '대여', 'LTB00001'],
+                ['S', '지원', 'STP00001'],
+              ]),
+              const SizedBox(height: 8),
+              Text(
+                '장비코드: DT 데스크탑 · NB 노트북 · MN 모니터 · PR 프린터 · '
+                'TB 태블릿 · SC 스캐너 · IP IP전화기 · NW 네트워크장비 · '
+                'SV 서버 · WR 무선라우터 · SD 스토리지 · TP 테스트폰 · '
+                'ET 현장업무 태블릿 · EH 법인폰',
+                style: theme.textTheme.bodySmall,
+              ),
               const SizedBox(height: 12),
               Text(
-                '예시: D00123, N00045, TP0012, EH0003',
+                '예시: D00123, TP0012, BDT00001, STP22222',
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.outline),
               ),
@@ -78,6 +86,22 @@ class AssetUidGuideDialog extends StatelessWidget {
           child: const Text('닫기'),
         ),
       ],
+    );
+  }
+
+  Widget _formatBox(ThemeData theme, String text) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        text,
+        style: theme.textTheme.bodyMedium
+            ?.copyWith(fontWeight: FontWeight.w600),
+      ),
     );
   }
 

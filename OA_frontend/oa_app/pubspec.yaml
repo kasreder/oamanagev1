@@ -44,6 +44,10 @@ dependencies:
   image_picker: ^1.0.0
   google_mlkit_text_recognition: ^0.13.0
 
+  # Printing / PDF (인수증 A4 인쇄)
+  printing: ^5.13.0
+  pdf: ^3.11.0
+
   # Local Storage
   path_provider: ^2.1.0
   shared_preferences: ^2.2.0
@@ -74,3 +78,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/sounds/
+    - assets/vendor_logos/

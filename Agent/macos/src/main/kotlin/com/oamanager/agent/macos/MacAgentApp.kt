@@ -19,9 +19,30 @@ class MacAgentApp(val prefs: MacPreferences) {
     private var realtimeManager: RealtimeManager? = null
 
     val isRunning: Boolean get() = heartbeatScheduler?.isRunning == true
+    val hasPersonalSession: Boolean
+        get() = prefs.personalLoginConfigured && authManager.hasStoredSession()
 
-    fun start() {
-        val assetUid = prefs.assetUid ?: return
+    /**
+     * 자산 담당자 또는 관리자 개인 OA 계정으로 로그인한다.
+     * 비밀번호는 호출 범위를 벗어나 저장하지 않는다.
+     */
+    suspend fun signInWithPersonalAccount(account: String, password: String): Boolean {
+        val loginEmail = account.trim().let {
+            if (it.contains('@')) it else "$it@oamanager.internal"
+        }
+        val signedIn = authManager.signInWithPassword(loginEmail, password)
+        if (signedIn) prefs.personalLoginConfigured = true
+        return signedIn
+    }
+
+    fun start(): Boolean {
+        if (!hasPersonalSession) {
+            System.err.println("OA personal-account login is required before starting the agent.")
+            return false
+        }
+
+        val assetUid = prefs.assetUid ?: return false
+        if (heartbeatScheduler?.isRunning == true) return true
         val interval = prefs.intervalMinutes
 
         heartbeatScheduler = HeartbeatScheduler(
@@ -32,6 +53,7 @@ class MacAgentApp(val prefs: MacPreferences) {
         scope.launch { startRealtime(assetUid) }
 
         println("OA Agent started: asset_uid=$assetUid, interval=${interval}min")
+        return true
     }
 
     fun stop() {
@@ -45,8 +67,7 @@ class MacAgentApp(val prefs: MacPreferences) {
 
     suspend fun sendHeartbeatOnce() {
         val assetUid = prefs.assetUid ?: throw IllegalStateException("asset_uid not set")
-        val token = authManager.getValidToken()
-            ?: throw IllegalStateException("Authentication failed")
+        val token = requireValidToken()
 
         val systemInfo = SystemInfoCollector(
             assetUserName = prefs.assetUserName ?: "",
@@ -60,8 +81,7 @@ class MacAgentApp(val prefs: MacPreferences) {
 
     suspend fun verifyUser(userName: String, employeeId: String): Pair<Boolean, String> {
         val assetUid = prefs.assetUid ?: throw IllegalStateException("asset_uid not set")
-        val token = authManager.getValidToken()
-            ?: throw IllegalStateException("Authentication failed")
+        val token = requireValidToken()
 
         val result = client.verifyUser(token, assetUid, userName, employeeId)
         val matched = result["matched"]?.let {
@@ -78,12 +98,13 @@ class MacAgentApp(val prefs: MacPreferences) {
     }
 
     private suspend fun startRealtime(assetUid: String) {
+        if (!hasPersonalSession) return
         try {
+            requireValidToken()
             realtimeManager = RealtimeManager(authManager = authManager)
             realtimeManager?.connect(scope)
-            realtimeManager?.joinPresence(assetUid, "macos", "1.0.0")
+            realtimeManager?.joinPresence(assetUid)
             realtimeManager?.joinCommandChannel(assetUid)
-            realtimeManager?.joinAlertChannel()
 
             realtimeManager?.onCommand { command, _ ->
                 when (command) {
@@ -96,4 +117,12 @@ class MacAgentApp(val prefs: MacPreferences) {
             System.err.println("Realtime connection failed: ${e.message}")
         }
     }
+
+    private suspend fun requireValidToken(): String =
+        authManager.getValidToken() ?: run {
+            prefs.accessToken = null
+            prefs.refreshToken = null
+            prefs.personalLoginConfigured = false
+            throw IllegalStateException("OA session expired. Sign in with a personal OA account again.")
+        }
 }

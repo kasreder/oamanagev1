@@ -5,15 +5,18 @@ import 'package:go_router/go_router.dart';
 import '../../main.dart';
 import '../../models/user.dart';
 import '../../notifiers/auth_notifier.dart';
+import '../../notifiers/menu_visibility_provider.dart';
 import 'asset_uid_guide_dialog.dart';
 
 /// 네비게이션 메뉴 항목 정의
 class _NavItem {
+  final String key;
   final String label;
   final IconData icon;
   final String path;
 
   const _NavItem({
+    required this.key,
     required this.label,
     required this.icon,
     required this.path,
@@ -21,11 +24,20 @@ class _NavItem {
 }
 
 const _navItems = <_NavItem>[
-  _NavItem(label: '홈', icon: Icons.home, path: '/'),
-  _NavItem(label: '스캔', icon: Icons.qr_code_scanner, path: '/scan'),
-  _NavItem(label: '자산목록', icon: Icons.list_alt, path: '/assets'),
-  _NavItem(label: '실사목록', icon: Icons.fact_check, path: '/inspections'),
-  _NavItem(label: '도면', icon: Icons.map, path: '/drawings'),
+  _NavItem(key: 'home', label: '홈', icon: Icons.home, path: '/'),
+  _NavItem(key: 'scan', label: '스캔', icon: Icons.qr_code_scanner, path: '/scan'),
+  _NavItem(key: 'assets', label: '자산목록', icon: Icons.list_alt, path: '/assets'),
+  _NavItem(
+      key: 'inspections',
+      label: '실사목록',
+      icon: Icons.fact_check,
+      path: '/inspections'),
+  _NavItem(key: 'drawings', label: '도면', icon: Icons.map, path: '/drawings'),
+  _NavItem(
+      key: 'receipts',
+      label: '인수증',
+      icon: Icons.receipt_long,
+      path: '/receipts'),
 ];
 
 /// 모든 화면에서 사용하는 공통 레이아웃 Scaffold.
@@ -42,6 +54,7 @@ class AppScaffold extends ConsumerWidget {
   final int? currentIndex;
   final List<Widget>? actions;
   final bool showPrimaryNav;
+  final Widget? floatingActionButton;
 
   const AppScaffold({
     super.key,
@@ -50,6 +63,7 @@ class AppScaffold extends ConsumerWidget {
     this.currentIndex,
     this.actions,
     this.showPrimaryNav = true,
+    this.floatingActionButton,
   });
 
   @override
@@ -59,13 +73,27 @@ class AppScaffold extends ConsumerWidget {
     final user = authState.valueOrNull?.user;
     final screenWidth = MediaQuery.of(context).size.width;
     final isNarrow = screenWidth < 600;
-    final hasPrimarySelection =
-        showPrimaryNav &&
-        currentIndex != null &&
-        currentIndex! >= 0 &&
-        currentIndex! < _navItems.length;
+
+    // 메뉴권한 필터 (로딩/실패 시 기본 전부). 인수증은 운영자 그룹 게이트 병행.
+    final visibleKeys =
+        ref.watch(menuVisibilityProvider).valueOrNull ?? managedMenus.keys.toSet();
+    final navItems = _navItems
+        .where((i) =>
+            visibleKeys.contains(i.key) &&
+            (i.key != 'receipts' || (user?.isAdminGroup ?? false)))
+        .toList();
+
+    // 페이지가 넘긴 currentIndex(원본 기준) → 필터된 리스트 기준으로 재매핑
+    final selIdx = (showPrimaryNav &&
+            currentIndex != null &&
+            currentIndex! >= 0 &&
+            currentIndex! < _navItems.length)
+        ? navItems.indexWhere((i) => i.path == _navItems[currentIndex!].path)
+        : -1;
+    final hasPrimarySelection = selIdx >= 0 && navItems.length >= 2;
 
     return Scaffold(
+      floatingActionButton: floatingActionButton,
       appBar: AppBar(
         title: Text(title),
         actions: [
@@ -79,17 +107,17 @@ class AppScaffold extends ConsumerWidget {
           ),
         ],
       ),
-      drawer: _buildDrawer(context, ref, isDarkMode, user),
-      body: isNarrow || !showPrimaryNav
+      drawer: _buildDrawer(context, ref, isDarkMode, user, visibleKeys),
+      body: isNarrow || !showPrimaryNav || navItems.length < 2
           ? body
           : Row(
               children: [
                 NavigationRail(
-                  selectedIndex: hasPrimarySelection ? currentIndex : null,
+                  selectedIndex: hasPrimarySelection ? selIdx : null,
                   onDestinationSelected: (index) =>
-                      _onNavItemTapped(context, index),
+                      context.go(navItems[index].path),
                   labelType: NavigationRailLabelType.all,
-                  destinations: _navItems
+                  destinations: navItems
                       .map(
                         (item) => NavigationRailDestination(
                           icon: Icon(item.icon),
@@ -104,10 +132,10 @@ class AppScaffold extends ConsumerWidget {
             ),
       bottomNavigationBar: isNarrow && showPrimaryNav && hasPrimarySelection
           ? BottomNavigationBar(
-              currentIndex: currentIndex!,
-              onTap: (index) => _onNavItemTapped(context, index),
+              currentIndex: selIdx,
+              onTap: (index) => context.go(navItems[index].path),
               type: BottomNavigationBarType.fixed,
-              items: _navItems
+              items: navItems
                   .map(
                     (item) => BottomNavigationBarItem(
                       icon: Icon(item.icon),
@@ -120,17 +148,12 @@ class AppScaffold extends ConsumerWidget {
     );
   }
 
-  void _onNavItemTapped(BuildContext context, int index) {
-    if (index >= 0 && index < _navItems.length) {
-      context.go(_navItems[index].path);
-    }
-  }
-
   Widget _buildDrawer(
     BuildContext context,
     WidgetRef ref,
     bool isDarkMode,
     User? user,
+    Set<String> visibleKeys,
   ) {
     return Drawer(
       child: ListView(
@@ -146,12 +169,23 @@ class AppScaffold extends ConsumerWidget {
               ),
             ),
           ),
-          _buildDrawerItem(context, Icons.home, '홈', '/'),
-          _buildDrawerItem(context, Icons.list_alt, '자산목록', '/assets'),
-          _buildDrawerItem(context, Icons.fact_check, '실사목록', '/inspections'),
-          _buildDrawerItem(context, Icons.map, '도면관리', '/drawings'),
+          if (visibleKeys.contains('home'))
+            _buildDrawerItem(context, Icons.home, '홈', '/'),
+          if (visibleKeys.contains('assets'))
+            _buildDrawerItem(context, Icons.list_alt, '자산목록', '/assets'),
+          if (visibleKeys.contains('inspections'))
+            _buildDrawerItem(
+                context, Icons.fact_check, '실사목록', '/inspections'),
+          if (visibleKeys.contains('drawings'))
+            _buildDrawerItem(context, Icons.map, '도면관리', '/drawings'),
+          if (visibleKeys.contains('receipts') &&
+              user != null &&
+              user.isAdminGroup)
+            _buildDrawerItem(context, Icons.receipt_long, '인수증', '/receipts'),
           if (user != null && user.isAdminGroup) ...[
             const Divider(),
+            _buildDrawerItem(
+                context, Icons.storefront, '거래처', '/admin/vendors'),
             _buildDrawerItem(
                 context, Icons.settings, '설정', '/admin/settings'),
           ],

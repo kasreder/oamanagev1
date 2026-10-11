@@ -33,6 +33,8 @@ class _DrawingViewerPageState extends ConsumerState<DrawingViewerPage> {
   List<Asset> _assets = [];
   bool _isLoading = true;
   String? _error;
+  String? _imageSignedUrl;
+  bool _imageUrlLoadFailed = false;
   bool _showGrid = true;
   bool _editMode = false;
   Asset? _pendingMoveAsset;
@@ -68,28 +70,39 @@ class _DrawingViewerPageState extends ConsumerState<DrawingViewerPage> {
     setState(() {
       _isLoading = true;
       _error = null;
+      _imageSignedUrl = null;
+      _imageUrlLoadFailed = false;
     });
     try {
       final drawing = await _api.fetchDrawing(widget.drawingId);
       final assets = await _api.fetchAssetsOnDrawing(widget.drawingId);
+      String? imageSignedUrl;
+      var imageUrlLoadFailed = false;
+      final drawingFile = drawing.drawingFile;
+      if (drawingFile != null && drawingFile.isNotEmpty) {
+        try {
+          imageSignedUrl = await supabase.storage
+              .from('drawing-images')
+              .createSignedUrl(drawingFile, 3600);
+        } catch (_) {
+          imageUrlLoadFailed = true;
+        }
+      }
+      if (!mounted) return;
       setState(() {
         _drawing = drawing;
         _assets = assets;
+        _imageSignedUrl = imageSignedUrl;
+        _imageUrlLoadFailed = imageUrlLoadFailed;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
         _error = e.toString();
       });
     }
-  }
-
-  String? get _imageUrl {
-    if (_drawing?.drawingFile == null) return null;
-    return supabase.storage
-        .from('drawing-images')
-        .getPublicUrl(_drawing!.drawingFile!);
   }
 
   Map<(int, int), List<Asset>> get _groupedAssets {
@@ -160,8 +173,7 @@ class _DrawingViewerPageState extends ConsumerState<DrawingViewerPage> {
                     leading: Icon(iconForCategory(a.category),
                         color: theme.colorScheme.primary),
                     title: Text(a.assetUid,
-                        style:
-                            const TextStyle(fontWeight: FontWeight.w600)),
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
                     subtitle: Text(
                       '${a.name ?? "-"}'
                       '${(a.userName?.isNotEmpty ?? false) ? "  ·  ${a.userName}" : ""}',
@@ -224,7 +236,9 @@ class _DrawingViewerPageState extends ConsumerState<DrawingViewerPage> {
       await _loadData();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${picked.length}건을 ${Drawing.getGridLabel(row, col)} 에 배치')),
+          SnackBar(
+              content: Text(
+                  '${picked.length}건을 ${Drawing.getGridLabel(row, col)} 에 배치')),
         );
       }
     } catch (e) {
@@ -247,7 +261,9 @@ class _DrawingViewerPageState extends ConsumerState<DrawingViewerPage> {
       await _loadData();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${asset.assetUid} → ${Drawing.getGridLabel(row, col)}')),
+          SnackBar(
+              content: Text(
+                  '${asset.assetUid} → ${Drawing.getGridLabel(row, col)}')),
         );
       }
     } catch (e) {
@@ -283,9 +299,8 @@ class _DrawingViewerPageState extends ConsumerState<DrawingViewerPage> {
 
   @override
   Widget build(BuildContext context) {
-    final title = _drawing != null
-        ? '${_drawing!.building} ${_drawing!.floor}'
-        : '도면 뷰어';
+    final title =
+        _drawing != null ? '${_drawing!.building} ${_drawing!.floor}' : '도면 뷰어';
     return AppScaffold(title: title, body: _buildBody(context));
   }
 
@@ -302,6 +317,7 @@ class _DrawingViewerPageState extends ConsumerState<DrawingViewerPage> {
     final canEdit = _isAdminUser;
     final rows = _drawing!.gridRows;
     final cols = _drawing!.gridCols;
+    final hasDrawingImage = _drawing!.drawingFile?.isNotEmpty ?? false;
 
     return Column(
       children: [
@@ -332,8 +348,8 @@ class _DrawingViewerPageState extends ConsumerState<DrawingViewerPage> {
                 ),
               const Spacer(),
               IconButton(
-                icon: Icon(_showGrid ? Icons.grid_on : Icons.grid_off,
-                    size: 20),
+                icon:
+                    Icon(_showGrid ? Icons.grid_on : Icons.grid_off, size: 20),
                 onPressed: () => setState(() => _showGrid = !_showGrid),
                 tooltip: '격자 표시',
               ),
@@ -396,35 +412,55 @@ class _DrawingViewerPageState extends ConsumerState<DrawingViewerPage> {
                       child: Stack(
                         children: [
                           // 도면 이미지
-                          if (_imageUrl != null)
+                          if (hasDrawingImage)
                             Positioned.fill(
-                              child: CachedNetworkImage(
-                                imageUrl: _imageUrl!,
-                                fit: BoxFit.fill,
-                                placeholder: (_, __) => const Center(
-                                  child: CircularProgressIndicator(),
-                                ),
-                                errorWidget: (_, __, ___) => Center(
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.broken_image,
-                                          size: 48,
-                                          color:
-                                              theme.colorScheme.outline),
-                                      const SizedBox(height: 8),
-                                      Text('이미지를 불러올 수 없습니다.',
-                                          style: theme.textTheme.bodySmall),
-                                    ],
-                                  ),
-                                ),
-                              ),
+                              child: _imageSignedUrl != null
+                                  ? CachedNetworkImage(
+                                      imageUrl: _imageSignedUrl!,
+                                      fit: BoxFit.fill,
+                                      placeholder: (_, __) => const Center(
+                                        child: CircularProgressIndicator(),
+                                      ),
+                                      errorWidget: (_, __, ___) => Center(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.broken_image,
+                                                size: 48,
+                                                color:
+                                                    theme.colorScheme.outline),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              '이미지를 불러올 수 없습니다.',
+                                              style: theme.textTheme.bodySmall,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    )
+                                  : Center(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.broken_image,
+                                              size: 48,
+                                              color: theme.colorScheme.outline),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            _imageUrlLoadFailed
+                                                ? '이미지를 불러올 수 없습니다.'
+                                                : '이미지 URL을 준비하는 중입니다.',
+                                            style: theme.textTheme.bodySmall,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                             )
                           else
                             Positioned.fill(
                               child: Container(
-                                color: theme.colorScheme
-                                    .surfaceContainerHighest,
+                                color:
+                                    theme.colorScheme.surfaceContainerHighest,
                                 child: const Center(
                                   child: Text('도면 이미지가 등록되지 않았습니다.'),
                                 ),
@@ -771,8 +807,8 @@ class _AssignAssetsDialogState extends State<_AssignAssetsDialog> {
                       ? Center(
                           child: Text(
                             _searched ? '결과 없음' : '키워드 입력 후 검색',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.outline),
+                            style: theme.textTheme.bodySmall
+                                ?.copyWith(color: theme.colorScheme.outline),
                           ),
                         )
                       : ListView.builder(
@@ -784,8 +820,7 @@ class _AssignAssetsDialogState extends State<_AssignAssetsDialog> {
                             final name = a['name'] as String? ?? '';
                             final user = a['user_name'] as String? ?? '';
                             final cat = a['category'] as String? ?? '';
-                            final inDrawing =
-                                a['location_drawing_id'] as int?;
+                            final inDrawing = a['location_drawing_id'] as int?;
                             final r = a['location_row'] as int?;
                             final c = a['location_col'] as int?;
                             final hasLoc = r != null && c != null;

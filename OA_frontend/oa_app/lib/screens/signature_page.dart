@@ -71,7 +71,12 @@ class _SignaturePageState extends ConsumerState<SignaturePage> {
       final roundNum = activeRound?.round ?? 0;
       final timestamp = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
       final inspId = widget.inspectionId ?? 'temp';
-      final storagePath = '$roundNum/signatures/${inspId}_sig_${timestamp}_$roundNum.png';
+      final authUid = supabase.auth.currentUser?.id;
+      if (authUid == null) {
+        throw Exception('로그인 세션을 확인할 수 없습니다.');
+      }
+      // Storage RLS requires the first path segment to be the caller UUID.
+      final storagePath = '$authUid/$roundNum/signatures/${inspId}_sig_${timestamp}_$roundNum.png';
 
       String? uploadedPath;
 

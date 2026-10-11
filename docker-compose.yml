@@ -30,8 +30,6 @@ services:
         SUPABASE_ANON_KEY: ${OA_ANON_KEY}
     container_name: oa-frontend
     restart: unless-stopped
-    ports:
-      - "3080:80"
     networks:
       - traefik-public
       - oa-internal
@@ -48,10 +46,19 @@ services:
   # api.terraforming.into → oa-kong:8000
   # ================================================================
   oa-kong:
-    image: kong:2.8.1
+    image: kong/kong:3.9.3
     container_name: oa-kong
     restart: unless-stopped
-    entrypoint: bash -c 'eval "echo \"$$(cat ~/temp.yml)\"" > ~/kong.yml && /docker-entrypoint.sh kong docker-start'
+    # Expand only $VARNAME placeholders in the declarative file. Do not use
+    # shell eval: a secret value must never become executable shell syntax.
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - >-
+        umask 077;
+        perl -pe 's/\$$([A-Za-z_][A-Za-z0-9_]*)/exists $$ENV{$$1} ? $$ENV{$$1} : die "missing environment variable: $$1\n"/ge'
+        /home/kong/temp.yml > /tmp/kong.yml;
+        exec /entrypoint.sh kong docker-start
     networks:
       - traefik-public
       - oa-internal
@@ -61,23 +68,45 @@ services:
       - "traefik.http.routers.oa-kong.rule=Host(`apioa.terraforming.info`)"
       - "traefik.http.routers.oa-kong.entrypoints=websecure"
       - "traefik.http.routers.oa-kong.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.oa-kong.middlewares=oa-kong-request-body-limit"
       - "traefik.http.services.oa-kong.loadbalancer.server.port=8000"
+      # Storage accepts at most 10 MiB; stop larger requests at the edge.
+      - "traefik.http.middlewares.oa-kong-request-body-limit.buffering.maxRequestBodyBytes=12582912"
+      - "traefik.http.middlewares.oa-kong-request-body-limit.buffering.memRequestBodyBytes=1048576"
     volumes:
       - ./volumes/api/kong.yml:/home/kong/temp.yml:ro
     environment:
       KONG_DATABASE: "off"
-      KONG_DECLARATIVE_CONFIG: /home/kong/kong.yml
+      KONG_DECLARATIVE_CONFIG: /tmp/kong.yml
       KONG_DNS_ORDER: LAST,A,CNAME
-      KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth
+      KONG_ROUTER_FLAVOR: traditional_compatible
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth,rate-limiting,request-size-limiting
+      # Management listeners stay inside the Kong container; only proxy :8000
+      # is reachable from Traefik on the shared edge network.
+      KONG_ADMIN_LISTEN: "127.0.0.1:8001 reuseport backlog=16384, 127.0.0.1:8444 http2 ssl reuseport backlog=16384"
+      KONG_ADMIN_GUI_LISTEN: "off"
+      KONG_STATUS_LISTEN: "127.0.0.1:8007 reuseport backlog=16384"
       KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
       KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+      KONG_NGINX_HTTP_CLIENT_MAX_BODY_SIZE: "12m"
       SUPABASE_ANON_KEY: ${OA_ANON_KEY}
       SUPABASE_SERVICE_KEY: ${OA_SERVICE_ROLE_KEY}
       DASHBOARD_USERNAME: ${OA_DASHBOARD_USERNAME}
       DASHBOARD_PASSWORD: ${OA_DASHBOARD_PASSWORD}
+    mem_limit: 512m
+    pids_limit: 256
+    ulimits:
+      nofile:
+        soft: 4096
+        hard: 4096
     depends_on:
       oa-auth:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kong health"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
 
   # ================================================================
   # AUTH - GoTrue 인증 서버
@@ -106,17 +135,17 @@ services:
       GOTRUE_API_PORT: 9999
       API_EXTERNAL_URL: ${OA_SUPABASE_PUBLIC_URL}
       GOTRUE_DB_DRIVER: postgres
-      GOTRUE_DB_DATABASE_URL: postgresql://supabase_auth_admin:${OA_POSTGRES_PASSWORD}@oa-db:5432/postgres
+      GOTRUE_DB_DATABASE_URL: postgresql://supabase_auth_admin:${OA_SUPABASE_AUTH_ADMIN_PASSWORD:?OA_SUPABASE_AUTH_ADMIN_PASSWORD must be configured}@oa-db:5432/postgres
       GOTRUE_SITE_URL: ${OA_SITE_URL}
       GOTRUE_URI_ALLOW_LIST: ${OA_ADDITIONAL_REDIRECT_URLS}
-      GOTRUE_DISABLE_SIGNUP: ${OA_DISABLE_SIGNUP:-false}
+      GOTRUE_DISABLE_SIGNUP: ${OA_DISABLE_SIGNUP:-true}
       GOTRUE_JWT_ADMIN_ROLES: service_role
       GOTRUE_JWT_AUD: authenticated
       GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
       GOTRUE_JWT_EXP: ${OA_JWT_EXPIRY:-3600}
       GOTRUE_JWT_SECRET: ${OA_JWT_SECRET}
-      GOTRUE_EXTERNAL_EMAIL_ENABLED: ${OA_ENABLE_EMAIL_SIGNUP:-true}
-      GOTRUE_MAILER_AUTOCONFIRM: ${OA_ENABLE_EMAIL_AUTOCONFIRM:-true}
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: ${OA_ENABLE_EMAIL_SIGNUP:-false}
+      GOTRUE_MAILER_AUTOCONFIRM: ${OA_ENABLE_EMAIL_AUTOCONFIRM:-false}
       GOTRUE_SMTP_ADMIN_EMAIL: ${OA_SMTP_ADMIN_EMAIL:-}
       GOTRUE_SMTP_HOST: ${OA_SMTP_HOST:-}
       GOTRUE_SMTP_PORT: ${OA_SMTP_PORT:-587}
@@ -139,7 +168,7 @@ services:
     networks:
       - oa-internal
     environment:
-      PGRST_DB_URI: postgresql://authenticator:${OA_POSTGRES_PASSWORD}@oa-db:5432/postgres
+      PGRST_DB_URI: postgresql://authenticator:${OA_AUTHENTICATOR_PASSWORD:?OA_AUTHENTICATOR_PASSWORD must be configured}@oa-db:5432/postgres
       PGRST_DB_SCHEMAS: ${OA_PGRST_DB_SCHEMAS:-public}
       PGRST_DB_ANON_ROLE: anon
       PGRST_JWT_SECRET: ${OA_JWT_SECRET}
@@ -173,9 +202,7 @@ services:
           "--head",
           "-o",
           "/dev/null",
-          "-H",
-          "Authorization: Bearer ${OA_ANON_KEY}",
-          "http://localhost:4000/api/tenants/realtime-dev/health"
+          "http://localhost:4000/healthcheck"
         ]
       timeout: 5s
       interval: 5s
@@ -185,7 +212,7 @@ services:
       DB_HOST: oa-db
       DB_PORT: 5432
       DB_USER: supabase_admin
-      DB_PASSWORD: ${OA_POSTGRES_PASSWORD}
+      DB_PASSWORD: ${OA_SUPABASE_ADMIN_PASSWORD:?OA_SUPABASE_ADMIN_PASSWORD must be configured}
       DB_NAME: postgres
       DB_AFTER_CONNECT_QUERY: "SET search_path TO _realtime"
       DB_ENC_KEY: supabaserealtime
@@ -198,8 +225,22 @@ services:
       ENABLE_TAILSCALE: "false"
       DNS_NODES: "''"
       RLIMIT_NOFILE: ""
-    command: >
-      sh -c "/app/bin/migrate && /app/bin/realtime eval 'Realtime.Release.seeds(Realtime.Repo)' && /app/bin/server"
+      # v2.34.47 defaults RUN_JANITOR to false.  Keep the rolling
+      # realtime.messages partitions current while a tenant has live clients;
+      # private-channel authorization is evaluated against that table too.
+      RUN_JANITOR: "true"
+      DISABLE_HEALTHCHECK_LOGGING: "true"
+    # The bundled seed deletes and recreates the self-host tenant on every
+    # container start. Reapply private_only after it so anonymous/public
+    # channels cannot return after a restart.
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        /app/bin/migrate
+        /app/bin/realtime eval 'Realtime.Release.seeds(Realtime.Repo)'
+        /app/bin/realtime eval 'Application.load(:realtime); Ecto.Migrator.with_repo(Realtime.Repo, fn repo -> case Ecto.Adapters.SQL.query!(repo, "UPDATE _realtime.tenants SET private_only = true WHERE external_id = " <> <<36, 49>> <> " RETURNING private_only", [System.get_env("SELF_HOST_TENANT_NAME", "realtime-dev")]).rows do [[true]] -> :ok; _ -> raise "Realtime private_only guard did not update a tenant" end end)'
+        exec /app/bin/server
     depends_on:
       oa-db:
         condition: service_healthy
@@ -231,8 +272,8 @@ services:
       SERVICE_KEY: ${OA_SERVICE_ROLE_KEY}
       POSTGREST_URL: http://oa-rest:3000
       PGRST_JWT_SECRET: ${OA_JWT_SECRET}
-      DATABASE_URL: postgresql://supabase_storage_admin:${OA_POSTGRES_PASSWORD}@oa-db:5432/postgres
-      FILE_SIZE_LIMIT: "52428800"
+      DATABASE_URL: postgresql://supabase_storage_admin:${OA_SUPABASE_STORAGE_ADMIN_PASSWORD:?OA_SUPABASE_STORAGE_ADMIN_PASSWORD must be configured}@oa-db:5432/postgres
+      FILE_SIZE_LIMIT: "10485760"
       STORAGE_BACKEND: file
       FILE_STORAGE_BACKEND_PATH: /var/lib/storage
       TENANT_ID: stub
@@ -281,8 +322,8 @@ services:
       PG_META_PORT: 8080
       PG_META_DB_HOST: oa-db
       PG_META_DB_PORT: 5432
-      PG_META_DB_USER: supabase
-      PG_META_DB_PASSWORD: ${OA_POSTGRES_PASSWORD}
+      PG_META_DB_USER: supabase_admin
+      PG_META_DB_PASSWORD: ${OA_SUPABASE_ADMIN_PASSWORD:?OA_SUPABASE_ADMIN_PASSWORD must be configured}
       PG_META_DB_NAME: postgres
       PG_META_CRYPTO_KEY: ${OA_PG_META_CRYPTO_KEY:-your-crypto-key}
     depends_on:
@@ -305,7 +346,6 @@ services:
       SUPABASE_URL: http://oa-kong:8000
       SUPABASE_ANON_KEY: ${OA_ANON_KEY}
       SUPABASE_SERVICE_ROLE_KEY: ${OA_SERVICE_ROLE_KEY}
-      SUPABASE_DB_URL: postgresql://postgres:${OA_POSTGRES_PASSWORD}@oa-db:5432/postgres
       VERIFY_JWT: "${OA_FUNCTIONS_VERIFY_JWT:-false}"
     command:
       - start
@@ -314,6 +354,8 @@ services:
     depends_on:
       oa-auth:
         condition: service_healthy
+    mem_limit: 512m
+    pids_limit: 256
 
   # ================================================================
   # DB - PostgreSQL 15 (포트 5433으로 기존 5432와 충돌 방지)
@@ -323,13 +365,18 @@ services:
     container_name: oa-db
     restart: unless-stopped
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     networks:
       - oa-internal
     volumes:
       - oa-db-data:/var/lib/postgresql/data
       - ./volumes/db/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
       - ./volumes/db/init/00-schemas.sql:/docker-entrypoint-initdb.d/zz-schemas.sql:ro
+      # Fresh volumes must give every TCP service login a SCRAM password before
+      # the password-only pg_hba.conf takes effect. Existing volumes require
+      # the documented one-time live rotation before PostgreSQL is reloaded.
+      # Run after the image's migrate.sh has created service roles.
+      - ./volumes/db/init/99-set-passwords.sh:/docker-entrypoint-initdb.d/zz-set-passwords.sh:ro
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "postgres", "-h", "localhost"]
       interval: 5s
@@ -339,8 +386,12 @@ services:
       POSTGRES_HOST: /var/run/postgresql
       PGPORT: 5432
       POSTGRES_PORT: 5432
-      PGPASSWORD: ${OA_POSTGRES_PASSWORD}
-      POSTGRES_PASSWORD: ${OA_POSTGRES_PASSWORD}
+      PGPASSWORD: ${OA_POSTGRES_PASSWORD:?OA_POSTGRES_PASSWORD must be configured}
+      POSTGRES_PASSWORD: ${OA_POSTGRES_PASSWORD:?OA_POSTGRES_PASSWORD must be configured}
+      SUPABASE_ADMIN_PASSWORD: ${OA_SUPABASE_ADMIN_PASSWORD:?OA_SUPABASE_ADMIN_PASSWORD must be configured}
+      SUPABASE_AUTH_ADMIN_PASSWORD: ${OA_SUPABASE_AUTH_ADMIN_PASSWORD:?OA_SUPABASE_AUTH_ADMIN_PASSWORD must be configured}
+      AUTHENTICATOR_PASSWORD: ${OA_AUTHENTICATOR_PASSWORD:?OA_AUTHENTICATOR_PASSWORD must be configured}
+      SUPABASE_STORAGE_ADMIN_PASSWORD: ${OA_SUPABASE_STORAGE_ADMIN_PASSWORD:?OA_SUPABASE_STORAGE_ADMIN_PASSWORD must be configured}
       PGDATABASE: postgres
       POSTGRES_DB: postgres
       JWT_SECRET: ${OA_JWT_SECRET}

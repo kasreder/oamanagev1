@@ -13,9 +13,13 @@ class SignaturePadWidget extends StatefulWidget {
   /// 서명 완료 시 PNG 데이터 콜백
   final ValueChanged<Uint8List> onCompleted;
 
+  /// true면 투명 배경 PNG로 내보냄 (문서 위에 겹쳐도 뒤 글자를 가리지 않음)
+  final bool transparentBackground;
+
   const SignaturePadWidget({
     super.key,
     required this.onCompleted,
+    this.transparentBackground = false,
   });
 
   @override
@@ -31,7 +35,8 @@ class _SignaturePadWidgetState extends State<SignaturePadWidget> {
     _controller = SignatureController(
       penStrokeWidth: 3,
       penColor: Colors.black,
-      exportBackgroundColor: Colors.white,
+      exportBackgroundColor:
+          widget.transparentBackground ? Colors.transparent : Colors.white,
     );
   }
 

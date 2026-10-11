@@ -13,6 +13,10 @@ import 'screens/inspection_detail_page.dart';
 import 'screens/signature_page.dart';
 import 'screens/drawing_manager_page.dart';
 import 'screens/drawing_viewer_page.dart';
+import 'screens/receipt_list_page.dart';
+import 'screens/receipt_detail_page.dart';
+import 'screens/vendor_manager_page.dart';
+import 'screens/change_password_page.dart';
 import 'screens/admin_settings_page.dart';
 
 /// GoRouter Provider (Riverpod)
@@ -42,6 +46,23 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       }
       // 인증 상태에서 로그인 페이지면 → /
       if (isAuthenticated && isLoginPage) {
+        return '/';
+      }
+
+      final user = authState.valueOrNull?.user;
+      final loc = state.matchedLocation;
+
+      // 관리자가 비번을 설정한 계정 → 강제 비번 변경 페이지로
+      if (isAuthenticated &&
+          (user?.mustChangePassword ?? false) &&
+          loc != '/change-password') {
+        return '/change-password';
+      }
+
+      // 인수증/거래처는 admin group(admin, operator1, operator2)만
+      final adminGroupOnly =
+          loc.startsWith('/receipt') || loc == '/admin/vendors';
+      if (isAuthenticated && adminGroupOnly && !(user?.isAdminGroup ?? false)) {
         return '/';
       }
       return null;
@@ -117,6 +138,29 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
           return DrawingViewerPage(drawingId: id);
         },
+      ),
+      GoRoute(
+        path: '/receipts',
+        builder: (context, state) => const ReceiptListPage(),
+      ),
+      GoRoute(
+        path: '/receipt/new',
+        builder: (context, state) => const ReceiptDetailPage(),
+      ),
+      GoRoute(
+        path: '/receipt/:id',
+        builder: (context, state) {
+          final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+          return ReceiptDetailPage(receiptId: id);
+        },
+      ),
+      GoRoute(
+        path: '/admin/vendors',
+        builder: (context, state) => const VendorManagerPage(),
+      ),
+      GoRoute(
+        path: '/change-password',
+        builder: (context, state) => const ChangePasswordPage(),
       ),
       GoRoute(
         path: '/admin/settings',

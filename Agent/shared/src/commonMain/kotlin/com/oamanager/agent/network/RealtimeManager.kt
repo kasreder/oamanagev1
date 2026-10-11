@@ -15,9 +15,9 @@ import kotlin.math.min
  * Supabase Realtime WebSocket 연결 관리.
  *
  * Phoenix Channels v1 프로토콜 기반으로 Presence, Broadcast 채널을 관리합니다.
- * - Presence: `agent-presence:global` 채널로 접속 상태 공유
+ * - Presence: `agent-presence:global` 채널로 최소 접속 상태 공유
  * - Broadcast 명령 수신: `agent-commands:{asset_uid}` 채널
- * - Broadcast 알림 발신: `agent-alerts:global` 채널
+ * - notifications 테이블 INSERT 수신: `notifications:{asset_uid}` 채널
  */
 class RealtimeManager(
     private val config: AgentConfig = AgentConfig,
@@ -104,17 +104,18 @@ class RealtimeManager(
 
     /**
      * Presence 채널(`agent-presence:global`)에 참여합니다.
+     *
+     * Realtime v2의 private Presence join은 다른 참가자의 presence read도
+     * 요구하므로, 전송 payload는 자산 식별자만 유지합니다.
      */
-    suspend fun joinPresence(assetUid: String, platform: String, agentVersion: String) {
+    suspend fun joinPresence(assetUid: String) {
         val topic = "realtime:agent-presence:global"
         val presenceState = buildJsonObject {
             put("asset_uid", assetUid)
-            put("platform", platform)
-            put("agent_version", agentVersion)
-            put("connected_at", kotlinx.datetime.Clock.System.now().toString())
         }
         sendPhoenixMessage(topic, "phx_join", buildJsonObject {
             put("config", buildJsonObject {
+                put("private", JsonPrimitive(true))
                 put("presence", buildJsonObject {
                     put("key", assetUid)
                 })
@@ -131,6 +132,7 @@ class RealtimeManager(
         val topic = "realtime:agent-commands:$assetUid"
         sendPhoenixMessage(topic, "phx_join", buildJsonObject {
             put("config", buildJsonObject {
+                put("private", JsonPrimitive(true))
                 put("broadcast", buildJsonObject {
                     put("self", JsonPrimitive(false))
                 })
@@ -147,6 +149,7 @@ class RealtimeManager(
         val topic = "realtime:notifications:$assetUid"
         sendPhoenixMessage(topic, "phx_join", buildJsonObject {
             put("config", buildJsonObject {
+                put("private", JsonPrimitive(true))
                 put("postgres_changes", buildJsonArray {
                     add(buildJsonObject {
                         put("event", "INSERT")
@@ -158,45 +161,6 @@ class RealtimeManager(
             })
         })
         joinedChannels.add(topic)
-    }
-
-    /**
-     * 알림 발신 채널(`agent-alerts:global`)에 참여합니다.
-     */
-    suspend fun joinAlertChannel() {
-        val topic = "realtime:agent-alerts:global"
-        sendPhoenixMessage(topic, "phx_join", buildJsonObject {
-            put("config", buildJsonObject {
-                put("broadcast", buildJsonObject {
-                    put("self", JsonPrimitive(false))
-                })
-            })
-        })
-        joinedChannels.add(topic)
-    }
-
-    // ─── Broadcast 전송 ─────────────────────────────────────────────────
-
-    /**
-     * 알림을 Broadcast로 전송합니다.
-     */
-    suspend fun sendAlert(
-        assetUid: String,
-        alertType: String,
-        message: String,
-        data: JsonObject = buildJsonObject {},
-    ) {
-        val topic = "realtime:agent-alerts:global"
-        sendPhoenixMessage(topic, "broadcast", buildJsonObject {
-            put("event", "alert")
-            put("payload", buildJsonObject {
-                put("asset_uid", assetUid)
-                put("alert_type", alertType)
-                put("message", message)
-                put("data", data)
-                put("timestamp", kotlinx.datetime.Clock.System.now().toString())
-            })
-        })
     }
 
     // ─── 명령 수신 콜백 ─────────────────────────────────────────────────

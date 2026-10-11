@@ -6,6 +6,9 @@
 > **프론트엔드 명세서(`OA_frontend/README.md`)의 접속현황 인디케이터 로직을 참조합니다.**
 > **Heartbeat 프로토콜 및 시스템 정보 수집 항목 변경 시 모든 플랫폼 에이전트에 동시 반영이 필요합니다.**
 
+> ⛔ **현재 운영 상태 (2026-08 보안 강화 이후)**
+> `OA_backend/SECURITY_HARDENING_RUNBOOK.md`에 따라 공용 에이전트 계정(`employee_id='agent'`)은 차단되었고, `update_heartbeat`·`verify_user`·`confirm_assignment` RPC는 `authenticated` 실행 권한이 회수된 상태입니다. **기기별 신원·자산 매핑(§15 재도입 설계)이 검증되기 전까지 기존 APK와 에이전트의 Heartbeat·사용자 확인·수령 확인은 실패하는 것이 정상입니다.** 서버 권한을 완화해서 우회하지 않습니다.
+
 ### 예제 코드 정책 (Example Code Policy)
 
 | 구분 | 구속력 | 설명 |
@@ -28,15 +31,15 @@ OA 자산(PC, 노트북, 태블릿, 서버 등)에 설치되어 **실시간 접�
 ### 1.2 주요 기능
 | 기능 | 설명 |
 |------|------|
-| Heartbeat 전송 | 사용자 설정 주기(5분/15분/30분)로 `last_active_at` 갱신하여 접속 상태 실시간 반영 |
-| 시스템 모니터링 | CPU, 메모리, 스토리지, 배터리, 네트워크, 제조사, 모델명 등 18개 항목 수집 |
-| FCM 푸시 알림 | 관리자가 프론트엔드에서 발송한 알림(OS 업데이트 등)을 기기에서 수신/표시 |
+| Heartbeat 전송 | 사용자 설정 주기(5분/15분/30분)로 `last_active_at` 갱신하여 접속 상태 실시간 반영 (⛔ 현재 서버 차단) |
+| 시스템 모니터링 | CPU, 메모리, 스토리지, 배터리, 네트워크, 제조사, 모델명, MAC, 보안 패치 등 26개 항목 수집 |
+| 서버 알림 수신 | `notifications` INSERT를 Realtime(postgres_changes)으로 수신해 시스템 알림 표시 (FCM 미사용) |
 | 사용자 확인 | 서버 설정 주기(기본 30일)마다 사용자 이름+사번 입력 → DB 대조 검증 |
 | 자산 수령 확인 | 자산 배정 후 사용자가 이름 입력하여 수령 확인 완료 |
 | 에이전트 버전 관리 | 서버에서 최신 버전 비교 → 구버전 시 업데이트 알림 |
 | 자동 재시작 | 기기 재부팅, 앱 종료 후에도 자동으로 Heartbeat 재개 |
-| 보안 저장 | 인증 토큰, 자산 식별자를 플랫폼별 보안 저장소에 암호화 저장 |
-| Realtime 연동 | Supabase Realtime (WebSocket) 기반 실시간 양방향 통신 — Presence 상태 공유, 관리자 명령 수신, 알림 발신 |
+| 보안 저장 | 인증 토큰, 자산 식별자를 플랫폼별 보안 저장소에 암호화 저장 (비밀번호 미저장) |
+| Realtime 연동 | Supabase Realtime private 채널 — Presence 상태 공유, 관리자 명령 수신, 서버 알림 수신 (전역 알림 발신 없음) |
 | 오프라인 대응 | 네트워크 단절 시 대기, 복구 시 자동 재전송 |
 
 ### 1.3 기술 스택
@@ -50,9 +53,10 @@ OA 자산(PC, 노트북, 태블릿, 서버 등)에 설치되어 **실시간 접�
 | Android 스케줄링 | **WorkManager** (Jetpack) |
 | Android 보안 저장 | **EncryptedSharedPreferences** (AndroidX Security) |
 | 백엔드 | **Supabase** (PostgreSQL 17 + PostgREST) |
-| 인증 | **Supabase Auth** (JWT, email/password) |
-| 실시간 통신 | **Supabase Realtime** (Phoenix Channels over WebSocket) |
-| 푸시 알림 | **Firebase Cloud Messaging (FCM)** |
+| 인증 | **Supabase Auth** (JWT, 자산 담당자·관리자 개인 계정) |
+| 실시간 통신 | **Supabase Realtime** (Phoenix Channels over WebSocket, private 채널) |
+| 알림 | **Supabase Realtime** `notifications` postgres_changes (FCM/Firebase 의존성 없음) |
+| Desktop 보안 저장 | Windows DPAPI (`CurrentUser`), macOS Keychain |
 
 ### 1.4 시스템 아키텍처
 ```
@@ -102,6 +106,7 @@ OA 자산(PC, 노트북, 태블릿, 서버 등)에 설치되어 **실시간 접�
 |--------|------|----------|------|
 | **Android** | ✅ 구현 | 태블릿, 테스트폰 | WorkManager 기반 |
 | **Windows** | ✅ 구현 | 데스크탑, 노트북 | System Tray + Task Scheduler (Win10/11) |
+| **macOS** | ✅ 구현 | 데스크탑, 노트북 | 메뉴바 트레이 + launchd (`--service`), Keychain 저장 |
 | iOS | 향후 | iPhone, iPad | Background App Refresh |
 | Linux | 향후 | 서버, 데스크탑 | systemd service |
 
@@ -113,72 +118,48 @@ OA 자산(PC, 노트북, 태블릿, 서버 등)에 설치되어 **실시간 접�
 ```
 Agent/
 ├── README.md                                  ← 본 문서 (공통 명세)
-├── build.gradle.kts                           ← 루트 빌드 파일
-├── settings.gradle.kts                        ← 모듈 설정 (shared, android)
-├── gradle.properties                          ← Gradle 속성
-├── gradle/
-│   └── wrapper/
-│       └── gradle-wrapper.properties
+├── BUILDING.md                                ← 빌드 입력값(OA_AGENT_SUPABASE_URL / ANON_KEY) 규칙
+├── build.gradle.kts / settings.gradle.kts     ← 모듈: shared, android:app, windows, macos
+├── gradle.properties / gradle/wrapper/
 ├── shared/                                    ← KMP 공유 모듈
-│   ├── build.gradle.kts
 │   └── src/
 │       ├── commonMain/kotlin/com/oamanager/agent/
-│       │   ├── model/
-│       │   │   ├── HeartbeatPayload.kt        ← 3.1 Heartbeat 페이로드 모델
-│       │   │   └── SystemInfo.kt              ← 3.2 시스템 정보 모델
-│       │   ├── network/
-│       │   │   ├── SupabaseClient.kt          ← 4.1 Ktor 기반 HTTP 클라이언트
-│       │   │   ├── AuthManager.kt             ← 4.2 토큰 관리
-│       │   │   └── RealtimeManager.kt         ← 14.7 Supabase Realtime WebSocket 연결
-│       │   └── AgentConfig.kt                 ← 공통 설정 (URL, 주기 등)
-│       └── androidMain/kotlin/com/oamanager/agent/
-│           └── platform/
-│               └── SystemInfoCollector.kt     ← 6.5 Android 시스템 정보 수집
-├── android/                                   ← Android 에이전트 앱
-│   ├── README.md                              ← Android 전용 참고사항
-│   ├── app/
-│   │   ├── build.gradle.kts
-│   │   └── src/main/
-│   │       ├── AndroidManifest.xml            ← 6.2 권한 및 컴포넌트 선언
-│   │       ├── java/com/oamanager/agent/android/
-│   │       │   ├── OAAgentApp.kt              ← 6.3.1 Application 클래스
-│   │       │   ├── ui/
-│   │       │   │   ├── SetupActivity.kt       ← 6.3.3 초기 설정 화면
-│   │       │   │   └── SetupViewModel.kt      ← 6.3.3 ViewModel
-│   │       │   ├── worker/
-│   │       │   │   └── HeartbeatWorker.kt     ← 6.3.2 WorkManager Worker
-│   │       │   ├── data/
-│   │       │   │   └── AgentPreferences.kt    ← 6.3.4 보안 저장소
-│   │       │   └── receiver/
-│   │       │       └── BootReceiver.kt        ← 6.3.7 부팅 시 재등록
-│   │       └── res/
-│   │           ├── layout/
-│   │           │   └── activity_setup.xml     ← 6.7 설정 화면 레이아웃
-│   │           ├── values/
-│   │           │   └── strings.xml
-│   │           └── drawable/
-│   │               └── ic_notification.xml    ← 알림 아이콘
-│   └── build.gradle.kts
+│       │   ├── AgentConfig.kt                 ← URL·키(빌드 시 생성값), 주기, 재연결 설정
+│       │   ├── model/HeartbeatPayload.kt      ← 3.1
+│       │   ├── model/SystemInfo.kt            ← 3.2 (26개 필드)
+│       │   ├── network/SupabaseClient.kt      ← Ktor HTTP 클라이언트
+│       │   ├── network/AuthManager.kt         ← 개인 계정 토큰 관리
+│       │   ├── network/RealtimeManager.kt     ← 14.7 Realtime (Presence/명령/알림)
+│       │   └── platform/SystemInfoCollector.kt← expect 선언
+│       ├── androidMain/.../platform/SystemInfoCollector.kt
+│       └── desktopMain/.../platform/SystemInfoCollector.kt  ← Windows + macOS 공용
+├── android/app/src/main/
+│   ├── AndroidManifest.xml                    ← 6.2
+│   └── java/com/oamanager/agent/android/
+│       ├── OAAgentApp.kt                      ← WorkManager/ForegroundService 분기
+│       ├── data/AgentPreferences.kt           ← EncryptedSharedPreferences
+│       ├── ui/SetupActivity.kt / SetupViewModel.kt / TestActivity.kt
+│       ├── worker/HeartbeatWorker.kt
+│       ├── service/HeartbeatForegroundService.kt ← Realtime 연결 + admin_alert_channel
+│       ├── service/AdminCommandEvents.kt
+│       └── receiver/BootReceiver.kt
 ├── windows/                                   ← Windows 에이전트 (JVM)
-│   ├── build.gradle.kts
 │   ├── src/main/kotlin/com/oamanager/agent/windows/
-│   │   ├── Main.kt                            ← 엔트리 포인트 (트레이/서비스/즉시전송)
-│   │   ├── WindowsAgentApp.kt                 ← 앱 메인 로직
-│   │   ├── ui/
-│   │   │   ├── TrayIconManager.kt             ← 시스템 트레이 아이콘
-│   │   │   ├── SetupDialog.kt                 ← 설정 다이얼로그 (Swing)
-│   │   │   └── VerificationDialog.kt          ← 사용자 확인 다이얼로그
-│   │   ├── service/
-│   │   │   ├── HeartbeatScheduler.kt          ← Timer 기반 Heartbeat 스케줄링
-│   │   │   └── WindowsServiceInstaller.kt     ← Task Scheduler 등록
-│   │   └── data/
-│   │       └── WindowsPreferences.kt          ← AES-256-CBC 암호화 저장소
-│   └── install/
-│       ├── install.bat                        ← 설치 스크립트
-│       └── uninstall.bat                      ← 제거 스크립트
-├── ios/                                       ← (향후)
-└── linux/                                     ← (향후)
+│   │   ├── Main.kt / WindowsAgentApp.kt
+│   │   ├── ui/TrayIconManager.kt / SetupDialog.kt / VerificationDialog.kt
+│   │   ├── service/HeartbeatScheduler.kt / WindowsServiceInstaller.kt
+│   │   └── data/WindowsPreferences.kt         ← DPAPI(CurrentUser) 저장소
+│   └── install/install.bat / uninstall.bat
+└── macos/                                     ← macOS 에이전트 (JVM)
+    ├── src/main/kotlin/com/oamanager/agent/macos/
+    │   ├── Main.kt / MacAgentApp.kt           ← 트레이 모드 / `--service`(launchd)
+    │   ├── ui/TrayIconManager.kt
+    │   ├── service/HeartbeatScheduler.kt
+    │   └── data/MacPreferences.kt             ← Keychain generic-password
+    └── install/install.sh / uninstall.sh
 ```
+
+> FCM 관련 코드(`fcm/OAFirebaseMessagingService.kt`, `google-services.json`, Firebase 의존성)는 제거되었습니다.
 
 ---
 
@@ -190,7 +171,7 @@ Agent/
 
 ```json
 {
-  "p_asset_uid": "BDT00001",
+  "p_asset_uid": "D00001",
   "p_system_info": {
     "cpu_usage": 45.2,
     "memory_total_mb": 8192,
@@ -216,12 +197,12 @@ Agent/
 
 | 필드 | 타입 | 필수 | 설명 |
 |------|------|------|------|
-| `p_asset_uid` | text | **필수** | OA 자산 고유 식별자 (정규식: `^(B\|R\|C\|L\|S)(DT\|NB\|MN\|PR\|TB\|SC\|IP\|NW\|SV\|WR\|SD)[0-9]{5}$`) |
-| `p_system_info` | jsonb | **필수** | 시스템 모니터링 정보 (18개 필드) |
+| `p_asset_uid` | text | **필수** | OA 자산 고유 식별자 (서버 형식: 현재기준 `D00001` 또는 변경후 `BDT00001`, `docs/asset_uid_spec.md`) |
+| `p_system_info` | jsonb | **필수** | 시스템 모니터링 정보 (26개 필드) |
 
 ### 3.2 SystemInfo
 
-시스템 모니터링 수집 항목입니다. 모든 플랫폼에서 동일한 **18개 필드**를 수집합니다.
+시스템 모니터링 수집 항목입니다. 모든 플랫폼이 동일한 **26개 필드** 구조로 전송합니다 (19~26번은 기본값 `""`, 플랫폼별로 해당 항목만 채움).
 
 | # | 필드 | 타입 | 단위 | 설명 |
 |---|------|------|------|------|
@@ -243,6 +224,14 @@ Agent/
 | 16 | `asset_user_name` | text | - | OA 자산 사용자명 (서버 조회: `assets.user_name`) |
 | 17 | `employee_id` | text | - | 사용자 사번 (서버 조회: `users.employee_id`) |
 | 18 | `agent_version` | text | - | 에이전트 앱 버전 (예: `1.0.0`) |
+| 19 | `mac_address` | text | - | MAC 주소 — 서버가 `assets.mac_address`로 동기화 |
+| 20 | `serial_number` | text | - | 기기 시리얼 번호 |
+| 21 | `phone_number` | text | - | 전화번호 (Android, `READ_PHONE_STATE`) |
+| 22 | `os_security_patch` | text | - | Android `ro.build.version.security_patch` (예: `2025-12-05`) |
+| 23 | `os_vendor_security_patch` | text | - | Android `ro.vendor.build.security_patch` |
+| 24 | `os_build_number` | text | - | Windows OS Build (예: `19045`), macOS 시스템 빌드 (예: `24A348`) |
+| 25 | `os_ubr` | text | - | Windows Update Build Revision (예: `5247`) |
+| 26 | `os_kb_list` | text | - | Windows 적용 KB 목록 (HotFixID 콤마 구분) |
 
 ```kotlin
 // shared/src/commonMain/kotlin/com/oamanager/agent/model/SystemInfo.kt
@@ -266,6 +255,14 @@ data class SystemInfo(
     @SerialName("asset_user_name")      val assetUserName: String,
     @SerialName("employee_id")          val employeeId: String,
     @SerialName("agent_version")        val agentVersion: String,
+    @SerialName("mac_address")          val macAddress: String = "",
+    @SerialName("serial_number")        val serialNumber: String = "",
+    @SerialName("phone_number")         val phoneNumber: String = "",
+    @SerialName("os_security_patch")        val osSecurityPatch: String = "",
+    @SerialName("os_vendor_security_patch") val osVendorSecurityPatch: String = "",
+    @SerialName("os_build_number")          val osBuildNumber: String = "",
+    @SerialName("os_ubr")                   val osUbr: String = "",
+    @SerialName("os_kb_list")               val osKbList: String = "",
 )
 ```
 
@@ -278,36 +275,42 @@ data class SystemInfo(
 |------|-----------|--------|------|------|
 | 1 | `/auth/v1/token?grant_type=password` | POST | 로그인 (email/password) | anon key |
 | 2 | `/auth/v1/token?grant_type=refresh_token` | POST | 토큰 갱신 | anon key |
-| 3 | `/rest/v1/rpc/update_heartbeat` | POST | Heartbeat 전송 | Bearer token |
-| 4 | `/rest/v1/rpc/verify_user` | POST | 사용자 확인 (이름+사번 검증) | Bearer token |
-| 5 | `/rest/v1/rpc/confirm_assignment` | POST | 자산 수령 확인 | Bearer token |
-| 6 | `/rest/v1/device_tokens` | POST/PATCH | FCM 토큰 등록/갱신 | Bearer token |
+| 3 | `/rest/v1/rpc/update_heartbeat` | POST | Heartbeat 전송 (⛔ 현재 실행 권한 없음) | Bearer token |
+| 4 | `/rest/v1/rpc/verify_user` | POST | 사용자 확인 (⛔ 현재 실행 권한 없음) | Bearer token |
+| 5 | `/rest/v1/rpc/confirm_assignment` | POST | 자산 수령 확인 (⛔ 현재 실행 권한 없음) | Bearer token |
+| 6 | ~~`/rest/v1/device_tokens`~~ | — | FCM 토큰 등록 — **폐지** (FCM 미사용) | — |
 | 7 | `/rest/v1/agent_settings?setting_key=in.(latest_agent_version,min_agent_version)` | GET | Heartbeat 성공 후 에이전트 버전 확인 (11.3절 참조) | Bearer token |
-| 8 | `wss://apioa.terraforming.info/realtime/v1/websocket` | WebSocket | Supabase Realtime 연결 (Presence + Broadcast + **postgres_changes**) | Bearer token |
+| 8 | `wss://apioa.terraforming.info/realtime/v1/websocket` | WebSocket | Supabase Realtime 연결 (private 채널: Presence + Broadcast + **postgres_changes**) | Bearer token |
 | 9 | Realtime postgres_changes (notifications) | WebSocket | `notifications` 테이블 INSERT 구독 (filter: `asset_uid=eq.<자기 자산>`) — 관리자 재확인 요청 등 서버 발생 알림 수신 | Bearer token |
 
 ### 4.2 인증 방식
 
-에이전트 전용 서비스 계정을 사용합니다.
+공용 에이전트 서비스 계정은 사용하지 않습니다. 각 설치본은 자산 담당자 또는
+관리자 개인 OA 계정으로 명시적으로 로그인해야 합니다.
 
 | 항목 | 값 |
 |------|-----|
-| 계정 | `agent@oamanager.internal` |
+| 계정 | 자산 담당자 또는 관리자 개인 OA 계정 |
 | 역할 | `authenticated` (Supabase Auth) |
-| 권한 | `update_heartbeat` RPC 호출만 가능 |
+| 권한 | 서버 RPC가 해당 자산의 담당자 또는 관리자인지 별도로 검증 |
 | 토큰 저장 | 플랫폼별 보안 저장소 (8.1 참조) |
-| 토큰 만료 | 3600초 (1시간), 자동 갱신 |
+| 토큰 만료 | 3600초 (1시간), refresh token으로 갱신 |
 
-> **보안**: 에이전트 계정은 `is_admin = false`이며, RPC 함수를 통해 `last_active_at`과 `specifications.device_status`만 변경 가능합니다. 다른 테이블/컬럼 접근 불가.
+> **보안**: APK에 이메일·비밀번호를 포함하거나 갱신 실패 시 자동 로그인하지 않습니다. 개인 세션이 없거나 갱신에 실패하면 사용자가 다시 로그인해야 합니다.
+
+> **전환 범위**: Android·Windows·macOS 설정 화면은 모두 개인 계정 로그인을
+> 지원합니다. Windows/macOS는 이전 공용 계정 토큰이 남아 있더라도 개인 로그인
+> 전환 표시가 없는 세션으로 자동 Heartbeat를 재개하지 않습니다. 서버 권한을
+> 완화해서는 안 됩니다.
 
 **인증 플로우:**
 ```
-1. 앱 시작 → 저장된 refresh_token 확인
-2. refresh_token 있음 → /auth/v1/token?grant_type=refresh_token 호출
-3. refresh_token 없음/만료 → /auth/v1/token?grant_type=password 호출
-4. access_token + refresh_token 보안 저장소에 저장
-5. Heartbeat 전송 시 Authorization: Bearer <access_token> 헤더 사용
-6. 401 응답 → refresh_token으로 자동 갱신 후 재시도
+1. 앱 최초 실행 또는 구버전에서 업데이트 → 이전 공용 세션을 사용하지 않음
+2. 사용자가 자산 담당자 또는 관리자 개인 OA 계정으로 명시적 로그인
+3. access_token + refresh_token을 보안 저장소에 저장
+4. Heartbeat 전송 시 Authorization: Bearer <access_token> 헤더 사용
+5. access_token 만료 → refresh_token으로 갱신 → 4번 반복
+6. refresh token 갱신 실패 → Heartbeat를 중단하고 사용자 재로그인 요청
 ```
 
 ### 4.3 Heartbeat 요청/응답 예시
@@ -321,7 +324,7 @@ apikey: <SUPABASE_ANON_KEY>
 Content-Type: application/json
 
 {
-  "p_asset_uid": "BDT00001",
+  "p_asset_uid": "D00001",
   "p_system_info": {
     "cpu_usage": 45.2,
     "memory_total_mb": 8192,
@@ -360,7 +363,7 @@ Content-Type: application/json
 
 {
   "code": "P0001",
-  "message": "asset not found: BDT99999"
+  "message": "asset not found: D99999"
 }
 ```
 
@@ -370,7 +373,7 @@ Content-Type: application/json
 
 ### 5.1 RPC 함수 `update_heartbeat`
 
-> 마이그레이션 파일: `OA_backend/supabase/migrations/20260314000002_add_agent_rpc_and_columns.sql`
+> 최종 정의: `OA_backend/supabase/migrations/20260816000000_security_hardening.sql` (백엔드 README 9.6)
 
 ```sql
 CREATE OR REPLACE FUNCTION public.update_heartbeat(
@@ -380,17 +383,27 @@ CREATE OR REPLACE FUNCTION public.update_heartbeat(
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = pg_catalog, public, auth, pg_temp
 AS $$
+DECLARE
+  v_mac text;
 BEGIN
+  IF NOT (
+    public.is_admin_group()
+    OR public.is_current_asset_assignee(p_asset_uid)
+  ) THEN
+    RAISE EXCEPTION 'forbidden: asset assignee or administrator required';
+  END IF;
+
+  v_mac := NULLIF(btrim(p_system_info->>'mac_address'), '');
   UPDATE public.assets
-  SET
-    last_active_at = now(),
-    specifications = CASE
-      WHEN p_system_info IS NOT NULL
-      THEN jsonb_set(COALESCE(specifications, '{}'), '{device_status}', p_system_info)
-      ELSE specifications
-    END
+  SET last_active_at = now(),
+      specifications = CASE
+        WHEN p_system_info IS NOT NULL
+        THEN jsonb_set(COALESCE(specifications, '{}'::jsonb), '{device_status}', p_system_info)
+        ELSE specifications
+      END,
+      mac_address = COALESCE(v_mac, mac_address)
   WHERE asset_uid = p_asset_uid;
 
   IF NOT FOUND THEN
@@ -399,9 +412,9 @@ BEGIN
 END;
 $$;
 
--- 권한: authenticated 역할만 호출 가능
-REVOKE ALL ON FUNCTION public.update_heartbeat(text, jsonb) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.update_heartbeat(text, jsonb) TO authenticated;
+-- 현재: PUBLIC/anon/authenticated/service_role 모두 EXECUTE 회수 (의도된 차단)
+REVOKE EXECUTE ON FUNCTION public.update_heartbeat(text, jsonb)
+  FROM PUBLIC, anon, authenticated, service_role;
 ```
 
 | 항목 | 설명 |
@@ -409,10 +422,10 @@ GRANT EXECUTE ON FUNCTION public.update_heartbeat(text, jsonb) TO authenticated;
 | 함수명 | `update_heartbeat` |
 | 파라미터 | `p_asset_uid` (text, 필수), `p_system_info` (jsonb, 선택) |
 | 반환 | void |
-| 보안 | `SECURITY DEFINER` (RLS 우회하여 직접 UPDATE) |
-| 권한 | `authenticated` 역할만 `EXECUTE` 가능 |
-| 동작 | `last_active_at = now()` 갱신 + `specifications.device_status` JSONB 병합 |
-| 에러 | 존재하지 않는 `asset_uid` → `RAISE EXCEPTION` |
+| 내부 권한 검사 | 관리자 그룹 또는 해당 자산 담당자(`assets.user_id`가 호출자) |
+| 실행 권한 | **현재 없음** — 기기별 신원 재도입(§15) 후에만 부여 |
+| 동작 | `last_active_at = now()` + `specifications.device_status` 저장 + `mac_address` 동기화 |
+| 에러 | 권한 없음 → `forbidden`, 존재하지 않는 `asset_uid` → `asset not found` |
 
 ### 5.2 데이터 저장 구조
 
@@ -521,63 +534,69 @@ Heartbeat 데이터는 기존 `assets` 테이블의 두 컬럼에 저장됩니�
 | `FOREGROUND_SERVICE` | 5분 주기 Heartbeat용 포그라운드 서비스 | **필수** |
 | `FOREGROUND_SERVICE_DATA_SYNC` | Android 14+ 포그라운드 서비스 타입 지정 | **필수** |
 | `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | OEM 배터리 최적화 예외 요청 | 권장 |
-| `POST_NOTIFICATIONS` | Android 13+ 알림 권한 (FCM + 포그라운드 서비스) | **필수** |
+| `POST_NOTIFICATIONS` | Android 13+ 알림 권한 (관리자 알림 + 포그라운드 서비스) | **필수** |
+| `READ_PHONE_STATE` | 전화번호(`phone_number`) 수집 | 선택 |
 
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.oamanager.agent">
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 
     <application
-        android:name=".OAAgentApp"
-        android:label="OA Agent"
+        android:name="com.oamanager.agent.android.OAAgentApp"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
-        android:allowBackup="false">
+        android:label="@string/app_name"
+        android:theme="@style/Theme.OAAgent">
+
+        <!-- WorkManager 기본 초기화 제거 (OAAgentApp에서 Configuration.Provider로 초기화) -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            tools:node="remove">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
 
         <activity
-            android:name=".ui.SetupActivity"
+            android:name="com.oamanager.agent.android.ui.SetupActivity"
             android:exported="true"
-            android:label="OA Agent 설정">
+            android:label="@string/app_name">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <!-- FCM 메시징 서비스 -->
+        <!-- 5분 주기 Heartbeat + Realtime 연결용 포그라운드 서비스 -->
         <service
-            android:name=".fcm.OAFirebaseMessagingService"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
-
-        <!-- 5분 주기 Heartbeat용 포그라운드 서비스 -->
-        <service
-            android:name=".service.HeartbeatForegroundService"
+            android:name="com.oamanager.agent.android.service.HeartbeatForegroundService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
         <receiver
-            android:name=".receiver.BootReceiver"
+            android:name="com.oamanager.agent.android.receiver.BootReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
-
     </application>
 </manifest>
 ```
+
+> FCM 서비스(`OAFirebaseMessagingService`)는 제거되었습니다.
 
 ### 6.3 앱 컴포넌트 구조
 
@@ -727,7 +746,6 @@ class AgentPreferences(context: Context) {
     var assetUserName: String?      // OA 자산 사용자명 (서버 조회)
     var employeeId: String?         // 사용자 사번 (서버 조회)
     var lastVerifiedAt: Long        // 마지막 사용자 확인 시각 (epoch ms)
-    var fcmToken: String?           // FCM 디바이스 토큰
 }
 ```
 
@@ -741,7 +759,9 @@ class AgentPreferences(context: Context) {
 | `asset_user_name` | AES-256 | OA 자산 사용자명 |
 | `employee_id` | AES-256 | 사용자 사번 |
 | `last_verified_at` | AES-256 | 마지막 사용자 확인 시각 |
-| `fcm_token` | AES-256 | FCM 디바이스 토큰 |
+| `personal_account_auth_migrated_v1` | AES-256 | 개인 계정 로그인 전환 표시 (없으면 이전 공용 세션을 쓰지 않음) |
+
+> 이전 평문 저장소(`oa_agent_prefs_plain`)는 이관하지 않고 비웁니다(재로그인 필요). Android Keystore를 쓸 수 없으면 평문 저장으로 대체하지 않고 실패합니다.
 
 #### 6.3.5 SupabaseClient.kt
 Ktor 기반 경량 HTTP 클라이언트입니다. KMP `shared` 모듈의 `commonMain`에 위치합니다.
@@ -907,10 +927,10 @@ class BootReceiver : BroadcastReceiver() {
 │                              │
 │  자산 번호 (asset_uid)        │  ← 라벨
 │  ┌────────────────────────┐  │
-│  │ BDT00001               │  │  ← EditText (정규식 실시간 검증)
+│  │ D00001               │  │  ← EditText (정규식 실시간 검증)
 │  └────────────────────────┘  │
-│  ⚠ 형식: [B|R|C|L|S][유형코드]  │  ← 도움말 텍스트
-│     [5자리 숫자]              │
+│  ⚠ 형식: D00001 또는 BDT00001 │  ← 도움말 텍스트
+│     (두 형식 모두 허용)       │
 │                              │
 │  전송 주기                    │  ← 라벨
 │  ┌────────────────────────┐  │
@@ -925,7 +945,7 @@ class BootReceiver : BroadcastReceiver() {
 │  ── 상태 정보 ────────────── │  ← 구분선
 │                              │
 │  연결 상태: ● 연결됨          │  ← 초록/빨강 인디케이터
-│  자산 번호: BDT00001         │
+│  자산 번호: D00001         │
 │  전송 주기: 15분              │
 │  마지막 전송: 2026-03-11      │
 │              14:30:22        │
@@ -948,7 +968,7 @@ class BootReceiver : BroadcastReceiver() {
 
 | 항목 | 규칙 |
 |------|------|
-| 정규식 | `^(B\|R\|C\|L\|S)(DT\|NB\|MN\|PR\|TB\|SC\|IP\|NW\|SV\|WR\|SD)[0-9]{5}$` |
+| 정규식 | `AgentConfig.ASSET_UID_REGEX` = `^[A-Za-z0-9_-]+$` (문자 검사만). 최종 형식(현재기준 + 변경후 두 형식)은 서버가 검증 |
 | 실시간 검증 | 입력 중 `TextWatcher`로 형식 검증, 오류 시 빨간색 테두리 |
 | "시작" 버튼 | 정규식 통과 시에만 활성화 |
 | "즉시 전송" 버튼 | asset_uid 저장 완료 후에만 활성화 |
@@ -964,7 +984,7 @@ class BootReceiver : BroadcastReceiver() {
 
 ---
 
-## 7. 향후 플랫폼
+## 7. 플랫폼별 구현 및 향후 계획
 
 ### 7.1 iOS (향후)
 | 항목 | 계획 |
@@ -993,7 +1013,7 @@ class BootReceiver : BroadcastReceiver() {
 | 스케줄링 | 내부 Timer (트레이 모드) / Windows Task Scheduler (서비스 모드) |
 | HTTP | Ktor Client (CIO 엔진) |
 | UI | Java Swing — 시스템 트레이 아이콘 + 설정/확인 다이얼로그 |
-| 보안 저장 | AES-256-CBC (PBKDF2 키 파생, 머신 UUID 기반) — `%APPDATA%\OAAgent\agent.enc` |
+| 보안 저장 | Windows DPAPI (CurrentUser) — `%APPDATA%\OAAgent\agent.dpapi` |
 | 시스템 정보 | WMI (PowerShell `Get-CimInstance`) + Java Management API |
 | Realtime | WebSocket (Ktor CIO) — Presence, 명령 수신, 알림 발신 |
 
@@ -1032,6 +1052,17 @@ class BootReceiver : BroadcastReceiver() {
 | 17 | 사용자 사번 | `WindowsPreferences.employeeId` | 초기 설정 시 저장 |
 | 18 | 에이전트 버전 | 코드 상수 `1.0.0` | 빌드 시 설정 |
 
+### 7.4 macOS (✅ 구현)
+
+| 항목 | 값 |
+|------|-----|
+| 기술 | KMP shared 모듈 (desktop 타겟) + Kotlin/JVM |
+| 실행 모드 | 트레이 모드(기본) / `--service`(UI 없이 Heartbeat, launchd용) |
+| 보안 저장 | 로그인 Keychain generic-password 항목 (access/refresh token + 개인 로그인 전환 표시, 비밀번호 미저장) |
+| 시스템 정보 | `desktopMain` `SystemInfoCollector` 공용 (예: `pmset`으로 배터리, 시스템 빌드 번호) |
+| 설치/제거 | `macos/install/install.sh`, `uninstall.sh` |
+
+
 ---
 
 ## 8. 보안
@@ -1041,24 +1072,31 @@ class BootReceiver : BroadcastReceiver() {
 | 플랫폼 | 보안 저장소 | 암호화 방식 |
 |--------|-----------|-----------|
 | **Android** | EncryptedSharedPreferences | AES-256-GCM |
+| **Windows** | `%APPDATA%\\OAAgent\\agent.dpapi` | Windows DPAPI `CurrentUser` 범위 (비밀번호 미저장) |
+| **macOS** | 로그인 Keychain generic-password 항목 | macOS Keychain (비밀번호 미저장) |
 | iOS (향후) | Keychain Services | Apple Secure Enclave |
 | Linux (향후) | libsecret / 암호화 파일 | AES-256 |
-| Windows (향후) | Credential Manager | DPAPI |
+
+> Windows/macOS 설치본은 access/refresh token과 개인 로그인 전환 표시만 OS 보안
+> 저장소에 보관하며 비밀번호를 저장하지 않습니다. 이전 `agent.enc`는 안전하게
+> 이관할 수 없어 업데이트 후 재로그인이 필요할 수 있습니다.
 
 ### 8.2 asset_uid 검증
-- 클라이언트: 정규식 `^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD)[0-9]{5}$`로 형식 검증
+- 클라이언트: `AgentConfig.ASSET_UID_REGEX` = `^[A-Za-z0-9_-]+$` (느슨한 문자 검사만)
+- 서버 형식: `^([A-Z]{1,2}[0-9]{4,5}|(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD|TP|ET|EH)[0-9]{5})$` (DB CHECK + `validate_asset_uid` 트리거, 두 형식 병행 — `docs/asset_uid_spec.md`)
 - 서버: RPC 함수 내부에서 `WHERE asset_uid = p_asset_uid` → 존재하지 않으면 `RAISE EXCEPTION`
 
 ### 8.3 통신 암호화
 - 모든 통신은 **HTTPS Only** (Supabase 기본 제공)
-- Supabase anon key는 APK에 포함 (RLS로 보호되므로 공개 가능)
+- Supabase anon key는 클라이언트에 포함됨 (공개값). URL·anon key는 `BUILDING.md`에 따라 빌드 시 CI 비밀 저장소에서 주입하며 저장소·`AgentConfig.kt`·설치본에 넣지 않음
+- 익명 키만으로는 어떤 테이블·RPC·Storage에도 접근할 수 없음 (백엔드 README 5.0)
 - access_token은 보안 저장소에만 저장, 로그 출력 금지
 
 ### 8.4 RPC 함수 권한
-- `REVOKE ALL FROM PUBLIC` → 기본 접근 차단
-- `GRANT EXECUTE TO authenticated` → 인증된 사용자만 호출 가능
-- `SECURITY DEFINER` → RPC 내부에서만 assets 테이블 직접 UPDATE
-- 에이전트 계정은 `is_admin = false` → 관리자 기능 접근 불가
+- 스키마 전체 `EXECUTE`를 회수한 뒤 필요한 RPC만 개별 GRANT
+- `update_heartbeat`·`verify_user`·`confirm_assignment`: **현재 `authenticated` 실행 권한 없음** (§15 재도입 전까지 의도된 차단)
+- `SECURITY DEFINER` + 고정 `search_path`, 내부에서 관리자 그룹 또는 해당 자산 담당자인지 재검증
+- 공용 계정(`employee_id='agent'`)은 Auth 차단 + 모든 테이블 `legacy_agent_block` RESTRICTIVE 정책으로 차단
 
 ---
 
@@ -1066,20 +1104,20 @@ class BootReceiver : BroadcastReceiver() {
 
 ### 9.1 백엔드 RPC 테스트
 ```sql
--- Supabase SQL Editor에서 실행
-SELECT update_heartbeat('BDT00001', '{"cpu_usage": 45.2, "memory_total_mb": 8192, "memory_used_mb": 5120}');
+-- 현재 기대 결과: authenticated 역할로 호출 시 permission denied (의도된 차단)
+SELECT update_heartbeat('D00001', '{"cpu_usage": 45.2, "memory_total_mb": 8192, "memory_used_mb": 5120}');
 
--- 결과 확인
+-- 재도입 후: 담당자/관리자 세션에서 호출 → 결과 확인
 SELECT asset_uid, last_active_at, specifications->'device_status' AS device_status
 FROM assets
-WHERE asset_uid = 'BDT00001';
+WHERE asset_uid = 'D00001';
 ```
 
-### 9.2 에이전트 수동 테스트
-1. SetupActivity에서 `asset_uid` 입력 (예: `BDT00001`)
-2. "즉시 전송" 버튼 클릭
-3. DB에서 `last_active_at` 갱신 확인
-4. `specifications->'device_status'`에 시스템 정보 저장 확인
+### 9.2 에이전트 수동 테스트 (재도입 후)
+1. 자산 담당자 또는 관리자 개인 OA 계정으로 로그인
+2. SetupActivity에서 `asset_uid` 입력 (예: `D00001`)
+3. "즉시 전송" 버튼 클릭
+4. DB에서 `last_active_at` 갱신, `specifications->'device_status'` 저장 확인
 
 ### 9.3 백그라운드 동작 테스트
 1. "시작" 버튼으로 WorkManager 등록
@@ -1101,139 +1139,51 @@ WHERE asset_uid = 'BDT00001';
 | 잘못된 asset_uid | RPC 에러 → `Result.failure()` → 재시도 없음 |
 | Supabase 서버 다운 | `Result.retry()` → 지수 백오프로 재시도 |
 | 토큰 만료 | `AuthManager` 자동 갱신 → 갱신 실패 시 재로그인 |
-| FCM 토큰 갱신 | 새 토큰 발급 → `device_tokens` 테이블 자동 업데이트 |
+| 공용 계정 세션 | 이전 공용 세션 토큰이 남아 있어도 자동 Heartbeat 재개하지 않음 → 개인 계정 재로그인 요청 |
 | 사용자 확인 만료 | 확인 주기 도래 → 다음 앱 실행 시 확인 다이얼로그 표시 |
 | 자산 배정 미확인 | `assignment_status = 'pending'` → 앱 실행 시 수령 확인 다이얼로그 표시 |
 
 ---
 
-## 10. FCM 푸시 알림
+## 10. 서버 알림 (Realtime)
 
-### 10.1 아키텍처
+> 2026-06-04부터 FCM/Firebase를 사용하지 않습니다. 관리자·시스템 알림은 `notifications` 테이블 INSERT → Supabase Realtime `postgres_changes`로 에이전트에 전달됩니다 (구독 방식은 §14.5).
 
+### 10.1 흐름
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  OA Manager 프론트엔드 (관리자)                                   │
-│  "OS 업데이트 알림 발송" 버튼 클릭                                 │
-└──────────────────┬──────────────────────────────────────────────┘
-                   │ POST /functions/v1/send-notification
-                   ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Supabase Edge Function (send-notification)                      │
-│  1. device_tokens 테이블에서 대상 기기 FCM 토큰 조회               │
-│  2. Firebase Admin SDK로 FCM 메시지 발송                          │
-│  3. notifications 테이블에 발송 이력 저장                          │
-└──────────────────┬──────────────────────────────────────────────┘
-                   │ FCM (Firebase Cloud Messaging)
-                   ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  에이전트 기기 (OAFirebaseMessagingService)                       │
-│  1. 푸시 알림 수신                                               │
-│  2. NotificationManager로 알림 표시                              │
-│  3. 알림 클릭 → SetupActivity에서 상세 내용 확인                   │
-└─────────────────────────────────────────────────────────────────┘
+관리자 [자산 상세] "관리자 재확인 요청"  ─┐
+마스터 관리자 user_name 변경 (트리거)     ├─→ notifications INSERT
+재실사 요청 / 관리자 그룹의 직접 INSERT    ─┘        │
+                                                 ▼ Realtime (private 채널 notifications:{asset_uid})
+                                   에이전트 RealtimeManager → 시스템 알림 표시
 ```
 
-### 10.2 Firebase 프로젝트 설정
-
-| 항목 | 값 |
-|------|-----|
-| Firebase 프로젝트 | OA Manager 프로젝트에 Android 앱 등록 |
-| 패키지명 | `com.oamanager.agent` |
-| `google-services.json` | `android/app/` 디렉토리에 배치 |
-| FCM API | Firebase Cloud Messaging API (V1) 활성화 |
-| 서버 키 | Supabase Edge Function 환경변수로 설정 (`FIREBASE_SERVICE_ACCOUNT_KEY`) |
-
-**의존성 추가 (app/build.gradle.kts):**
-
-| 그룹 | 아티팩트 | 버전 | 용도 |
-|------|---------|------|------|
-| `com.google.firebase` | `firebase-messaging-ktx` | 23.4.1 | FCM 수신 |
-| `com.google.firebase` | `firebase-bom` | 32.7.1 | Firebase BoM |
-
-### 10.3 FCM 토큰 등록
-
-에이전트가 시작될 때 FCM 토큰을 서버에 등록합니다.
-
-```kotlin
-// android/app/src/main/java/com/oamanager/agent/android/fcm/OAFirebaseMessagingService.kt
-class OAFirebaseMessagingService : FirebaseMessagingService() {
-
-    override fun onNewToken(token: String) {
-        // FCM 토큰이 갱신될 때마다 서버에 업데이트
-        val prefs = AgentPreferences(this)
-        prefs.fcmToken = token
-        CoroutineScope(Dispatchers.IO).launch {
-            registerTokenToServer(prefs.assetUid, token)
-        }
-    }
-
-    override fun onMessageReceived(message: RemoteMessage) {
-        // 푸시 알림 수신 처리
-        val title = message.data["title"] ?: message.notification?.title ?: "OA Manager"
-        val body = message.data["body"] ?: message.notification?.body ?: ""
-        val type = message.data["type"] ?: "general"
-        showNotification(title, body, type)
-    }
-
-    private fun showNotification(title: String, body: String, type: String) {
-        val channelId = "oa_push_channel"
-        val notificationManager = getSystemService(NotificationManager::class.java)
-
-        // Android 8.0+ 알림 채널 생성
-        val channel = NotificationChannel(channelId, "OA 알림", NotificationManager.IMPORTANCE_HIGH)
-        notificationManager.createNotificationChannel(channel)
-
-        val notification = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(title)
-            .setContentText(body)
-            .setAutoCancel(true)
-            .build()
-
-        notificationManager.notify(System.currentTimeMillis().toInt(), notification)
-    }
-
-    private suspend fun registerTokenToServer(assetUid: String?, token: String) {
-        if (assetUid == null) return
-        // POST /rest/v1/device_tokens (upsert)
-        // { "asset_uid": "BDT00001", "fcm_token": "...", "platform": "android" }
-    }
-}
-```
-
-### 10.4 DB 테이블
-
-#### device_tokens
+### 10.2 DB 테이블 `notifications`
 
 | 컬럼 | 타입 | 설명 |
 |------|------|------|
 | `id` | BIGINT (PK, auto) | 고유 식별자 |
-| `asset_uid` | TEXT (UNIQUE) | 자산 고유 식별자 (FK → assets.asset_uid) |
-| `fcm_token` | TEXT | FCM 디바이스 토큰 |
-| `platform` | TEXT | 플랫폼 (`android`, `ios`, `linux`, `windows`) |
-| `updated_at` | TIMESTAMPTZ | 토큰 갱신 시각 |
-
-#### notifications
-
-| 컬럼 | 타입 | 설명 |
-|------|------|------|
-| `id` | BIGINT (PK, auto) | 고유 식별자 |
-| `asset_uid` | TEXT | 대상 자산 (NULL이면 전체 발송) |
-| `type` | TEXT | 알림 유형 (`os_update`, `security_alert`, `general`, `agent_update`) |
+| `asset_uid` | TEXT | 대상 자산 (NULL이면 전체) |
+| `type` | TEXT | `os_update`, `security_alert`, `general`, `agent_update`, `recheck_request` |
 | `title` | TEXT | 알림 제목 |
 | `body` | TEXT | 알림 내용 |
 | `sent_at` | TIMESTAMPTZ | 발송 시각 |
 | `read_at` | TIMESTAMPTZ | 읽은 시각 (NULL이면 미읽음) |
 
-### 10.5 알림 유형
+- 조회: 관리자 그룹 또는 해당 자산 담당자만 (RLS)
+- 생성: 관리자 그룹 (또는 서버 RPC/트리거)
 
-| 유형 | 코드 | 발송 주체 | 설명 |
-|------|------|----------|------|
-| OS 업데이트 | `os_update` | 관리자 (프론트엔드) | OS 업데이트 필요 알림 |
-| 보안 경고 | `security_alert` | 관리자 (프론트엔드) | 보안 패치, 위험 알림 |
-| 일반 공지 | `general` | 관리자 (프론트엔드) | 일반 공지사항 |
-| 버전 업데이트 | `agent_update` | 서버 (자동) | 에이전트 업데이트 알림 |
+### 10.3 알림 유형
+
+| 유형 | 코드 | 발송 주체 |
+|------|------|----------|
+| OS 업데이트 | `os_update` | 관리자 |
+| 보안 경고 | `security_alert` | 관리자 |
+| 일반 공지 / 재확인 요청 | `general` | 관리자, `admin_force_verify`, 마스터 user_name 변경 트리거 |
+| 버전 업데이트 | `agent_update` | 서버 |
+| 재실사 요청 | `recheck_request` | `request_inspection_recheck` RPC |
+
+> `device_tokens` 테이블은 레거시로 남아 있으나 에이전트는 더 이상 사용하지 않습니다.
 
 ---
 
@@ -1343,7 +1293,7 @@ suspend fun checkVersion() {
 
 3. 서버 검증 (RPC: verify_user)
    POST /rest/v1/rpc/verify_user
-   { "p_asset_uid": "BDT00001", "p_user_name": "김개발", "p_employee_id": "EMP20001" }
+   { "p_asset_uid": "D00001", "p_user_name": "김개발", "p_employee_id": "EMP20001" }
 
 4. 응답 처리
    - 일치 → "확인 완료" 메시지, last_verified_at 갱신, verification_status = 'verified'
@@ -1352,60 +1302,15 @@ suspend fun checkVersion() {
 
 ### 12.4 RPC 함수 `verify_user`
 
-```sql
-CREATE OR REPLACE FUNCTION public.verify_user(
-  p_asset_uid text,
-  p_user_name text,
-  p_employee_id text
-)
-RETURNS jsonb
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  v_db_user_name text;
-  v_db_employee_id text;
-  v_matched boolean;
-BEGIN
-  -- assets 테이블에서 사용자명 조회
-  SELECT user_name INTO v_db_user_name
-  FROM public.assets
-  WHERE asset_uid = p_asset_uid;
+> 정의·권한: 백엔드 README 9.6 (`20260816000000_security_hardening.sql`). ⛔ 현재 `authenticated` 실행 권한 없음.
 
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'asset not found: %', p_asset_uid;
-  END IF;
-
-  -- users 테이블에서 사번 조회 (user_name으로 매칭)
-  SELECT employee_id INTO v_db_employee_id
-  FROM public.users
-  WHERE employee_name = v_db_user_name;
-
-  -- 일치 여부 확인
-  v_matched := (v_db_user_name = p_user_name AND v_db_employee_id = p_employee_id);
-
-  -- 결과 업데이트
-  UPDATE public.assets
-  SET
-    last_verified_at = now(),
-    verification_status = CASE WHEN v_matched THEN 'verified' ELSE 'mismatch' END
-  WHERE asset_uid = p_asset_uid;
-
-  RETURN jsonb_build_object(
-    'matched', v_matched,
-    'message', CASE
-      WHEN v_matched THEN '사용자 확인 완료'
-      ELSE '기존 사용자와 다른 사용자입니다. OA관리부서에 문의하세요.'
-    END,
-    'verified_at', now()
-  );
-END;
-$$;
-
-REVOKE ALL ON FUNCTION public.verify_user(text, text, text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.verify_user(text, text, text) TO authenticated;
-```
+| 항목 | 내용 |
+|------|------|
+| 파라미터 | `p_asset_uid`, `p_user_name`, `p_employee_id` |
+| 내부 권한 검사 | 관리자 그룹 또는 해당 자산 담당자 |
+| 비교 기준 | `assets.user_name` + `assets.user_employee_id` (2026-06-05부터 users 테이블 우회 조회 제거). NULL은 불일치 |
+| 결과 | `verification_status` = `verified` / `mismatch`, `last_verified_at = now()` |
+| 반환 | `{ matched, message, verified_at }` |
 
 ### 12.5 불일치 시 경고 UI
 
@@ -1450,7 +1355,7 @@ GRANT EXECUTE ON FUNCTION public.verify_user(text, text, text) TO authenticated;
    → assets.assignment_confirmed_at = NULL
 
 2. 에이전트: 앱 실행 또는 Heartbeat 시 assignment_status 확인
-   GET /rest/v1/assets?asset_uid=eq.BDT00001&select=assignment_status,user_name
+   GET /rest/v1/assets?asset_uid=eq.D00001&select=assignment_status,user_name
 
 3. assignment_status = 'pending' → 수령 확인 다이얼로그 표시
    ┌──────────────────────────────┐
@@ -1475,7 +1380,7 @@ GRANT EXECUTE ON FUNCTION public.verify_user(text, text, text) TO authenticated;
 
 4. 서버 검증 (RPC: confirm_assignment)
    POST /rest/v1/rpc/confirm_assignment
-   { "p_asset_uid": "BDT00001", "p_user_name": "김개발" }
+   { "p_asset_uid": "D00001", "p_user_name": "김개발" }
 
 5. 응답 처리
    - 이름 일치 → assignment_status = 'confirmed', assignment_confirmed_at = now()
@@ -1484,61 +1389,14 @@ GRANT EXECUTE ON FUNCTION public.verify_user(text, text, text) TO authenticated;
 
 ### 13.3 RPC 함수 `confirm_assignment`
 
-```sql
-CREATE OR REPLACE FUNCTION public.confirm_assignment(
-  p_asset_uid text,
-  p_user_name text
-)
-RETURNS jsonb
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  v_db_user_name text;
-  v_assignment_status text;
-BEGIN
-  SELECT user_name, assignment_status
-  INTO v_db_user_name, v_assignment_status
-  FROM public.assets
-  WHERE asset_uid = p_asset_uid;
+> 정의·권한: 백엔드 README 9.6. ⛔ 현재 `authenticated` 실행 권한 없음.
 
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'asset not found: %', p_asset_uid;
-  END IF;
-
-  IF v_assignment_status != 'pending' THEN
-    RETURN jsonb_build_object(
-      'success', false,
-      'message', '수령 대기 중인 배정이 없습니다.'
-    );
-  END IF;
-
-  IF v_db_user_name != p_user_name THEN
-    RETURN jsonb_build_object(
-      'success', false,
-      'message', '배정된 사용자 이름과 일치하지 않습니다.'
-    );
-  END IF;
-
-  -- 수령 확인 완료
-  UPDATE public.assets
-  SET
-    assignment_status = 'confirmed',
-    assignment_confirmed_at = now()
-  WHERE asset_uid = p_asset_uid;
-
-  RETURN jsonb_build_object(
-    'success', true,
-    'message', '자산 수령이 확인되었습니다.',
-    'confirmed_at', now()
-  );
-END;
-$$;
-
-REVOKE ALL ON FUNCTION public.confirm_assignment(text, text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.confirm_assignment(text, text) TO authenticated;
-```
+| 항목 | 내용 |
+|------|------|
+| 파라미터 | `p_asset_uid`, `p_user_name` |
+| 내부 권한 검사 | 관리자 그룹 또는 해당 자산 담당자 |
+| 동작 | `assignment_status = 'pending'`이고 `assets.user_name`과 이름이 같으면 `confirmed` + `assignment_confirmed_at = now()` |
+| 반환 | `{ success, message, confirmed_at? }` |
 
 ### 13.4 assets 테이블 추가 컬럼
 
@@ -1562,7 +1420,10 @@ GRANT EXECUTE ON FUNCTION public.confirm_assignment(text, text) TO authenticated
 |------|------|------|------|
 | Presence | Presence | 에이전트 → 프론트엔드 | 에이전트 실시간 접속 상태 공유 |
 | 관리자 명령 수신 | Broadcast | 프론트엔드 → 에이전트 | 즉시 Heartbeat, 시스템 정보 갱신 등 |
-| 알림 발신 | Broadcast | 에이전트 → 프론트엔드 | 배터리 부족, 네트워크 변경 등 긴급 알림 |
+
+> 모든 Realtime 채널은 인증된 **private** 채널입니다. 에이전트는 자신에게
+> 배정된 자산의 명령·알림만 구독하며, 전역 알림 Broadcast를 발신하거나 구독하지
+> 않습니다.
 
 > **Heartbeat와의 관계**: WebSocket은 상시 연결, Heartbeat는 주기적 HTTP POST. 두 채널은 독립 동작합니다.
 > `request_heartbeat` 명령 수신 시 기존 `update_heartbeat` RPC를 즉시 호출합니다.
@@ -1571,9 +1432,8 @@ GRANT EXECUTE ON FUNCTION public.confirm_assignment(text, text) TO authenticated
 
 | 채널명 | 유형 | 방향 | 용도 |
 |--------|------|------|------|
-| `agent-presence:global` | Presence | 에이전트 → 프론트엔드 | 에이전트 실시간 접속 상태 추적 |
+| `agent-presence:global` | Presence | 에이전트 → 관리자/운영자 | 최소 접속 상태(`asset_uid`만) 공유 |
 | `agent-commands:{asset_uid}` | Broadcast | 프론트엔드 → 에이전트 | 관리자 → 특정 기기 명령 전송 |
-| `agent-alerts:global` | Broadcast | 에이전트 → 프론트엔드 | 에이전트 → 관리자 실시간 알림 |
 | `notifications:{asset_uid}` | **postgres_changes** | 서버(DB INSERT) → 에이전트 | `notifications` 테이블 INSERT 수신 (관리자 재확인 요청 등) |
 
 ### 14.3 Presence 상태 등록
@@ -1583,13 +1443,12 @@ GRANT EXECUTE ON FUNCTION public.confirm_assignment(text, text) TO authenticated
 **Presence 상태 데이터:**
 ```json
 {
-  "asset_uid": "BDT00001",
-  "platform": "android",
-  "agent_version": "1.0.0",
-  "connected_at": "2026-03-14T09:00:00Z"
+  "asset_uid": "D00001"
 }
 ```
 
+- private Presence join 권한은 해당 자산이 배정된 개인 계정 또는 관리자/운영자만
+  가집니다. 전역 채널 특성상 추가 사용자·기기 정보를 넣지 않습니다.
 - 채널 참여 → Supabase Realtime이 자동으로 `join` 이벤트 발생 → 프론트엔드에서 감지
 - 연결 해제 (앱 종료, 네트워크 끊김) → 자동 `leave` 이벤트 발생
 - 프론트엔드는 `sync` 이벤트로 전체 접속 목록을 갱신
@@ -1613,29 +1472,7 @@ GRANT EXECUTE ON FUNCTION public.confirm_assignment(text, text) TO authenticated
 | `request_heartbeat` | 즉시 `update_heartbeat` RPC 호출 (기존 HeartbeatWorker와 동일 로직) |
 | `refresh_system_info` | 시스템 정보 즉시 수집 후 `update_heartbeat` RPC 호출 |
 
-### 14.5 알림 발신 (Broadcast)
-
-에이전트가 특정 조건 감지 시 `agent-alerts:global` 채널로 알림을 전송합니다.
-
-**알림 메시지 포맷:**
-```json
-{
-  "asset_uid": "BDT00001",
-  "alert_type": "battery_low",
-  "message": "배터리 15% 이하",
-  "data": { "battery_level": 12, "battery_charging": false },
-  "timestamp": "2026-03-14T09:10:00Z"
-}
-```
-
-| alert_type | 설명 | 트리거 조건 |
-|------------|------|-----------|
-| `battery_low` | 배터리 부족 | `battery_level` ≤ 15% |
-| `network_changed` | 네트워크 변경 | WIFI ↔ CELLULAR 등 전환 |
-| `agent_started` | 에이전트 시작 | 서비스 시작 시 |
-| `agent_stopped` | 에이전트 종료 | 서비스 종료 시 (best-effort) |
-
-### 14.5.1 서버 발생 알림 수신 (Postgres Changes) — 2026-06-04 추가
+### 14.5 서버 발생 알림 수신 (Postgres Changes) — 2026-06-04 추가
 
 `notifications` 테이블이 Supabase Realtime publication에 등록되어 있어, INSERT 이벤트를 에이전트가 즉시 수신합니다 (Firebase/FCM 미사용).
 
@@ -1662,7 +1499,7 @@ GRANT EXECUTE ON FUNCTION public.confirm_assignment(text, text) TO authenticated
     "type": "INSERT",
     "table": "notifications",
     "record": {
-      "id": 12, "asset_uid": "BDT00001",
+      "id": 12, "asset_uid": "D00001",
       "type": "general",
       "title": "사용자 재확인 요청",
       "body": "관리자 요청으로 사용자 확인이 초기화되었습니다. 에이전트 앱에서 다시 확인을 진행해주세요.",
@@ -1685,7 +1522,7 @@ GRANT EXECUTE ON FUNCTION public.confirm_assignment(text, text) TO authenticated
 ### 14.6 연결 관리
 
 #### WebSocket 연결
-- **URL**: `wss://apioa.terraforming.info/realtime/v1/websocket?apikey=<ANON_KEY>&vsn=1.0.0`
+- **URL**: `wss://apioa.terraforming.info/realtime/v1/websocket?apikey=<ANON_KEY>`
 - **인증**: 연결 시 `access_token` 전달 (Phoenix Channel `join` 메시지 payload)
 - **프로토콜**: Phoenix Channels v1 (JSON 인코딩)
 
@@ -1723,13 +1560,10 @@ class RealtimeManager(
     suspend fun connect()
 
     // 채널 참여
-    suspend fun joinPresence(assetUid: String, platform: String, agentVersion: String)
+    suspend fun joinPresence(assetUid: String)               // payload는 asset_uid만 (최소 정보)
     suspend fun joinNotificationsChannel(assetUid: String)  // 2026-06-04 추가
+    // joinAlertChannel() / sendAlert() 는 제거됨 — 전역 알림 발신 없음
     suspend fun joinCommandChannel(assetUid: String)
-    suspend fun joinAlertChannel()
-
-    // Broadcast 전송
-    suspend fun sendAlert(alertType: String, message: String, data: JsonObject)
 
     // 명령 수신 콜백
     fun onCommand(handler: (command: String, params: JsonObject) -> Unit)
@@ -1766,16 +1600,9 @@ WebSocket 명령 수신
     → (기존 HeartbeatWorker와 동일한 로직)
 ```
 
-#### 알림 발신 트리거
-```
-BatteryManager 콜백 (배터리 레벨 변경)
-  → battery_level ≤ 15%
-    → realtimeManager.sendAlert("battery_low", ...)
-
-ConnectivityManager 콜백 (네트워크 변경)
-  → 네트워크 타입 변경
-    → realtimeManager.sendAlert("network_changed", ...)
-```
+#### 상태 변화 전달
+- 배터리·네트워크 등 자산 상태는 기존 인증된 Heartbeat RPC에 포함해 전송합니다.
+- 에이전트가 전역 Broadcast로 상태나 개인정보를 발신하지 않습니다.
 
 #### 서버 알림 수신 트리거 (2026-06-04 추가)
 ```
@@ -1788,8 +1615,39 @@ realtimeManager.joinNotificationsChannel(assetUid)
 
 ---
 
+## 15. 에이전트 재도입 설계 (보안 실행서 §4)
+
+공용 계정 방식은 폐기되었으며, 다음 조건을 모두 갖춘 뒤에만 에이전트 RPC 실행 권한을 다시 부여합니다.
+
+1. 자산마다 고유한 `auth.users` 신원 또는 일회용 등록 토큰을 발급한다.
+2. 등록 시 서버가 해당 신원과 **정확히 하나의 `asset_uid`**를 매핑한다. 에이전트가 임의 자산번호를 주장하는 방식은 허용하지 않는다.
+3. 기기 비밀은 Android Keystore·Windows DPAPI·macOS Keychain 등 플랫폼 보안 저장소에 보관하고, APK·저장소·배포 스크립트에 공용 비밀번호를 넣지 않는다.
+4. heartbeat/사용자 확인/수령 확인은 이 매핑을 서버에서 검증하는 전용 RPC 또는 Edge Function으로 다시 구현한다. 성공 전에는 해당 RPC의 `authenticated` 실행 권한을 부여하지 않는다.
+5. 기기별 알림 구독도 매핑된 자산의 알림만 읽도록 RLS를 분리한다.
+6. 새 keystore로 앱 서명 키를 교체하고 CI 비밀 저장소로 이관한다 (아래 "Android 릴리스 서명"). 기존 공용 APK 계정과 서명 키는 폐기한다.
+
+> 그 전까지 현재 구현(개인 계정 로그인)은 Realtime 명령·알림 수신 경로만 의미가 있으며, 데이터 갱신 RPC는 서버에서 거부됩니다.
+
+---
+
+## Android 릴리스 서명
+
+릴리스 APK/AAB는 저장소에 없는 서명 정보를 주입한 환경에서만 생성합니다. 다음 네 개의 값을 CI 비밀 저장소 또는 배포 담당자의 `~/.gradle/gradle.properties`에 보관하고, `-P` Gradle 속성 또는 동일한 이름의 환경 변수로 제공합니다.
+
+- `OA_AGENT_SIGNING_STORE_FILE`
+- `OA_AGENT_SIGNING_STORE_PASSWORD`
+- `OA_AGENT_SIGNING_KEY_ALIAS`
+- `OA_AGENT_SIGNING_KEY_PASSWORD`
+
+값 중 하나라도 없으면 릴리스 산출물 작업은 시작 전에 실패합니다. 키스토어, 비밀번호, 별칭은 저장소·문서·빌드 로그에 넣지 않습니다.
+
+---
+
 ## 변경 이력 (에이전트)
 
+- `2026-10-11` : 명세를 실제 코드·보안 실행서 기준으로 정비 — FCM 섹션 제거(Realtime 알림으로 대체), macOS 에이전트 추가, SystemInfo 26개 필드, AndroidManifest 실제값, 에이전트 RPC 현재 차단 상태와 재도입 설계(§15), asset_uid 현재 형식
+- `2026-08` : 공용 에이전트 계정 폐기 → 개인 OA 계정 로그인, 보안 저장소(Android Keystore/DPAPI/Keychain)로 토큰만 저장, 빌드 시 URL·anon key 주입(`BUILDING.md`), 전역 알림 Broadcast 발신 제거, Presence 최소 정보(`asset_uid`)
+- `2026-06-14` : SystemInfo에 MAC·시리얼·전화번호·보안 패치 필드 추가 (서버가 MAC을 자산 마스터로 동기화)
 - `2026-06-04` :
   - `RealtimeManager.kt`
     - `joinNotificationsChannel(assetUid)` — postgres_changes 구독

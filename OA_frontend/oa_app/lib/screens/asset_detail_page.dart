@@ -470,8 +470,9 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
 
   /// 자산 상세에서 [실사 보기] 버튼:
   /// - 가장 최근 inspection이 있으면 그 상세 페이지로 이동
-  /// - 없으면 새 inspection을 자동 생성 후 그 상세 페이지로 이동
-  Future<void> _createInspection() async {
+  /// - 관리자는 없을 때만 새 inspection을 생성할 수 있음
+  /// - 일반 사용자는 자동 생성하지 않음 (활성 회차 시작 RPC가 행을 생성함)
+  Future<void> _createInspection({bool createIfMissing = true}) async {
     final assetId = widget.assetId;
     if (assetId == null) return;
     try {
@@ -483,7 +484,14 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
         return;
       }
 
-      // 2. 없으면 새 inspection 생성 후 이동
+      if (!createIfMissing) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('현재 조회할 실사 기록이 없습니다.')),
+        );
+        return;
+      }
+
+      // 2. 관리자만 없으면 새 inspection 생성 후 이동
       final assetCode = _asset?.assetUid ?? 'UNKNOWN';
       final activeRound = await _api.fetchActiveRound();
       final created = await _api.createInspection({
@@ -1933,6 +1941,12 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
     final theme = Theme.of(context);
 
     if (widget.isCreateMode) {
+      if (!_isAdminUser) {
+        return const Padding(
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: Text('자산 등록은 관리자 그룹만 할 수 있습니다.'),
+        );
+      }
       // 생성 모드: 저장 버튼
       return SizedBox(
         width: double.infinity,
@@ -1947,6 +1961,18 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
                 )
               : const Icon(Icons.save),
           label: const Text('저장'),
+        ),
+      );
+    }
+
+    if (!_isAdminUser) {
+      return SizedBox(
+        width: double.infinity,
+        height: 48,
+        child: FilledButton.tonalIcon(
+          onPressed: () => _createInspection(createIfMissing: false),
+          icon: const Icon(Icons.fact_check),
+          label: const Text('실사 보기'),
         ),
       );
     }
@@ -2013,7 +2039,7 @@ class _AssetDetailPageState extends ConsumerState<AssetDetailPage> {
         ),
         const SizedBox(height: 12),
 
-        // 실사 보기 버튼 — 새 실사 생성 X, 최근 실사 상세로 이동
+        // 관리자: 최근 실사를 열고, 없을 때만 생성 후 이동
         SizedBox(
           width: double.infinity,
           height: 48,

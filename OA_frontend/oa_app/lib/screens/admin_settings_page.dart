@@ -3,9 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../constants.dart';
 import '../models/inspection_round.dart';
+import '../models/receipt.dart';
 import '../models/user.dart' as app_user;
+import '../models/vendor.dart';
+import '../utils/receipt_printer.dart';
 import '../notifiers/auth_notifier.dart';
+import '../notifiers/menu_visibility_provider.dart';
 import '../services/api_service.dart';
 import '../widgets/common/app_scaffold.dart';
 import '../widgets/common/error_widget.dart';
@@ -67,7 +72,7 @@ class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage>
       final rows = await Supabase.instance.client
           .from('users')
           .select(
-              'id, employee_id, employee_name, role, is_master_admin, organization_dept, created_at')
+              'id, employee_id, employee_name, role, is_master_admin, organization_dept, created_at, receipt_team, must_change_password')
           .order('role', ascending: false)
           .order('employee_id');
       if (!mounted) return;
@@ -85,20 +90,13 @@ class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage>
     }
   }
 
-  /// role 변경 — 관리자 그룹만 사용.
+  /// role 변경 — DB RPC가 마스터 관리자 여부를 최종 검증한다.
   Future<void> _updateUserRole(String employeeId, String role) async {
     try {
-      await Supabase.instance.client
-          .from('users')
-          .update({'role': role})
-          .eq('employee_id', employeeId);
-      // 권한이 admin이 아니면 is_master_admin도 false로 자동 정리
-      if (role != 'admin') {
-        await Supabase.instance.client
-            .from('users')
-            .update({'is_master_admin': false})
-            .eq('employee_id', employeeId);
-      }
+      await Supabase.instance.client.rpc(
+        'admin_update_user_role',
+        params: {'p_employee_id': employeeId, 'p_role': role},
+      );
       await Future.wait([_loadUsers(), _loadAdmins()]);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -123,33 +121,204 @@ class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage>
     }
   }
 
-  Future<void> _resetUserPassword(String employeeId) async {
+  /// 비밀번호 설정 — 관리자가 직접 입력. 기본은 다음 로그인 시 변경 강제(초기화),
+  /// 체크 해제하면 그대로 사용(수정).
+  Future<void> _setUserPassword(String employeeId) async {
+    final pwCtrl = TextEditingController();
+    bool force = true;
+    bool obscure = true;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('$employeeId 비번 초기화'),
-        content: Text('$employeeId 의 비밀번호를 [$employeeId' '1234!]로 초기화합니다. 계속하시겠습니까?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('초기화')),
-        ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSt) => AlertDialog(
+          title: Text('$employeeId 비밀번호 설정'),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: pwCtrl,
+                  obscureText: obscure,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    labelText: '새 비밀번호',
+                    helperText: passwordPolicyText,
+                    helperMaxLines: 2,
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                          obscure ? Icons.visibility : Icons.visibility_off),
+                      onPressed: () => setSt(() => obscure = !obscure),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: force,
+                  onChanged: (v) => setSt(() => force = v ?? true),
+                  title: const Text('다음 로그인 시 비밀번호 변경 강제 (초기화)'),
+                  subtitle: const Text('해제하면 입력한 비밀번호를 그대로 사용 (수정)'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('취소')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('설정')),
+          ],
+        ),
       ),
     );
     if (ok != true) return;
-    try {
-      await Supabase.instance.client.rpc(
-        'admin_reset_user_password',
-        params: {'p_employee_id': employeeId},
-      );
+    final pw = pwCtrl.text;
+    final pwError = validatePassword(pw);
+    if (pwError != null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$employeeId 비번 초기화 완료')),
+        SnackBar(content: Text('비밀번호 정책 위반: $pwError ($passwordPolicyText)')),
+      );
+      return;
+    }
+    try {
+      await Supabase.instance.client.rpc(
+        'admin_set_user_password',
+        params: {
+          'p_employee_id': employeeId,
+          'p_new_password': pw,
+          'p_force_change': force,
+        },
+      );
+      await _loadUsers();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(force
+              ? '$employeeId 비밀번호 초기화 완료 — 다음 로그인 시 변경 요구됨'
+              : '$employeeId 비밀번호 수정 완료'),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: SelectableText('초기화 실패: $e'),
+          content: SelectableText('설정 실패: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
+  /// 사용자 사번/이름/부서 수정 (관리자. admin 계정은 마스터만 — RPC가 검증)
+  /// 사번 변경 시 로그인 이메일도 함께 바뀜. 본인 사번은 RPC가 차단.
+  Future<void> _editUserProfile(
+      String employeeId, String currentName, String? currentDept,
+      {bool isMe = false}) async {
+    final idCtrl = TextEditingController(text: employeeId);
+    final nameCtrl = TextEditingController(text: currentName);
+    final deptCtrl = TextEditingController(text: currentDept ?? '');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('$employeeId 정보 수정'),
+        content: SizedBox(
+          width: 360,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: idCtrl,
+                enabled: !isMe,
+                decoration: InputDecoration(
+                  labelText: '사번 *',
+                  border: const OutlineInputBorder(),
+                  helperText: isMe
+                      ? '본인 사번은 로그인 중 변경할 수 없습니다.'
+                      : '변경 시 로그인 아이디도 새 사번으로 바뀝니다.',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(
+                    labelText: '사용자 이름 *', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: deptCtrl,
+                decoration: const InputDecoration(
+                    labelText: '부서', border: OutlineInputBorder()),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('취소')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('저장')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final name = nameCtrl.text.trim();
+    final newId = idCtrl.text.trim();
+    if (name.isEmpty || newId.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('사번과 이름은 필수입니다.')));
+      return;
+    }
+    try {
+      await Supabase.instance.client.rpc(
+        'admin_update_user_profile',
+        params: {
+          'p_employee_id': employeeId,
+          'p_employee_name': name,
+          'p_org_dept': deptCtrl.text.trim().isEmpty ? null : deptCtrl.text.trim(),
+          'p_new_employee_id': newId == employeeId ? null : newId,
+        },
+      );
+      await _loadUsers();
+      if (!mounted) return;
+      if (newId != employeeId) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('사번 변경됨: $employeeId → $newId (로그인 아이디도 $newId)')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: SelectableText('수정 실패: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+  }
+
+  /// 인수증 서명팀 지정 (helpdesk / it_plan / null)
+  Future<void> _updateReceiptTeam(String employeeId, String? team) async {
+    try {
+      await Supabase.instance.client.rpc(
+        'admin_set_receipt_team',
+        params: {'p_employee_id': employeeId, 'p_team': team},
+      );
+      await _loadUsers();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: SelectableText('서명팀 변경 실패: $e'),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
@@ -194,10 +363,10 @@ class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage>
 
   Future<void> _toggleMaster(String employeeId, bool value) async {
     try {
-      await Supabase.instance.client
-          .from('users')
-          .update({'is_master_admin': value})
-          .eq('employee_id', employeeId);
+      await Supabase.instance.client.rpc(
+        'admin_set_master_admin',
+        params: {'p_employee_id': employeeId, 'p_is_master': value},
+      );
       await Future.wait([_loadAdmins(), _loadUsers()]);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -279,13 +448,19 @@ class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage>
     final authState = ref.watch(authNotifierProvider);
     final user = authState.valueOrNull?.user;
     final isAdmin = user?.isAdminGroup ?? false;
+    final isAdminRole = user?.isAdmin ?? false;
+    final isMasterAdmin = user?.isMasterAdmin ?? false;
     final tabs = <Tab>[
       const Tab(text: '시스템 설정', icon: Icon(Icons.settings, size: 18)),
       const Tab(text: '유저 정보', icon: Icon(Icons.people, size: 18)),
-      if (isAdmin)
+      if (isAdminRole)
         const Tab(text: '아이디 생성', icon: Icon(Icons.person_add, size: 18)),
-      if (isAdmin)
+      if (isMasterAdmin)
         const Tab(text: '권한 관리', icon: Icon(Icons.shield, size: 18)),
+      if (isAdminRole)
+        const Tab(text: '메뉴권한', icon: Icon(Icons.menu_open, size: 18)),
+      if (isAdmin)
+        const Tab(text: '입고증 양식', icon: Icon(Icons.description, size: 18)),
       if (isAdmin)
         const Tab(text: '세부선택', icon: Icon(Icons.tune, size: 18)),
     ];
@@ -306,8 +481,10 @@ class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage>
                 children: [
                   _buildSystemTab(context, isAdmin, user),
                   _buildUsersTab(context, user),
-                  if (isAdmin) _buildCreateUserTab(context, user),
-                  if (isAdmin) _buildPermissionsTab(context),
+                  if (isAdminRole) _buildCreateUserTab(context, user),
+                  if (isMasterAdmin) _buildPermissionsTab(context),
+                  if (isAdminRole) const _MenuPermissionsTab(),
+                  if (isAdmin) const _ReceiptTemplateTab(),
                   if (isAdmin) const _DropdownOptionsTab(),
                 ],
               ),
@@ -554,8 +731,10 @@ class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage>
 
     final isMine = (Map<String, dynamic> u) =>
         me?.employeeId != null && u['employee_id'] == me!.employeeId;
-    final canManage = me?.isAdminGroup ?? false;
-    final visible = canManage
+    // 관리자(role=admin)면 운영자/일반 관리 가능. admin 계정 자체는 마스터만.
+    final canManage = me?.isAdmin ?? false;
+    final isMasterMe = me?.isMasterAdmin ?? false;
+    final visible = (me?.isAdminGroup ?? false)
         ? _users
         : _users.where(isMine).toList();
     final masterCount =
@@ -643,16 +822,35 @@ class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage>
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Wrap(
-                      spacing: 16,
-                      runSpacing: 4,
+                    Row(
                       children: [
-                        Text('사번: $empId',
-                            style: theme.textTheme.bodySmall),
-                        Text('부서: $dept',
-                            style: theme.textTheme.bodySmall),
-                        Text('가입일: ${df(createdAt)}',
-                            style: theme.textTheme.bodySmall),
+                        Expanded(
+                          child: Wrap(
+                            spacing: 16,
+                            runSpacing: 4,
+                            children: [
+                              Text('사번: $empId',
+                                  style: theme.textTheme.bodySmall),
+                              Text('이름: $empName',
+                                  style: theme.textTheme.bodySmall),
+                              Text('부서: $dept',
+                                  style: theme.textTheme.bodySmall),
+                              Text('가입일: ${df(createdAt)}',
+                                  style: theme.textTheme.bodySmall),
+                            ],
+                          ),
+                        ),
+                        if (canManage &&
+                            (isMasterMe || (role != 'admin' && !isMaster)))
+                          IconButton(
+                            tooltip: '사번/이름/부서 수정',
+                            icon: const Icon(Icons.edit, size: 18),
+                            onPressed: () => _editUserProfile(
+                                empId,
+                                empName,
+                                u['organization_dept'] as String?,
+                                isMe: isMine(u)),
+                          ),
                       ],
                     ),
                     if (canManage) ...[
@@ -665,24 +863,28 @@ class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage>
                           DropdownButton<String>(
                             value: role,
                             isDense: true,
-                            items: const [
-                              DropdownMenuItem(
+                            items: [
+                              const DropdownMenuItem(
                                   value: 'user', child: Text('일반')),
-                              DropdownMenuItem(
+                              const DropdownMenuItem(
                                   value: 'operator1', child: Text('운영자1')),
-                              DropdownMenuItem(
+                              const DropdownMenuItem(
                                   value: 'operator2', child: Text('운영자2')),
-                              DropdownMenuItem(
-                                  value: 'admin', child: Text('관리자')),
+                              if (isMasterMe || role == 'admin')
+                                const DropdownMenuItem(
+                                    value: 'admin', child: Text('관리자')),
                             ],
-                            onChanged: (v) {
-                              if (v == null || v == role) return;
-                              _updateUserRole(empId, v);
-                            },
+                            // 일반 관리자는 admin 계정을 변경할 수 없음 (RPC도 동일 검증)
+                            onChanged: (!isMasterMe && role == 'admin')
+                                ? null
+                                : (v) {
+                                    if (v == null || v == role) return;
+                                    _updateUserRole(empId, v);
+                                  },
                           ),
                           const SizedBox(width: 12),
-                          // 마스터 관리자 스위치 (admin인 경우만)
-                          if (role == 'admin') ...[
+                          // 마스터 관리자 스위치 (admin 대상 + 내가 마스터일 때만)
+                          if (role == 'admin' && isMasterMe) ...[
                             const Text('마스터:',
                                 style: TextStyle(fontSize: 13)),
                             Switch(
@@ -709,13 +911,46 @@ class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage>
                           ),
                         ),
                       const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: OutlinedButton.icon(
-                          onPressed: () => _resetUserPassword(empId),
-                          icon: const Icon(Icons.lock_reset, size: 16),
-                          label: Text('비번 초기화 ($empId' '1234!)'),
-                        ),
+                      Row(
+                        children: [
+                          const Text('인수증 서명팀: ',
+                              style: TextStyle(fontSize: 13)),
+                          const SizedBox(width: 4),
+                          DropdownButton<String>(
+                            value: (u['receipt_team'] as String?) ?? 'none',
+                            isDense: true,
+                            items: const [
+                              DropdownMenuItem(
+                                  value: 'none', child: Text('없음')),
+                              DropdownMenuItem(
+                                  value: 'helpdesk', child: Text('헬프데스크')),
+                              DropdownMenuItem(
+                                  value: 'it_plan', child: Text('IT기획팀')),
+                            ],
+                            onChanged: (v) => _updateReceiptTeam(
+                                empId, v == 'none' ? null : v),
+                          ),
+                          const Spacer(),
+                          if (u['must_change_password'] == true)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: Tooltip(
+                                message: '다음 로그인 시 비밀번호 변경 필요',
+                                child: Icon(Icons.lock_clock,
+                                    size: 16,
+                                    color: theme.colorScheme.tertiary),
+                              ),
+                            ),
+                          OutlinedButton.icon(
+                            // admin 계정 비번은 마스터만
+                            onPressed:
+                                (!isMasterMe && (role == 'admin' || isMaster))
+                                    ? null
+                                    : () => _setUserPassword(empId),
+                            icon: const Icon(Icons.lock_reset, size: 16),
+                            label: const Text('비밀번호 설정'),
+                          ),
+                        ],
                       ),
                     ],
                   ],
@@ -728,7 +963,10 @@ class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage>
   }
 
   Widget _buildCreateUserTab(BuildContext context, app_user.User? me) {
-    return _CreateUserForm(onCreated: _loadUsers);
+    return _CreateUserForm(
+      onCreated: _loadUsers,
+      isMaster: me?.isMasterAdmin ?? false,
+    );
   }
 
   Widget _buildBody(
@@ -1364,7 +1602,8 @@ class _AdminSettingsPageState extends ConsumerState<AdminSettingsPage>
 // ── 신규 유저 생성 폼 ─────────────────────────────────────────────────────
 class _CreateUserForm extends StatefulWidget {
   final VoidCallback onCreated;
-  const _CreateUserForm({required this.onCreated});
+  final bool isMaster;
+  const _CreateUserForm({required this.onCreated, required this.isMaster});
 
   @override
   State<_CreateUserForm> createState() => _CreateUserFormState();
@@ -1374,8 +1613,10 @@ class _CreateUserFormState extends State<_CreateUserForm> {
   final _empIdCtrl = TextEditingController();
   final _empNameCtrl = TextEditingController();
   final _deptCtrl = TextEditingController();
+  final _pwCtrl = TextEditingController();
   String _role = 'user';
   bool _busy = false;
+  bool _obscure = true;
   String? _error;
 
   static const _roles = [
@@ -1390,6 +1631,7 @@ class _CreateUserFormState extends State<_CreateUserForm> {
     _empIdCtrl.dispose();
     _empNameCtrl.dispose();
     _deptCtrl.dispose();
+    _pwCtrl.dispose();
     super.dispose();
   }
 
@@ -1398,28 +1640,48 @@ class _CreateUserFormState extends State<_CreateUserForm> {
     final empId = _empIdCtrl.text.trim();
     final empName = _empNameCtrl.text.trim();
     final dept = _deptCtrl.text.trim();
+    final pw = _pwCtrl.text;
     if (empId.isEmpty || empName.isEmpty) {
       setState(() => _error = '사번과 이름은 필수입니다.');
       return;
     }
+    if (pw.isNotEmpty) {
+      final pwError = validatePassword(pw);
+      if (pwError != null) {
+        setState(() =>
+            _error = '비밀번호 정책 위반: $pwError ($passwordPolicyText · 비우면 무작위 생성)');
+        return;
+      }
+    }
     setState(() => _busy = true);
     try {
-      await Supabase.instance.client.rpc(
-        'admin_create_user',
+      final result = await Supabase.instance.client.rpc(
+        'admin_create_user_secure',
         params: {
           'p_employee_id': empId,
           'p_employee_name': empName,
           'p_role': _role,
           'p_org_dept': dept.isEmpty ? null : dept,
+          'p_password': pw.isEmpty ? null : pw,
         },
       );
       if (!mounted) return;
+      final data = Map<String, dynamic>.from(result as Map);
+      final temporaryPassword = data['temporary_password'] as String? ?? '';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$empId 생성됨 (초기비번: $empId' '1234!)')),
+        SnackBar(
+          duration: const Duration(seconds: 12),
+          content: SelectableText(
+            temporaryPassword.isEmpty
+                ? '$empId 생성됨 · 입력한 비밀번호로 첫 로그인 후 변경이 요구됩니다.'
+                : '$empId 생성됨 · 임시 비밀번호: $temporaryPassword\n안전한 채널로 전달하세요.',
+          ),
+        ),
       );
       _empIdCtrl.clear();
       _empNameCtrl.clear();
       _deptCtrl.clear();
+      _pwCtrl.clear();
       setState(() => _role = 'user');
       widget.onCreated();
     } catch (e) {
@@ -1449,7 +1711,8 @@ class _CreateUserFormState extends State<_CreateUserForm> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '초기 비밀번호는 [사번 + 1234!] 패턴으로 자동 부여됩니다.',
+                  '비밀번호를 비우면 서버가 무작위 임시 비밀번호를 생성합니다. '
+                  '어느 쪽이든 첫 로그인 시 비밀번호 변경이 강제됩니다.',
                   style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant),
                 ),
@@ -1478,13 +1741,31 @@ class _CreateUserFormState extends State<_CreateUserForm> {
                   ),
                 ),
                 const SizedBox(height: 12),
+                TextField(
+                  controller: _pwCtrl,
+                  obscureText: _obscure,
+                  decoration: InputDecoration(
+                    labelText: '초기 비밀번호 (선택 · 비우면 무작위)',
+                    helperText: passwordPolicyText,
+                    helperMaxLines: 2,
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                          _obscure ? Icons.visibility : Icons.visibility_off),
+                      onPressed: () => setState(() => _obscure = !_obscure),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   value: _role,
                   decoration: const InputDecoration(
                     labelText: '권한 *',
                     border: OutlineInputBorder(),
                   ),
+                  // admin 등급 생성은 마스터만 (RPC도 동일 검증)
                   items: _roles
+                      .where((r) => widget.isMaster || r.$1 != 'admin')
                       .map((r) =>
                           DropdownMenuItem(value: r.$1, child: Text(r.$2)))
                       .toList(),
@@ -2144,6 +2425,401 @@ class _CategoryEditorState extends State<_CategoryEditor> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ── 메뉴권한 탭 (admin 전용) ───────────────────────────────────────────────
+// 대상(모든유저/그룹/개인)을 고르고 그 대상에게 보일 메뉴를 체크.
+// 규칙이 없으면 기본(전부 보임). 우선순위: 개인 > 그룹 > 모든유저.
+// admin 계정은 규칙과 무관하게 항상 전부 보임.
+class _MenuPermissionsTab extends ConsumerStatefulWidget {
+  const _MenuPermissionsTab();
+
+  @override
+  ConsumerState<_MenuPermissionsTab> createState() =>
+      _MenuPermissionsTabState();
+}
+
+class _MenuPermissionsTabState extends ConsumerState<_MenuPermissionsTab> {
+  static const _roleLabels = {
+    'operator1': '운영자1',
+    'operator2': '운영자2',
+    'user': '일반',
+  };
+
+  String _targetType = 'all'; // all / role / user
+  String _selectedRole = 'user';
+  String? _selectedEmpId;
+  List<Map<String, dynamic>> _userList = [];
+  Set<String> _checked = managedMenus.keys.toSet();
+  bool _hasRule = false;
+  bool _loading = true;
+  bool _saving = false;
+  String? _error;
+
+  String get _targetValue => switch (_targetType) {
+        'role' => _selectedRole,
+        'user' => _selectedEmpId ?? '',
+        _ => '',
+      };
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    try {
+      final rows = await Supabase.instance.client
+          .from('users')
+          .select('employee_id, employee_name, role')
+          .neq('role', 'admin')
+          .order('employee_id');
+      _userList = List<Map<String, dynamic>>.from(rows as List);
+    } catch (e) {
+      _error = e.toString();
+    }
+    await _loadRule();
+  }
+
+  Future<void> _loadRule() async {
+    setState(() => _loading = true);
+    try {
+      if (_targetType == 'user' && (_selectedEmpId ?? '').isEmpty) {
+        _hasRule = false;
+        _checked = managedMenus.keys.toSet();
+      } else {
+        final rows = await Supabase.instance.client
+            .from('menu_permissions')
+            .select()
+            .eq('target_type', _targetType)
+            .eq('target_value', _targetValue);
+        final list = rows as List;
+        if (list.isEmpty) {
+          _hasRule = false;
+          _checked = managedMenus.keys.toSet();
+        } else {
+          _hasRule = true;
+          _checked = Set<String>.from(
+              (list.first as Map<String, dynamic>)['menu_keys'] as List);
+        }
+      }
+      _error = null;
+    } catch (e) {
+      _error = e.toString();
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _save() async {
+    if (_targetType == 'user' && (_selectedEmpId ?? '').isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('대상 사용자를 선택하세요.')));
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await Supabase.instance.client.from('menu_permissions').upsert(
+        {
+          'target_type': _targetType,
+          'target_value': _targetValue,
+          'menu_keys': _checked.toList(),
+        },
+        onConflict: 'target_type,target_value',
+      );
+      ref.invalidate(menuVisibilityProvider);
+      _hasRule = true;
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('메뉴권한 저장 완료')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: SelectableText('저장 실패: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _resetRule() async {
+    setState(() => _saving = true);
+    try {
+      await Supabase.instance.client
+          .from('menu_permissions')
+          .delete()
+          .eq('target_type', _targetType)
+          .eq('target_value', _targetValue);
+      ref.invalidate(menuVisibilityProvider);
+      await _loadRule();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('규칙 삭제 — 기본(전부 보임)으로 복귀')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: SelectableText('삭제 실패: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('대상 선택',
+              style: theme.textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'all', label: Text('모든유저')),
+              ButtonSegment(value: 'role', label: Text('그룹별')),
+              ButtonSegment(value: 'user', label: Text('개인별')),
+            ],
+            selected: {_targetType},
+            onSelectionChanged: (s) {
+              setState(() => _targetType = s.first);
+              _loadRule();
+            },
+          ),
+          const SizedBox(height: 12),
+          if (_targetType == 'role')
+            DropdownButtonFormField<String>(
+              value: _selectedRole,
+              decoration: const InputDecoration(
+                  labelText: '그룹', border: OutlineInputBorder()),
+              items: _roleLabels.entries
+                  .map((e) => DropdownMenuItem(
+                      value: e.key, child: Text('${e.value} (${e.key})')))
+                  .toList(),
+              onChanged: (v) {
+                if (v == null) return;
+                setState(() => _selectedRole = v);
+                _loadRule();
+              },
+            ),
+          if (_targetType == 'user')
+            DropdownButtonFormField<String>(
+              value: _selectedEmpId,
+              decoration: const InputDecoration(
+                  labelText: '사용자', border: OutlineInputBorder()),
+              items: _userList
+                  .map((u) => DropdownMenuItem(
+                        value: u['employee_id'] as String,
+                        child: Text(
+                            '${u['employee_id']} · ${u['employee_name']} (${_roleLabels[u['role']] ?? u['role']})'),
+                      ))
+                  .toList(),
+              onChanged: (v) {
+                setState(() => _selectedEmpId = v);
+                _loadRule();
+              },
+            ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Text('보이는 메뉴',
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.bold)),
+              const SizedBox(width: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: _hasRule
+                      ? theme.colorScheme.primaryContainer
+                      : theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  _hasRule ? '규칙 있음' : '규칙 없음 (기본: 전부 보임)',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          if (_error != null)
+            SelectableText(_error!,
+                style: TextStyle(color: theme.colorScheme.error)),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else
+            Card(
+              child: Column(
+                children: managedMenus.entries
+                    .map((e) => CheckboxListTile(
+                          dense: true,
+                          title: Text(e.value),
+                          subtitle: Text(e.key,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.outline)),
+                          value: _checked.contains(e.key),
+                          onChanged: (v) => setState(() {
+                            if (v == true) {
+                              _checked.add(e.key);
+                            } else {
+                              _checked.remove(e.key);
+                            }
+                          }),
+                        ))
+                    .toList(),
+              ),
+            ),
+          const SizedBox(height: 8),
+          Text(
+            '· 우선순위: 개인 > 그룹 > 모든유저 > 기본(전부 보임)\n'
+            '· admin 계정은 규칙과 무관하게 항상 모든 메뉴가 보입니다.\n'
+            '· 인수증은 메뉴권한과 별개로 운영자 그룹 이상만 접근됩니다.',
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: theme.colorScheme.outline),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _saving || _loading ? null : _save,
+                  icon: const Icon(Icons.save),
+                  label: const Text('저장'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _saving || _loading || !_hasRule
+                      ? null
+                      : _resetRule,
+                  icon: const Icon(Icons.restart_alt),
+                  label: const Text('규칙 삭제 (기본으로)'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── 입고증 양식 탭 (admin 그룹) ────────────────────────────────────────────
+// 거래처별 입고증(인수증) 양식 뼈대 미리보기 — 데이터 없이 빈 양식만 표시.
+class _ReceiptTemplateTab extends StatefulWidget {
+  const _ReceiptTemplateTab();
+
+  @override
+  State<_ReceiptTemplateTab> createState() => _ReceiptTemplateTabState();
+}
+
+class _ReceiptTemplateTabState extends State<_ReceiptTemplateTab> {
+  static const _variantLabels = {
+    'default': '기본 양식',
+    'aj': 'AJ네트웍스 납품확인서',
+    'koffice': '한국오피스 납품확인서',
+    'iguard': '아이가드 납품확인서',
+    'ctok': '씨토크 입고확인서',
+    'boim': '보임 물품인수증',
+  };
+
+  List<Vendor> _vendors = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final rows = await ApiService().fetchVendors(includeInactive: true);
+      if (!mounted) return;
+      setState(() {
+        _vendors = rows;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _preview(Vendor v) async {
+    final blank = Receipt(
+      id: 0,
+      vendorId: v.id,
+      issuedAt: DateTime.now(),
+      vendor: v,
+      items: const [],
+    );
+    await ReceiptPrinter.showPreviewDialog(
+      context,
+      blank,
+      title: '${v.name} 양식 뼈대',
+      options: const ReceiptPrintOptions(
+        issuedAt: PrintFieldMode.blank,
+        confirmDate: PrintFieldMode.blank,
+        docNo: PrintFieldMode.blank,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return Center(child: SelectableText('조회 실패: $_error'));
+    }
+    if (_vendors.isEmpty) {
+      return const Center(child: Text('등록된 거래처가 없습니다.'));
+    }
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text(
+          '거래처를 누르면 해당 입고증 양식의 뼈대(빈 양식)를 미리볼 수 있습니다.',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: theme.colorScheme.outline),
+        ),
+        const SizedBox(height: 12),
+        for (final v in _vendors)
+          Card(
+            child: ListTile(
+              leading: Icon(Icons.description,
+                  color: theme.colorScheme.primary),
+              title: Text(v.name,
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: Text(
+                _variantLabels[v.templateVariant] ??
+                    '사용자 정의 (${v.templateVariant})',
+                style: theme.textTheme.bodySmall,
+              ),
+              trailing: const Icon(Icons.preview),
+              onTap: () => _preview(v),
+            ),
+          ),
+      ],
     );
   }
 }

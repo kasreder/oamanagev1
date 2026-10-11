@@ -14,6 +14,11 @@ class User {
   final String? authProvider;
   final String? snsId;
   final String role;
+  final bool isMasterAdmin;
+  /// 인수증 서명 담당 팀: 'helpdesk' | 'it_plan' | null
+  final String? receiptTeam;
+  /// 관리자가 비번을 설정한 뒤 다음 로그인에서 강제 변경
+  final bool mustChangePassword;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -33,6 +38,9 @@ class User {
     this.authProvider,
     this.snsId,
     this.role = 'user',
+    this.isMasterAdmin = false,
+    this.receiptTeam,
+    this.mustChangePassword = false,
     this.createdAt,
     this.updatedAt,
   });
@@ -60,6 +68,9 @@ class User {
       authProvider: json['auth_provider'] as String?,
       snsId: json['sns_id'] as String?,
       role: json['role'] as String? ?? 'user',
+      isMasterAdmin: json['is_master_admin'] as bool? ?? false,
+      receiptTeam: json['receipt_team'] as String?,
+      mustChangePassword: json['must_change_password'] as bool? ?? false,
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String).toLocal()
           : null,
@@ -84,6 +95,7 @@ class User {
       'auth_provider': authProvider,
       'sns_id': snsId,
       'role': role,
+      'is_master_admin': isMasterAdmin,
     };
   }
 
@@ -103,6 +115,7 @@ class User {
     String? authProvider,
     String? snsId,
     String? role,
+    bool? isMasterAdmin,
   }) {
     return User(
       id: id ?? this.id,
@@ -120,6 +133,7 @@ class User {
       authProvider: authProvider ?? this.authProvider,
       snsId: snsId ?? this.snsId,
       role: role ?? this.role,
+      isMasterAdmin: isMasterAdmin ?? this.isMasterAdmin,
       createdAt: createdAt,
       updatedAt: updatedAt,
     );

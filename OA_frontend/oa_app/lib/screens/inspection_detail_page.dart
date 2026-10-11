@@ -124,10 +124,9 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
       _inspAssetUidCtrl.text = a.assetUid;
       _buildingCtrl.text = a.building ?? '';
       _floorCtrl.text = a.floor ?? '';
-      _positionCtrl.text =
-          (a.locationRow != null && a.locationCol != null)
-              ? '${a.locationRow! + 1}행 / ${a.locationCol! + 1}열'
-              : '';
+      _positionCtrl.text = (a.locationRow != null && a.locationCol != null)
+          ? '${a.locationRow! + 1}행 / ${a.locationCol! + 1}열'
+          : '';
       _inspUserNameCtrl.text = a.userName ?? '';
       _inspUserDeptCtrl.text = a.userDepartment ?? '';
     });
@@ -234,6 +233,7 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
         final v = c.text.trim();
         return v.isEmpty ? null : v;
       }
+
       await _api.updateInspection(widget.inspectionId, {
         'asset_code': t(_inspAssetUidCtrl),
         'inspection_building': t(_buildingCtrl),
@@ -278,8 +278,12 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
           '등록 후에는 일반 사용자가 수정할 수 없습니다. 계속하시겠습니까?',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('등록')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('취소')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('등록')),
         ],
       ),
     );
@@ -322,8 +326,12 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
           '기존 사진을 데이터베이스와 스토리지에서 모두 삭제하고 새로 등록합니다.\n계속하시겠습니까?',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('아니오')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('재등록')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('아니오')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('재등록')),
         ],
       ),
     );
@@ -332,9 +340,12 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
     try {
       // Storage 삭제 → DB 컬럼 NULL → 새 촬영 트리거
       try {
-        await Supabase.instance.client.storage.from('inspection-photos').remove([path]);
-      } catch (_) { /* 이미 없는 파일이면 무시 */ }
-      await _api.updateInspection(widget.inspectionId, {'inspection_photo': null});
+        await Supabase.instance.client.storage
+            .from('inspection-photos')
+            .remove([path]);
+      } catch (_) {/* 이미 없는 파일이면 무시 */}
+      await _api
+          .updateInspection(widget.inspectionId, {'inspection_photo': null});
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('기존 사진을 삭제했습니다. 다시 촬영하세요.')),
@@ -363,8 +374,12 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
           '기존 서명을 데이터베이스와 스토리지에서 모두 삭제하고 새로 등록합니다.\n계속하시겠습니까?',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('아니오')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('재등록')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('아니오')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('재등록')),
         ],
       ),
     );
@@ -372,9 +387,12 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
     final path = _inspection!.signatureImage!;
     try {
       try {
-        await Supabase.instance.client.storage.from('inspection-signatures').remove([path]);
-      } catch (_) { /* 이미 없는 파일이면 무시 */ }
-      await _api.updateInspection(widget.inspectionId, {'signature_image': null});
+        await Supabase.instance.client.storage
+            .from('inspection-signatures')
+            .remove([path]);
+      } catch (_) {/* 이미 없는 파일이면 무시 */}
+      await _api
+          .updateInspection(widget.inspectionId, {'signature_image': null});
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('기존 서명을 삭제했습니다. 다시 서명하세요.')),
@@ -402,8 +420,12 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
           '기존 실사 사진/서명/위치/메모/상태를 비우고 처음부터 다시 진행합니다.\n계속하시겠습니까?',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('아니오')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('진행')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('아니오')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('진행')),
         ],
       ),
     );
@@ -444,8 +466,12 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
           '관리자가 등록을 취소해야 다시 실사할 수 있습니다.\n\n계속하시겠습니까?',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('아니오')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('요청')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('아니오')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('요청')),
         ],
       ),
     );
@@ -478,8 +504,12 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
         title: const Text('등록 취소'),
         content: const Text('등록을 취소하면 다시 수정 가능 상태가 됩니다. 계속하시겠습니까?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('아니오')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('등록취소')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('아니오')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('등록취소')),
         ],
       ),
     );
@@ -526,7 +556,13 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
       final assetCode = _inspection?.assetCode ?? 'UNKNOWN';
       final roundNum = _inspection?.roundId ?? 0;
       final timestamp = DateFormat('yyyyMMdd_HHmm').format(now);
-      final storagePath = '$roundNum/photos/${assetCode}_detail_${timestamp}_$roundNum.jpg';
+      final authUid = supabase.auth.currentUser?.id;
+      if (authUid == null) {
+        throw Exception('로그인 세션을 확인할 수 없습니다.');
+      }
+      // Storage RLS requires the first path segment to be the caller UUID.
+      final storagePath =
+          '$authUid/$roundNum/photos/${assetCode}_detail_${timestamp}_$roundNum.jpg';
 
       final bytes = await photo.readAsBytes();
 
@@ -558,7 +594,9 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
       // 고아파일 삭제: Storage 업로드 성공 후 DB 실패 시
       if (uploadedPath != null) {
         try {
-          await supabase.storage.from('inspection-photos').remove([uploadedPath]);
+          await supabase.storage
+              .from('inspection-photos')
+              .remove([uploadedPath]);
         } catch (_) {}
       }
       if (mounted) {
@@ -656,7 +694,8 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
                 Expanded(
                   child: Text(
                     '진행 중인 실사가 없어 사진/서명을 등록할 수 없습니다.',
-                    style: theme.textTheme.bodySmall?.copyWith(color: Colors.orange),
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: Colors.orange),
                   ),
                 ),
               ],
@@ -697,13 +736,11 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _infoRow('자산번호',
-                    _asset?.assetUid ?? ins.assetAssetUid ?? '-'),
+                _infoRow('자산번호', _asset?.assetUid ?? ins.assetAssetUid ?? '-'),
                 _infoRow('건물', _asset?.building ?? ins.assetBuilding ?? '-'),
                 _infoRow('층', _asset?.floor ?? ins.assetFloor ?? '-'),
                 _infoLocationRow(),
-                _infoRow('실사용자',
-                    _asset?.userName ?? ins.assetUserName ?? '-'),
+                _infoRow('실사용자', _asset?.userName ?? ins.assetUserName ?? '-'),
                 _infoRow('실사용부서',
                     _asset?.userDepartment ?? ins.assetUserDepartment ?? '-'),
               ],
@@ -820,9 +857,8 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
                   .valueOrNull ??
               inspectionStatusOptions;
           return DropdownButtonFormField<String>(
-            value: statusList.contains(_statusCtrl.text)
-                ? _statusCtrl.text
-                : null,
+            value:
+                statusList.contains(_statusCtrl.text) ? _statusCtrl.text : null,
             decoration: const InputDecoration(
               labelText: '상태',
               border: OutlineInputBorder(),
@@ -881,8 +917,10 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
         LayoutBuilder(
           builder: (ctx, c) {
             final isWide = c.maxWidth >= 720;
-            final photoCard = _buildPhotoCard(theme, canCapture, isCompleted, readOnly);
-            final signatureCard = _buildSignatureCard(theme, canCapture, readOnly);
+            final photoCard =
+                _buildPhotoCard(theme, canCapture, isCompleted, readOnly);
+            final signatureCard =
+                _buildSignatureCard(theme, canCapture, readOnly);
             if (isWide) {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -963,15 +1001,11 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
               onPressed: null,
               icon: const Icon(Icons.check_circle),
               label: Text(
-                roundNumber != null
-                    ? '${roundNumber}차 등록 완료됨'
-                    : '실사 등록 완료됨',
+                roundNumber != null ? '${roundNumber}차 등록 완료됨' : '실사 등록 완료됨',
               ),
               style: FilledButton.styleFrom(
-                disabledBackgroundColor:
-                    theme.colorScheme.primaryContainer,
-                disabledForegroundColor:
-                    theme.colorScheme.onPrimaryContainer,
+                disabledBackgroundColor: theme.colorScheme.primaryContainer,
+                disabledForegroundColor: theme.colorScheme.onPrimaryContainer,
               ),
             ),
           ),
@@ -1121,8 +1155,7 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
                   Icon(Icons.photo_camera,
                       size: 32, color: theme.colorScheme.outline),
                   const SizedBox(height: 8),
-                  Text('사진이 등록되지 않았습니다.',
-                      style: theme.textTheme.bodySmall),
+                  Text('사진이 등록되지 않았습니다.', style: theme.textTheme.bodySmall),
                 ],
               ),
             ),
@@ -1133,8 +1166,7 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
               child: SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed:
-                      _isUploadingPhoto ? null : _captureAndUploadPhoto,
+                  onPressed: _isUploadingPhoto ? null : _captureAndUploadPhoto,
                   icon: _isUploadingPhoto
                       ? const SizedBox(
                           width: 18,
@@ -1167,8 +1199,7 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
     );
   }
 
-  Widget _buildSignatureCard(
-      ThemeData theme, bool canCapture, bool readOnly) {
+  Widget _buildSignatureCard(ThemeData theme, bool canCapture, bool readOnly) {
     final has = _signatureSignedUrl != null;
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -1222,11 +1253,9 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
               padding: const EdgeInsets.all(24),
               child: Column(
                 children: [
-                  Icon(Icons.draw,
-                      size: 32, color: theme.colorScheme.outline),
+                  Icon(Icons.draw, size: 32, color: theme.colorScheme.outline),
                   const SizedBox(height: 8),
-                  Text('서명이 등록되지 않았습니다.',
-                      style: theme.textTheme.bodySmall),
+                  Text('서명이 등록되지 않았습니다.', style: theme.textTheme.bodySmall),
                 ],
               ),
             ),
@@ -1293,8 +1322,8 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
             ),
           ),
           Expanded(
-            child: Text(_assetLocationLabel(),
-                style: theme.textTheme.bodyMedium),
+            child:
+                Text(_assetLocationLabel(), style: theme.textTheme.bodyMedium),
           ),
           TextButton.icon(
             onPressed: canPreview ? _showDrawingPreview : null,
@@ -1323,7 +1352,7 @@ class _InspectionDetailPageState extends ConsumerState<InspectionDetailPage> {
 }
 
 /// 자산 위치를 도면 위에 표시하는 팝업 — 줌/팬 + 빨간 셀 박스 + 닫기 버튼
-class _DrawingPreviewDialog extends StatelessWidget {
+class _DrawingPreviewDialog extends StatefulWidget {
   final Drawing drawing;
   final int row;
   final int col;
@@ -1335,13 +1364,52 @@ class _DrawingPreviewDialog extends StatelessWidget {
   });
 
   @override
+  State<_DrawingPreviewDialog> createState() => _DrawingPreviewDialogState();
+}
+
+class _DrawingPreviewDialogState extends State<_DrawingPreviewDialog> {
+  String? _imageSignedUrl;
+  bool _isImageUrlLoading = true;
+  bool _imageUrlLoadFailed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadImageSignedUrl();
+  }
+
+  Future<void> _loadImageSignedUrl() async {
+    final drawingFile = widget.drawing.drawingFile;
+    if (drawingFile == null || drawingFile.isEmpty) {
+      if (mounted) setState(() => _isImageUrlLoading = false);
+      return;
+    }
+
+    String? signedUrl;
+    var loadFailed = false;
+    try {
+      signedUrl = await supabase.storage
+          .from('drawing-images')
+          .createSignedUrl(drawingFile, 3600);
+    } catch (_) {
+      loadFailed = true;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _imageSignedUrl = signedUrl;
+      _imageUrlLoadFailed = loadFailed;
+      _isImageUrlLoading = false;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final drawing = widget.drawing;
+    final row = widget.row;
+    final col = widget.col;
     final theme = Theme.of(context);
-    final url = drawing.drawingFile != null
-        ? supabase.storage
-            .from('drawing-images')
-            .getPublicUrl(drawing.drawingFile!)
-        : null;
+    final hasDrawingImage = drawing.drawingFile?.isNotEmpty ?? false;
 
     return Dialog(
       insetPadding: const EdgeInsets.all(16),
@@ -1394,28 +1462,52 @@ class _DrawingPreviewDialog extends StatelessWidget {
                       height: gridH,
                       child: Stack(
                         children: [
-                          if (url != null)
+                          if (hasDrawingImage)
                             Positioned.fill(
-                              child: CachedNetworkImage(
-                                imageUrl: url,
-                                fit: BoxFit.fill,
-                                placeholder: (_, __) => const Center(
-                                  child: CircularProgressIndicator(),
-                                ),
-                                errorWidget: (_, __, ___) => Center(
-                                  child: Icon(Icons.broken_image,
-                                      size: 48,
-                                      color: theme.colorScheme.outline),
-                                ),
-                              ),
+                              child: _isImageUrlLoading
+                                  ? const Center(
+                                      child: CircularProgressIndicator())
+                                  : _imageSignedUrl != null
+                                      ? CachedNetworkImage(
+                                          imageUrl: _imageSignedUrl!,
+                                          fit: BoxFit.fill,
+                                          placeholder: (_, __) => const Center(
+                                            child: CircularProgressIndicator(),
+                                          ),
+                                          errorWidget: (_, __, ___) => Center(
+                                            child: Icon(Icons.broken_image,
+                                                size: 48,
+                                                color:
+                                                    theme.colorScheme.outline),
+                                          ),
+                                        )
+                                      : Center(
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.broken_image,
+                                                  size: 48,
+                                                  color: theme
+                                                      .colorScheme.outline),
+                                              const SizedBox(height: 8),
+                                              Text(
+                                                _imageUrlLoadFailed
+                                                    ? '이미지를 불러올 수 없습니다.'
+                                                    : '이미지 URL을 준비하는 중입니다.',
+                                                style:
+                                                    theme.textTheme.bodySmall,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
                             )
                           else
                             Positioned.fill(
                               child: Container(
-                                color: theme
-                                    .colorScheme.surfaceContainerHighest,
-                                child: const Center(
-                                    child: Text('도면 이미지가 없습니다.')),
+                                color:
+                                    theme.colorScheme.surfaceContainerHighest,
+                                child:
+                                    const Center(child: Text('도면 이미지가 없습니다.')),
                               ),
                             ),
                           Positioned(
@@ -1426,8 +1518,7 @@ class _DrawingPreviewDialog extends StatelessWidget {
                             child: Container(
                               decoration: BoxDecoration(
                                 color: Colors.red.withValues(alpha: 0.35),
-                                border:
-                                    Border.all(color: Colors.red, width: 2),
+                                border: Border.all(color: Colors.red, width: 2),
                               ),
                             ),
                           ),
@@ -1455,4 +1546,3 @@ class _DrawingPreviewDialog extends StatelessWidget {
     );
   }
 }
-

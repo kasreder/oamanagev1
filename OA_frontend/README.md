@@ -27,20 +27,21 @@
 OA 자산의 효율적인 관리 및 실사를 위한 웹/모바일 통합 애플리케이션 개발
 
 ### 1.2 주요 기능
-본 시스템은 다음 **다섯 가지 핵심 기능**을 제공합니다:
+본 시스템은 다음 핵심 기능을 제공합니다:
 
 #### 1) 자산관리
 - **자산 등록**: 신규 OA 자산 정보 입력 및 QR 코드 생성
 - **자산 변경**: 기존 자산 정보 수정 (위치, 담당자, 상태 등)
 - **자산 삭제**: 폐기/이관된 자산 삭제 처리
-- **자산 유형별 관리**: 데스크탑, 모니터, 노트북, IP전화기, 스캐너, 프린터, 태블릿, 테스트폰, 네트워크장비, 서버, 웨어러블, 특수목적장비
+- **자산 유형별 관리**: 데스크탑, 모니터, 노트북, IP전화기, 스캐너, 프린터, 태블릿, 테스트폰, 네트워크장비, 서버, 웨어러블, 특수목적장비, 현장업무 태블릿, 법인폰 (`constants.dart` `assetCategories` 14종)
+  > ⚠️ DB `assets.category` CHECK는 아직 앞의 12종만 허용합니다(`20240201000002`). 현장업무 태블릿·법인폰 저장 시 CHECK 위반이 날 수 있으므로 CHECK 확장 마이그레이션이 필요합니다.
 
 #### 2) 자산실사
 - **위치 정보 관리**: 건물, 층수, 자리번호 기반 자산 위치 추적
 - **QR 촬영 확인**: 모바일/웹 카메라를 통한 QR 스캔으로 자산 실사 (웹 카메라 실패 시 수동 입력 폴백)
 - **실사 사인**: 실사 담당자 친필 서명 기능으로 책임 소재 명확화
 - **전사 실사 라운드(차수) 관리**: 관리자 그룹이 년도별 실사 차수 생성/시작/종료, 라운드 활성 시에만 촬영 가능
-- **역할 기반 권한**: admin(관리자), operator1/2(운영자), user(사용자) — 관리자 그룹만 차수 관리 및 완료건 수정
+- **역할 기반 권한**: admin(관리자), operator1/2(운영자), user(사용자) — 관리자 그룹은 차수 관리, 완료·잠금건 수정과 초기화는 admin만
 - **실사 기록 저장**: 실사 일시, 담당자, 자산 상태, 서명 이미지 등 이력 관리, 고아파일 자동 삭제
 
 #### 3) 도면 관리
@@ -56,18 +57,27 @@ OA 자산의 효율적인 관리 및 실사를 위한 웹/모바일 통합 애�
 #### 5) 에이전트 실시간 연동
 - **Postgres Changes 구독**: 에이전트 Heartbeat로 변경된 `assets` 데이터를 폴링 없이 즉시 반영
 - **에이전트 접속 상태 (Presence)**: 에이전트 WebSocket 접속 여부를 실시간 추적 → 이중 인디케이터 표시
-- **관리자 명령 전송 (Broadcast)**: 특정 기기에 "즉시 Heartbeat", "시스템 정보 갱신" 명령 전송
-- **에이전트 알림 수신 (Broadcast)**: 배터리 부족, 네트워크 변경 등 긴급 알림 SnackBar 표시
+- **관리자 명령 전송 (Broadcast)**: 관리자 그룹이 특정 기기에 "즉시 Heartbeat", "시스템 정보 갱신" 명령 전송
+- **운영 알림 수신 (Broadcast)**: 관리자 그룹만 `agent-alerts:global` 구독 (에이전트는 전역 알림을 발신하지 않음)
+- ⛔ **현재 상태**: 보안 실행서에 따라 에이전트 RPC(heartbeat·사용자 확인·수령 확인) 실행 권한이 회수되어 있어, 기기별 신원 재도입 전까지 에이전트 데이터 갱신은 멈춰 있습니다 (백엔드 README 9.6).
 - **사용자 확인 상태**: 에이전트 사용자 확인 결과 (`verified`/`mismatch`) 자산 목록/상세에 표시
 - **자산 배정 수령 상태**: 배정 수령 확인 결과 (`pending`/`confirmed`) 자산 목록/상세에 배지 표시
+
+#### 6) 인수증 (2026-09)
+- **인수증 작성/조회/인쇄**: 거래처·발송업체·인수업체, 항목·금액, 서명 3종(거래처/헬프데스크/IT기획팀), PDF 인쇄 (`printing`, `pdf`)
+- **거래처 관리**: 로고·양식 변형 관리 (`/admin/vendors`)
+- **접근**: 관리자 그룹 메뉴에만 노출
+
+#### 7) 관리자 설정 (`/admin/settings`)
+- 시스템 설정, 유저 정보(프로필·사번·비밀번호), 아이디 생성, 권한 관리(마스터 전용), 메뉴권한, 입고증 양식, 세부선택(드롭다운 옵션)
 
 ---
 
 ## 2. 기술 스택
 
 ### 2.1 개발 환경
-- **Framework**: Flutter 3.22.x 이상
-- **Language**: Dart 3.4+
+- **Framework**: Flutter 3.41.x (현재 3.41.2 — 로컬 `/opt/flutter`, Docker 빌드 `ghcr.io/cirruslabs/flutter:stable`)
+- **Language**: Dart 3.11.x (`pubspec.lock` 기준 Dart ≥3.9, Flutter ≥3.27 필요)
 - **IDE**: VSCode / Android Studio
 
 ### 2.2 주요 패키지
@@ -85,6 +95,9 @@ OA 자산의 효율적인 관리 및 실사를 위한 웹/모바일 통합 애�
 | `flutter_slidable` | ^3.0.0 | 리스트 항목 슬라이드 액션 |
 | `image_picker` | ^1.0.0 | 이미지 선택 및 카메라 촬영 |
 | `google_mlkit_text_recognition` | ^0.13.0 | 디바이스 라벨 OCR (모바일, 온디바이스) |
+| `printing` | ^5.13.0 | 인수증 인쇄/PDF 미리보기 |
+| `pdf` | ^3.11.0 | 인수증 PDF 생성 |
+| `audioplayers` | ^6.0.0 | 스캔 피드백 사운드 |
 | `path_provider` | ^2.1.0 | 로컬 파일 저장 경로 |
 | `shared_preferences` | ^2.2.0 | 로컬 설정 저장 |
 | `intl` | ^0.19.0 | 날짜/시간 포맷팅 |
@@ -111,47 +124,41 @@ OA 자산의 효율적인 관리 및 실사를 위한 웹/모바일 통합 애�
 ### 3.1 디렉토리 구조
 ```
 lib/
-├── main.dart                      # 앱 진입점 (ProviderScope 설정)
-├── app_router.dart                # GoRouter 라우팅 설정
-├── theme.dart                     # 라이트/다크 테마 설정 (Material 3)
-├── models/                        # 데이터 모델
-│   ├── asset.dart                 # 자산 모델
-│   ├── user.dart                  # 사용자 모델
-│   ├── asset_inspection.dart      # 실사 기록 모델
-│   ├── auth_state.dart            # 인증 상태 모델 (토큰, 로그인 사용자 정보)
-│   └── drawing.dart               # 도면 모델 (건물/층/격자 정보)
-├── notifiers/                     # Riverpod 상태 관리
-│   ├── asset_notifier.dart        # 자산 상태 관리
-│   ├── inspection_notifier.dart   # 실사 상태 관리
-│   ├── signature_notifier.dart    # 서명 상태 관리
-│   ├── drawing_notifier.dart      # 도면 상태 관리
-│   ├── auth_notifier.dart         # 인증/토큰 상태 관리
-│   ├── agent_presence_notifier.dart  # 에이전트 Presence 상태 관리
-│   └── agent_alert_notifier.dart     # 에이전트 Broadcast 알림 관리
-├── screens/                       # 화면 UI
-│   ├── home_page.dart             # 홈 대시보드
-│   ├── login_page.dart            # 로그인 화면
-│   ├── scan_page.dart             # QR 스캔 화면
-│   ├── asset_list_page.dart       # 자산 목록 (건물별/부서별 그룹화)
-│   ├── asset_detail_page.dart     # 자산 상세 및 편집
-│   ├── inspection_list_page.dart  # 실사 기록 목록
-│   ├── inspection_detail_page.dart # 실사 상세 화면
-│   ├── signature_page.dart        # 친필 서명 화면
-│   ├── drawing_manager_page.dart  # 도면 관리 화면 (추가/삭제)
-│   ├── drawing_viewer_page.dart   # 도면 뷰어 (격자+자산위치)
-│   └── unverified_page.dart       # 미검증 자산 목록
-├── widgets/                       # 재사용 컴포넌트
-│   ├── common/                    # 공통 위젯
-│   ├── signature_pad.dart         # 서명 패드 위젯
-│   ├── grouped_asset_list.dart    # 그룹화된 자산 리스트
-│   ├── drawing_grid_overlay.dart  # 도면 격자 오버레이
-│   └── asset_marker.dart          # 도면 위 자산 마커
-└── services/                      # API 통신 레이어
-    ├── api_service.dart           # Supabase 기반 API 서비스 (PostgREST)
-    ├── auth_service.dart          # 로그인/토큰 갱신/로그아웃 API
-    ├── realtime_service.dart      # Supabase Realtime 구독 관리 (Postgres Changes, Broadcast, Presence)
-    ├── signature_service.dart     # 서명 이미지 저장/로드
-    └── drawing_service.dart       # 도면 이미지 업로드/다운로드
+├── main.dart                      # 앱 진입점 (Supabase 초기화, ProviderScope)
+├── app_router.dart                # GoRouter 라우팅 (인증 가드, 비밀번호 강제 변경 리다이렉트)
+├── theme.dart                     # 라이트/다크 테마 + 지급형태별 색상
+├── constants.dart                 # 카테고리, 지급형태, 옵션, assetUidRegex 등
+├── models/
+│   ├── asset.dart / asset_inspection.dart / inspection_round.dart
+│   ├── user.dart                  # 역할, isAdminGroup, isMasterAdmin
+│   ├── auth_state.dart / drawing.dart / search_condition.dart
+│   └── receipt.dart / vendor.dart # 인수증
+├── notifiers/
+│   ├── auth_notifier.dart / asset_notifier.dart / inspection_notifier.dart
+│   ├── drawing_notifier.dart / signature_notifier.dart
+│   ├── agent_presence_notifier.dart / agent_alert_notifier.dart
+│   ├── dropdown_options_provider.dart  # dropdown_options 테이블
+│   └── menu_visibility_provider.dart   # menu_permissions 테이블
+├── screens/
+│   ├── login_page.dart / change_password_page.dart
+│   ├── home_page.dart / scan_page.dart
+│   ├── asset_list_page.dart / asset_detail_page.dart
+│   ├── inspection_list_page.dart / inspection_detail_page.dart / signature_page.dart
+│   ├── drawing_manager_page.dart / drawing_viewer_page.dart
+│   ├── receipt_list_page.dart / receipt_detail_page.dart / vendor_manager_page.dart
+│   └── admin_settings_page.dart   # 관리자 설정 (탭 7종)
+├── widgets/
+│   ├── common/                    # app_scaffold, asset_uid_guide_dialog 등
+│   ├── asset_cell_card.dart / asset_marker.dart / asset_search_dialog.dart
+│   ├── drawing_grid_overlay.dart / grouped_asset_list.dart
+│   └── receipt_items_editor.dart / signature_pad.dart
+├── services/
+│   ├── api_service.dart / auth_service.dart / realtime_service.dart
+│   └── signature_service.dart / drawing_service.dart
+└── utils/
+    ├── label_ocr*.dart            # OCR (모바일 ML Kit / 웹 Tesseract.js)
+    ├── csv_downloader_*.dart / receipt_printer.dart
+    └── category_icons.dart / os_security.dart / scan_feedback.dart / temp_file_cleaner.dart
 ```
 
 ### 3.2 상태 관리 패턴
@@ -171,7 +178,7 @@ lib/
 
 - **리스트 구조**:
   - 자산번호(asset_uid) 기준 정렬, 한 줄에 한 자산
-  - **공통 표시 항목**: 자산번호 | 자산명 | 유형(category) | 상태 | 지급형태 | 건물/층
+  - **공통 표시 항목**: 자산번호 | 자산명 | 유형(category) | 지급형태(= 상태) | 건물/층
   - **유형별 추가 표시 항목** (유형 필터 선택 시 해당 컬럼 동적 추가):
 
 | 유형 | 추가 표시 항목 |
@@ -198,7 +205,7 @@ lib/
 | 1 | `id` | ID | 80 |
 | 2 | `asset_uid` | 자산번호 | 170 |
 | 3 | `name` | 자산명 | 230 |
-| 4 | `assets_status` | 상태 | 130 |
+| 4 | ~~`assets_status`~~ | (2026-06-14 삭제 — "상태"는 `supply_type`) | — |
 | 5 | `supply_type` | 지급형태 | 130 |
 | 6 | `supply_end_date` | 지급만료일 | 170 |
 | 7 | `category` | 유형 | 130 |
@@ -238,42 +245,38 @@ lib/
   - 상세 페이지에서 공통 정보 + 유형별 specifications 확인
   - 인라인 편집 모드 전환 가능
 - **필터**:
-  - 상단 필터바: 유형별, 상태별 드롭다운 필터
+  - 상단 필터바: 유형별, 지급형태별 드롭다운 필터
   - 정렬: id 내림차순 고정
 - **검색**: 자산번호, 자산명, 시리얼번호, 사용자명으로 즉시 검색
 
 #### 4.1.2 자산 등록
 - 자산 정보 입력 폼 → 서버 전송 → QR 코드 생성 및 다운로드
-- 지급형태(`supply_type`) 선택: 지급 / 렌탈 / 대여 / 창고(대기) / 창고(점검)
+- 지급형태(`supply_type`) 선택: 지급 / 렌탈 / 대여 / 이동 / 창고(대기) / 창고(점검) / 폐기 / 도급 / 개인 (렌탈·대여·도급·개인은 만료일 필수)
 - 유형(category) 선택 시 해당 specifications 입력 폼 동적 표시
 - 담당 정보 입력: `소유자명/소유자부서`, `사용자명/사용자부서`, `관리자명/관리자부서`
-- **자산번호(`asset_uid`) 부여 기준**
-  - 기준 형식: `등록경로(대문자 1자리) + 등록장비(대문자 2자리) + 숫자 5자리`
-  - 검증 정규식: `^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD|SM)[0-9]{5}$`
-  - 예시: `BDT00001`, `RNB00027`, `CSV10342`
+- **자산번호(`asset_uid`) 부여 기준** (앱바 ? 버튼 → `asset_uid_guide_dialog.dart`, 두 형식 코드표)
+  - **두 형식 모두 등록 가능** (2026-10-11~)
+    - ① 현재기준: `영문 대문자 1~2자리 + 숫자 4~5자리` — 예: `D00001`, `TP0012`, `EH0003`
+    - ② 변경후: `등록경로 1자리 + 장비코드 2자리 + 숫자 5자리` — 예: `BDT00001`, `STP22222`
+  - 검증 정규식 (`constants.dart` `assetUidRegex`, DB CHECK·트리거와 동일):
+    `^([A-Z]{1,2}[0-9]{4,5}|(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD|TP|ET|EH)[0-9]{5})$`
+  - QR 스캔(`scan_page.dart`)과 자산 등록(`asset_detail_page.dart`)이 같은 정규식을 사용
 
-| 등록경로 | 코드 | 의미 |
-|------|------|------|
-| Buy | `B` | 구매 |
-| Rental | `R` | 렌탈 |
-| Contact | `C` | 계약 |
-| Lease | `L` | 리스 |
-| Spot | `S` | 스팟 |
+① 현재기준 코드
 
-| 등록장비 | 코드 | 의미 |
+| 코드 | 설명 | 코드 | 설명 |
+|------|------|------|------|
+| `D` | 데스크탑 | `C` | IP전화기 |
+| `N` | 노트북 | `TP` | 테스트폰 |
+| `T` | 태블릿 | `EH` | 법인폰 |
+| `M` | 모니터 | `ET` | 현장업무 태블릿 |
+| `S` | 스캐너 | `P` | 프린터 |
+
+② 변경후 코드
+
+| 등록경로 | 의미 | 장비코드 |
 |------|------|------|
-| DeskTop (iMac 포함) | `DT` | 데스크탑 |
-| NoteBook | `NB` | 노트북 |
-| MoNitor | `MN` | 모니터 |
-| PRinter | `PR` | 프린터 |
-| TaBlet | `TB` | 태블릿 |
-| SCanner | `SC` | 스캐너 |
-| IP Phone | `IP` | IP 전화기 |
-| NetWork | `NW` | 네트워크 장비 |
-| SerVer | `SV` | 서버 |
-| Wearable | `WR` | 웨어러블 |
-| SpecialDevice | `SD` | 특수목적장비 |
-| SMartphone | `SM` | 테스트폰 |
+| `B` / `R` / `C` / `L` / `S` | 구매 / 임대 / 도급 / 대여 / 지원 | `DT` 데스크탑, `NB` 노트북, `MN` 모니터, `PR` 프린터, `TB` 태블릿, `SC` 스캐너, `IP` IP전화기, `NW` 네트워크장비, `SV` 서버, `WR` 무선라우터, `SD` 스토리지, `TP` 테스트폰, `ET` 현장업무 태블릿, `EH` 법인폰 |
 
 #### 4.1.3 자산 수정
 - 상세 페이지에서 편집 버튼 클릭 → 인라인 편집 모드
@@ -282,7 +285,7 @@ lib/
 
 #### 4.1.4 자산 삭제
 - 삭제 확인 다이얼로그 → 서버 DELETE 요청
-- 관련 실사 기록 존재 시 경고 표시
+- 관련 실사 기록 존재 시 경고 표시 (DB RLS도 실사 기록이 있는 자산 삭제를 거부, 관리자 그룹만 삭제 가능)
 
 ### 4.2 자산 실사
 
@@ -300,7 +303,7 @@ lib/
    - **친필 서명**: Signature Pad로 담당자 서명 입력 (펜 두께 3px)
    - 서명 이미지 자동 저장 (PNG 포맷)
 5. 서버 동기화 (온라인) 또는 로컬 저장 (오프라인)
-6. **사진 저장 경로**: `{round}/photos/{assetCode}_{page}_{timestamp}_{round}.jpg`
+6. **사진 저장 경로**: `<auth_uid>/{round}/photos/{assetCode}_{page}_{timestamp}_{round}.jpg` (첫 폴더는 업로더 Auth UUID — Storage RLS가 강제)
    - Storage 업로드 성공 → DB 실패 시 **고아파일 자동 삭제**
    - 임시 파일 자동 정리 (`TempFileCleaner`)
 
@@ -309,9 +312,10 @@ lib/
 
 - **라운드 상태 흐름**: `draft`(대기) → `active`(진행중) → `closed`(종료)
 - **동시 진행 제한**: active 라운드는 1개만 허용
-- **권한**: 관리자 그룹만 생성/시작/종료 가능, 일반 사용자는 조회만
-- **실사 연동**: 라운드가 active일 때만 일반 사용자가 사진/서명 등록 가능 (관리자 그룹은 항상 가능)
-- **사진 저장 경로**: 라운드 번호가 경로에 포함 (`{round}/photos/...`)
+- **권한**: 관리자 그룹은 생성/시작/종료, admin은 재오픈/삭제. 일반 사용자는 조회만
+- **자동 생성**: 라운드 시작 시 모든 자산에 대해 실사 행이 자동 생성됨
+- **실사 연동**: 라운드가 active이고 **본인에게 배정된 자산**일 때만 일반 사용자가 입력 가능 (admin은 항상 가능)
+- **사진 저장 경로**: `<auth_uid>/{round}/photos/...` (라운드 번호 포함)
 
 #### 4.2.3 실사 기록 목록 (리스트)
 > 실사 이력을 리스트 형식으로 조회하는 화면
@@ -341,9 +345,11 @@ lib/
 - **연결 동선**: 실사 목록에서 실사 자산 선택 → 실사 상세(`/inspection/:id`) 이동
 - **자산 이동**: 실사 상세에서 [자산 상세 보기] → 자산 상세(`/asset/:id`) 이동
 - **완료 조건**: 5개 필드 모두 NOT NULL (건물, 층, 위치, 사진, 서명)
-- **수정 권한**:
-  - 일반사용자: 완료된 실사 수정 불가 + 라운드가 active일 때만 사진/서명 등록 가능
-  - 관리자 그룹: 완료 여부/라운드 상태와 무관하게 항상 수정 가능
+- **수정 권한** (백엔드 README 5.4):
+  - 일반사용자: 활성 라운드 + 본인 배정 자산 + 미완료 + 미잠금 건만. 처음 수정하면 본인 소유로 귀속되어 다른 사람은 수정 불가
+  - admin: 완료·잠금 여부와 라운드 상태 무관하게 항상 수정 가능
+  - operator1/2: 조회만 (실사 수정·초기화 불가)
+- **재실사 요청**: `request_inspection_recheck` RPC → 알림(`recheck_request`) 생성
 - **실사초기화**: 관리자만 실행 가능, 상태/사진/서명/메모를 초기화 후 재실사 상태로 전환
 - **에러 메시지**: 모든 에러 SnackBar는 `SelectableText`로 표시 (복사 가능)
 
@@ -410,7 +416,7 @@ lib/
 
 | 타이밍 | 동작 |
 |--------|------|
-| 인증 성공 후 | `RealtimeService.subscribeAll()` — 모든 채널 구독 시작 |
+| 인증 성공 후 | `RealtimeService.subscribeAll(isAdminGroup: ...)` — Postgres Changes는 전원, Presence·운영 알림은 관리자 그룹만 구독. 모든 채널은 `private: true` |
 | 로그아웃 시 | `RealtimeService.unsubscribeAll()` — 모든 채널 구독 해제 |
 
 #### 4.6.2 Postgres Changes 구독
@@ -519,51 +525,40 @@ Future<void> _requestForceVerify() async {
 }
 ```
 
-- 권한: `is_admin()` (admin role 전체). RLS와 무관하게 RPC 권한 체크
+- 권한: `is_admin()` (role=admin). RPC 내부에서 권한 재확인
 - 부수효과:
   1. `assets.verification_status=NULL`, `last_verified_at=NULL`, `specifications.user_mismatch` 제거
   2. `notifications`에 row 1건 자동 INSERT
 - 에이전트 측: Realtime postgres_changes 구독 (filter=asset_uid=eq.자기자산) → 안드로이드 시스템 알림(`admin_alert_channel`)
 - 자동 트리거: **마스터 관리자**가 자산 상세에서 `user_name`을 수정·저장하면 별도 버튼 클릭 없이 동일 효과 발생 (백엔드 README 9.9.2 참고)
 
-#### 4.6.5.2 마스터 관리자 지정 (admin 전용)
+#### 4.6.5.2 마스터 관리자 지정 (마스터 전용)
 
-- 위치: 에이전트 설정 페이지 → "마스터 관리자" 카드
-- UI: 현재 마스터 수 `N / 4` 표시 + admin role 사용자별 SwitchListTile
-- 호출:
+- 위치: 관리자 설정(`/admin/settings`) → "권한 관리" 탭 (마스터 관리자에게만 노출)
+- UI: 현재 마스터 수 `N / 4` 표시 + admin role 사용자별 토글
+- 호출 (클라이언트의 `users` 직접 UPDATE 권한은 없음):
   ```dart
-  await Supabase.instance.client
-      .from('users')
-      .update({'is_master_admin': value})
-      .eq('employee_id', employeeId);
+  await Supabase.instance.client.rpc('admin_set_master_admin', params: {
+    'p_employee_id': employeeId,
+    'p_is_master': value,
+  });
   ```
-- 한도 초과 시 SwitchListTile 비활성화 + "한도 초과로 추가 지정 불가" subtitle
-- 백엔드 트리거가 마지막 한도/role 강제 → 위반 시 `PostgrestException` SnackBar 노출
+- 서버 제약: 마스터만 호출 가능, role=admin만 지정, 최대 4명, 마지막 마스터 해제 불가 → 위반 시 `PostgrestException` SnackBar 노출
 
-#### 4.6.6 에이전트 알림 수신 (Broadcast)
-`agent-alerts:global` 채널을 구독하여 에이전트가 발생시킨 긴급 알림을 수신합니다.
+#### 4.6.6 운영 알림 수신 (Broadcast, 관리자 그룹 전용)
+`agent-alerts:global` 채널은 **관리자 그룹만** 참여할 수 있습니다 (Realtime 정책 `oa_realtime_alerts_read_admin`). 에이전트는 이 채널에 발신하지 않으며, 배터리·네트워크 상태는 Heartbeat(`specifications.device_status`)로 전달됩니다.
 
 ```dart
-final alertChannel = supabase.channel('agent-alerts:global')
-  .onBroadcast(
-    event: 'alert',
-    callback: (payload) {
-      ref.read(agentAlertNotifierProvider.notifier).addAlert(payload);
-      // SnackBar 또는 Toast로 즉시 표시
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${payload['asset_uid']}: ${payload['message']}')),
-      );
-    },
-  )
-  .subscribe();
+final alertChannel = supabase.channel(
+  'agent-alerts:global',
+  opts: const RealtimeChannelConfig(private: true),
+).onBroadcast(
+  event: 'alert',
+  callback: (payload) {
+    ref.read(agentAlertNotifierProvider.notifier).addAlert(payload);
+  },
+).subscribe();
 ```
-
-| alert_type | SnackBar 표시 |
-|------------|--------------|
-| `battery_low` | "BDT00001: 배터리 15% 이하" (경고색) |
-| `network_changed` | "BDT00001: 네트워크 변경됨" (정보색) |
-| `agent_started` | "BDT00001: 에이전트 시작됨" (성공색) |
-| `agent_stopped` | "BDT00001: 에이전트 종료됨" (경고색) |
 
 #### 4.6.7 사용자 확인 상태 표시
 
@@ -624,8 +619,11 @@ final alertChannel = supabase.channel('agent-alerts:global')
 | 친필 서명 | `/signature` | 친필 서명 입력 (실사 상세에서 "사인하기" 버튼으로 진입) |
 | **도면 관리** | `/drawings` | 건물/층별 도면 등록/관리 (새 지역 등록) |
 | **도면 뷰어** | `/drawing/:id` | 도면 이미지 + 격자 + 자산 마커 뷰어 |
-| 미검증 자산 | `/unverified` | 실사 미완료 자산 목록 (자산 목록에서 진입) |
-| **에이전트 설정** | (Drawer 메뉴) | admin 전용. Heartbeat 주기, **마스터 관리자 4명 토글**, 기타 agent_settings 편집 |
+| 인수증 목록 | `/receipts` | 인수증 목록 (관리자 그룹 메뉴) |
+| 인수증 작성/상세 | `/receipt/new`, `/receipt/:id` | 인수증 작성·수정·인쇄 |
+| 거래처 관리 | `/admin/vendors` | 거래처 마스터 (관리자 그룹) |
+| 관리자 설정 | `/admin/settings` | 시스템 설정·유저 정보·아이디 생성·권한 관리(마스터)·메뉴권한·입고증 양식·세부선택 |
+| 비밀번호 변경 | `/change-password` | `must_change_password = true`인 사용자는 로그인 후 강제 이동 |
 
 > **공통 사항**: 로그인 화면을 제외한 **모든 페이지**에 네비게이션(BottomNavigationBar 또는 NavigationRail)과 Drawer가 기본 포함됩니다.
 
@@ -642,15 +640,10 @@ final alertChannel = supabase.channel('agent-alerts:global')
 
 - 사번/비밀번호 로그인: `POST /api/auth/login`
 - SNS 로그인: OAuth 2.0 기반 (카카오 SDK, Google Sign-In)
-- 로그인 성공 → Access/Refresh Token 발급 → 홈(`/`) 이동
+- 로그인 성공 → Access/Refresh Token 발급 → 홈(`/`) 이동. 단 `must_change_password = true`면 `/change-password`로 리다이렉트
 
-**테스트 계정** (`supabase db reset` 시 시드로 자동 생성):
-
-| 항목 | 값 |
-|------|-----|
-| 사번(ID) | `temp01` |
-| 비밀번호 | `temp1234!` |
-| 로그인 이메일(내부 변환) | `temp01@oamanager.internal` |
+**계정 프로비저닝**: `supabase db reset`은 로그인 계정을 생성하지 않습니다.
+관리자가 발급한 무작위 일회용 임시 비밀번호만 안전한 채널로 전달합니다.
 
 #### 5.1.2 홈 (`/`)
 > 대시보드 — 주요 현황을 한눈에 파악
@@ -844,49 +837,33 @@ final alertChannel = supabase.channel('agent-alerts:global')
 - **확인**: 서명 이미지를 PNG 포맷으로 변환 → `POST /api/inspections/:id/signature`로 Storage 업로드 → 실사 상세 화면으로 복귀 (서명 이미지 자동 반영)
 - **뒤로 가기**: 서명 없이 복귀 시 "서명을 저장하지 않고 나가시겠습니까?" 확인 다이얼로그
 
-#### 5.1.10 미검증 자산 (`/unverified`)
-> 실사가 완료되지 않은 자산만 필터링하여 표시하는 목록 화면
-
-| 영역 | 내용 |
-|------|------|
-| 상단 | "미검증 자산" 타이틀 + 미검증 자산 수 뱃지 |
-| 검색 | 검색창 (자산번호/자산명/시리얼번호) + **검색** 버튼 |
-| 필터바 | 유형별, 건물별 드롭다운 필터 |
-| 리스트 | 미검증 자산 리스트 (6.6 리스트 목록 스타일 적용) |
-| 하단 | 페이지네이션 (페이지 번호 버튼, 이전/다음) |
-
-- **진입 경로**: 자산 목록(`/assets`)의 **[미검증 자산]** 버튼 또는 Drawer 메뉴
-- **미검증 기준**: 해당 자산의 실사 기록 중 완료 상태(위치+사진+서명 모두 존재)인 건이 없는 자산
-- **30건 단위** 페이지네이션
-- 리스트 행 표시: 자산번호 | 자산명 | 유형 | 상태 | 건물/층 | 최종 실사일
-- **친필서명**: O / X 아이콘으로 유무만 표시
-- **실사사진**: O / X 아이콘으로 유무만 표시
-- 행 클릭 → 자산 상세(`/asset/:id`) 이동
-- 자산 상세에서 **[실사 등록]** 버튼으로 바로 실사 진행 가능
+#### 5.1.10 미검증 자산 (폐지)
+> `/unverified` 화면과 `unverified_page.dart`는 현재 코드에 없습니다. 미완료 실사는 실사 목록(`/inspections`)의 상태 필터로 확인합니다.
 
 ### 5.2 네비게이션
 
 #### 공통 메뉴 항목
-| 순서 | 아이콘 | 라벨 | 라우트 | 설명 |
-|------|--------|------|--------|------|
-| 1 | Home | 홈 | `/` | 대시보드 (자산 현황, 실사 진행률) |
-| 2 | QrCodeScanner | 스캔 | `/scan` | QR 코드 스캔 실사 |
-| 3 | ListAlt | 자산 목록 | `/assets` | 자산번호 기준 리스트 조회 |
-| 4 | FactCheck | 실사 목록 | `/inspections` | 실사 기록 목록 |
-| 5 | Map | 도면 | `/drawings` | 건물/층별 도면 관리 |
+| 순서 | 아이콘 | 라벨 | 라우트 | 노출 조건 |
+|------|--------|------|--------|----------|
+| 1 | Home | 홈 | `/` | 전체 |
+| 2 | QrCodeScanner | 스캔 | `/scan` | 전체 |
+| 3 | ListAlt | 자산목록 | `/assets` | 전체 |
+| 4 | FactCheck | 실사목록 | `/inspections` | 전체 |
+| 5 | Map | 도면 | `/drawings` | 전체 |
+| 6 | ReceiptLong | 인수증 | `/receipts` | 관리자 그룹 |
+
+> 메뉴 노출은 `menu_permissions`(대상 all/role/user, 우선순위 user > role > all > 기본 전부 보임)로 추가 제한됩니다. admin 계정은 잠금 방지를 위해 항상 전부 보입니다.
 
 #### 공통 Drawer (사이드 메뉴)
-모든 화면에서 접근 가능한 **Drawer** 메뉴:
-| 항목 | 아이콘 | 설명 |
-|------|--------|------|
-| 사용자 정보 | Person | 상단 헤더: 사번, 이름, 고용형태, 소속 부서 표시 |
-| 홈 | Home | 대시보드 이동 |
-| 자산 목록 | ListAlt | 자산 목록 이동 |
-| 실사 목록 | FactCheck | 실사 기록 목록 이동 |
-| 도면 관리 | Map | 도면 관리 이동 |
-| 미검증 자산 | Warning | 미검증 자산 목록 이동 |
-| 다크 모드 | DarkMode | 다크 모드 ON/OFF 토글 스위치 (기본값: ON) — 별도 화면 없이 Drawer 내에서 즉시 전환 |
-| 로그아웃 | Logout | 로그아웃 → 로그인 화면 이동 |
+| 항목 | 아이콘 | 노출 조건 |
+|------|--------|----------|
+| 사용자 정보 | Person | 상단 헤더: 사번, 이름, 고용형태, 소속 부서 |
+| 홈 / 자산목록 / 실사목록 / 도면관리 | Home / ListAlt / FactCheck / Map | 전체 |
+| 인수증 | ReceiptLong | 관리자 그룹 |
+| 거래처 | Storefront | 관리자 그룹 |
+| 설정 | Settings | 관리자 그룹 |
+| 다크 모드 | DarkMode | 토글 스위치 (기본값: ON) |
+| 로그아웃 | Logout | 로그아웃 → 로그인 화면 |
 
 - 모바일: 햄버거 메뉴(AppBar leading) 또는 좌측 스와이프로 열기
 - 웹/태블릿: NavigationRail 상단 메뉴 아이콘으로 열기
@@ -924,17 +901,17 @@ final alertChannel = supabase.channel('agent-alerts:global')
 | Surface | `#FFFFFF` | `#1C1B1F` | 카드, 바텀시트 배경 |
 | On Surface | `#1C1B1F` | `#E6E1E5` | 텍스트, 아이콘 |
 
-### 6.3 자산 실시간 현황 색상
-> 자산의 **현재 접속/운영 상태**를 나타내는 색상입니다. 도면 마커, 리스트 뱃지 등에 사용됩니다.
-> ※ 8.1의 `assets_status`(자산현재진행상태), `supply_type`(자산지급형태)과는 별개의 개념입니다.
+### 6.3 지급형태(상태) 색상
+> `theme.dart` `getStatusColor()` — `assets_status` 폐기 후 `supply_type` 기준. 도면 마커, 리스트 뱃지 등에 사용됩니다.
 
-| 상태 | Light Mode | Dark Mode | 용도 |
-|------|-----------|-----------|------|
-| 정상 (사용) | `#4CAF50` (Green) | `#81C784` (Green 300) | 리스트 뱃지, 도면 마커 |
-| 가용 | `#2196F3` (Blue) | `#64B5F6` (Blue 300) | 리스트 뱃지, 도면 마커 |
-| 점검필요 | `#FF9800` (Orange) | `#FFB74D` (Orange 300) | 리스트 뱃지, 도면 마커 |
-| 고장 | `#F44336` (Red) | `#E57373` (Red 300) | 리스트 뱃지, 도면 마커 |
-| 이동 | `#9C27B0` (Purple) | `#BA68C8` (Purple 300) | 리스트 뱃지, 도면 마커 |
+| 지급형태 | 색상 계열 | 용도 |
+|------|-----------|------|
+| 지급 | Green (`statusUsing`) | 리스트 뱃지, 도면 마커 |
+| 렌탈 / 대여 | Blue (`statusAvailable`) | 리스트 뱃지, 도면 마커 |
+| 창고(점검) | Orange (`statusNeedCheck`) | 리스트 뱃지, 도면 마커 |
+| 폐기 | Red (`statusBroken`) | 리스트 뱃지, 도면 마커 |
+| 이동 | Purple (`statusMoving`) | 리스트 뱃지, 도면 마커 |
+| 그 외 (창고(대기)/도급/개인) | onSurface 기본색 | — |
 
 > **Dark Mode 원칙**: 어두운 배경에서 가독성을 위해 Light Mode 대비 채도를 낮추고 밝기를 높인 **Material 300 톤**을 사용합니다.
 
@@ -1011,24 +988,29 @@ final alertChannel = supabase.channel('agent-alerts:global')
 ## 7. API 연동 명세
 
 ### 7.1 엔드포인트
-#### 7.1.1 인증 불필요 API
-> 정책: **일반 조회(GET)는 인증 없이 가능**  
-> (로그인/토큰 갱신 API도 인증 없이 호출 가능)
+#### 7.1.1 인증 진입 API (토큰 없이 호출)
+> 정책 (보안 실행서): **로그인·토큰 갱신만 토큰 없이 호출합니다. 조회(GET)를 포함한 모든 데이터 API는 인증이 필요합니다.** 익명 키만으로는 어떤 데이터도 읽을 수 없습니다.
 
 | 메서드 | 경로 | 설명 |
 |--------|------|------|
 | POST | `/api/auth/login` | 로그인 (사번+비밀번호 → Access/Refresh Token 발급) |
-| POST | `/api/auth/sns/kakao` | 카카오 SNS 로그인 (카카오 토큰 → Access/Refresh Token 발급) |
-| POST | `/api/auth/sns/google` | 구글 SNS 로그인 (구글 토큰 → Access/Refresh Token 발급) |
-| POST | `/api/auth/refresh` | 토큰 갱신 (Refresh Token → 새 Access Token 발급) |
+| POST | `/api/auth/sns/kakao` | 카카오 SNS 로그인 (사전 연결된 계정만) |
+| POST | `/api/auth/sns/google` | 구글 SNS 로그인 |
+| POST | `/api/auth/refresh` | 토큰 갱신 |
+
+#### 7.1.1a 인증 필요 조회 API
+> 결과는 RLS로 범위가 제한됩니다 — 관리자 그룹은 전체, 일반 사용자는 본인 배정 자산·참여 실사·본인 사용자 정보만.
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
 | GET | `/api/assets` | 자산 목록 조회 |
 | GET | `/api/assets/:id` | 자산 상세 조회 |
-| GET | `/api/users` | 사용자(사원) 목록 조회 |
+| GET | `/api/users` | 사용자 목록 (일반 사용자는 본인만) |
 | GET | `/api/users/:id` | 사용자 상세 조회 |
-| GET | `/api/inspections` | 실사 목록 조회 |
+| GET | `/api/inspections` | 실사 목록 조회 (`asset_inspections_with_asset` view) |
 | GET | `/api/inspections/:id` | 실사 상세 조회 |
-| GET | `/api/inspections/:id/photo` | 실사 사진 이미지 조회 |
-| GET | `/api/inspections/:id/signature` | 실사 서명 이미지 조회 |
+| GET | `/api/inspections/:id/photo` | 실사 사진 Signed URL |
+| GET | `/api/inspections/:id/signature` | 실사 서명 Signed URL |
 | GET | `/api/drawings` | 도면 목록 조회 |
 | GET | `/api/drawings/:id` | 도면 상세 조회 |
 | GET | `/api/drawings/:id/assets` | 도면 내 자산 목록 조회 |
@@ -1040,23 +1022,30 @@ final alertChannel = supabase.channel('agent-alerts:global')
 | 메서드 | 경로 | 설명 |
 |--------|------|------|
 | POST | `/api/auth/logout` | 로그아웃 (Refresh Token 무효화) |
-| POST | `/api/assets` | 자산 등록 |
-| PUT | `/api/assets/:id` | 자산 수정 |
-| DELETE | `/api/assets/:id` | 자산 삭제 |
-| POST | `/api/inspections` | 실사 기록 생성 |
-| PUT | `/api/inspections/:id` | 실사 기록 수정 (완료 건은 관리자만 가능) |
-| POST | `/api/inspections/:id/reset` | 실사 초기화 (관리자 전용) |
-| DELETE | `/api/inspections/:id` | 실사 기록 삭제 |
+| POST | `/api/assets` | 자산 등록 (관리자 그룹) |
+| PUT | `/api/assets/:id` | 자산 수정 (관리자 그룹) |
+| DELETE | `/api/assets/:id` | 자산 삭제 (관리자 그룹, 실사 기록 없는 자산만) |
+| POST | `/api/inspections` | 실사 기록 생성 (관리자 그룹 — 일반 실사는 라운드 시작 시 자동 생성) |
+| PUT | `/api/inspections/:id` | 실사 기록 수정 (일반 사용자는 배정 자산·활성 라운드·미완료·미잠금 건만, 완료·잠금 건은 admin) |
+| POST | `/api/inspections/:id/reset` | 실사 초기화 (admin) |
+| DELETE | `/api/inspections/:id` | 실사 기록 삭제 (admin) |
 | POST | `/api/inspections/:id/photo` | 실사 사진 이미지 업로드 |
 | POST | `/api/inspections/:id/signature` | 실사 서명 이미지 업로드 |
-| POST | `/api/drawings` | 도면 등록 (이미지 업로드 포함) |
-| PUT | `/api/drawings/:id` | 도면 수정 |
-| DELETE | `/api/drawings/:id` | 도면 삭제 |
+| POST | `/api/drawings` | 도면 등록 (이미지 업로드 포함, 관리자 그룹) |
+| PUT | `/api/drawings/:id` | 도면 수정 (관리자 그룹) |
+| DELETE | `/api/drawings/:id` | 도면 삭제 (관리자 그룹) |
 | GET | `/api/inspection_rounds` | 실사 라운드 목록 조회 |
 | GET | `/api/inspection_rounds?status=active` | 활성 라운드 조회 |
 | POST | `/api/inspection_rounds` | 라운드 생성 (관리자 그룹) |
 | RPC | `start_inspection_round(p_round_id)` | 라운드 시작 draft→active (관리자 그룹) |
 | RPC | `close_inspection_round(p_round_id)` | 라운드 종료 active→closed (관리자 그룹) |
+| RPC | `reopen_inspection_round(p_round_id)` | 라운드 재오픈 (admin) |
+| RPC | `delete_inspection_round(p_round_id, p_force)` | 라운드 삭제 (admin, active 불가) |
+| RPC | `request_inspection_recheck(p_inspection_id)` | 재실사 요청 알림 |
+| RPC | `admin_force_verify(p_asset_uid)` | 관리자 재확인 요청 (admin) |
+| RPC | `admin_create_user_secure` / `admin_set_user_password` / `admin_update_user_role` / `admin_update_user_profile` / `admin_set_receipt_team` | 사용자 관리 (admin, admin 계정 대상은 마스터) |
+| RPC | `admin_set_master_admin(p_employee_id, p_is_master)` | 마스터 지정/해제 (마스터) |
+| RPC | `clear_must_change_password()` | 비밀번호 변경 후 강제 변경 플래그 해제 (본인) |
 
 ### 7.2 요청/응답 예시
 
@@ -1065,7 +1054,7 @@ final alertChannel = supabase.channel('agent-alerts:global')
 // POST /api/auth/login
 // 사번 + 비밀번호로 인증 → Access/Refresh Token 발급
 {
-  "employee_id": "temp01",              // 사번 (8.3 users.employee_id와 매칭)
+  "employee_id": "employee-id-example", // 사번 (8.3 users.employee_id와 매칭)
   "password": "********"               // 비밀번호 (평문 전송, HTTPS 필수)
 }
 ```
@@ -1089,10 +1078,10 @@ final alertChannel = supabase.channel('agent-alerts:global')
   "access_token": "eyJhbGciOiJIUzI1NiIs...",   // 인증 필요 API 요청 시 Authorization 헤더에 포함
   "refresh_token": "eyJhbGciOiJIUzI1NiIs...",  // Access Token 만료 시 갱신용
   "token_type": "Bearer",                       // 토큰 타입
-  "expires_in": 1800,                            // Access Token 만료 시간 (초, 30분)
+  "expires_in": 3600,                            // Access Token 만료 시간 (초, 60분)
   "user": {                                      // 로그인 사용자 정보 (8.3 users 스키마 기반)
     "id": 42,                                    // 사용자 PK
-    "employee_id": "temp01",                      // 사번
+    "employee_id": "employee-id-example",         // 사번
     "employee_name": "홍길동",                     // 사원 이름
     "employment_type": "정규직",                   // 고용형태 (정규직/계약직/도급직)
     "organization_hq": "IT본부",                   // 소속 본부
@@ -1108,7 +1097,7 @@ final alertChannel = supabase.channel('agent-alerts:global')
 ```json
 // POST /api/auth/refresh
 // Access Token 만료 시 Refresh Token으로 새 Access Token 발급
-// ※ Dio Interceptor에서 401 응답 시 자동 호출 (11.3 참고)
+// ※ supabase_flutter SDK가 만료 전 자동 호출 (11.3 참고)
 
 // 요청
 {
@@ -1119,7 +1108,7 @@ final alertChannel = supabase.channel('agent-alerts:global')
 {
   "access_token": "eyJhbGciOiJIUzI1NiIs...",   // 새로 발급된 Access Token
   "token_type": "Bearer",
-  "expires_in": 1800                             // 만료 시간 (초, 30분)
+  "expires_in": 3600                             // 만료 시간 (초, 60분)
 }
 ```
 
@@ -1140,10 +1129,9 @@ final alertChannel = supabase.channel('agent-alerts:global')
 // POST /api/assets
 // 공통 항목 + category에 따른 specifications JSON 포함
 {
-  "asset_uid": "BDT00001",              // 자산 고유 코드 (등록경로+등록장비+숫자5자리)
+  "asset_uid": "D00001",                // 자산 고유 코드 (영문 1~2자리 + 숫자 4~5자리)
   "name": "개발팀 데스크탑",               // 자산 명칭
-  "assets_status": "사용",               // 자산현재진행상태 (사용/가용/이동/점검필요/고장)
-  "supply_type": "지급",                 // 자산지급형태 (지급/렌탈/대여/창고(대기)/창고(점검))
+  "supply_type": "지급",                 // 자산지급형태 = 상태 (지급/렌탈/대여/이동/창고(대기)/창고(점검)/폐기/도급/개인)
   "category": "데스크탑",                 // 자산 분류 → specifications 구조 결정
   "serial_number": "SN-12345",          // 시리얼 번호
   "model_name": "Dell OptiPlex 7090",   // 모델명
@@ -1175,7 +1163,6 @@ final alertChannel = supabase.channel('agent-alerts:global')
 //   size     - 페이지당 항목 수 (기본 30)
 //   category - 유형 필터 (선택)
 //   supply_type - 지급형태 필터 (선택)
-//   assets_status - 상태 필터 (선택)
 //   building - 건물 필터 (선택)
 //   search   - 자산번호/자산명/시리얼번호 검색 (선택)
 ```
@@ -1191,9 +1178,8 @@ final alertChannel = supabase.channel('agent-alerts:global')
   "data": [
     {
       "id": 1,
-      "asset_uid": "BDT00001",
+      "asset_uid": "D00001",
       "name": "개발팀 데스크탑",
-      "assets_status": "사용",
       "supply_type": "지급",
       "category": "데스크탑",
       "building": "본관",
@@ -1215,7 +1201,7 @@ final alertChannel = supabase.channel('agent-alerts:global')
 // POST /api/inspections
 // QR 스캔 후 실사 데이터 저장
 {
-  "asset_uid": "BDT00001",              // 스캔한 자산 코드
+  "asset_uid": "D00001",              // 스캔한 자산 코드
   "inspector_name": "홍길동",             // 실사 담당자
   "user_team": "IT팀",                   // 담당자 소속
   "inspection_date": "2024-02-07T16:00:00Z",  // 실사 일시
@@ -1235,7 +1221,7 @@ final alertChannel = supabase.channel('agent-alerts:global')
 {
   "id": 501,
   "asset_id": 1,
-  "asset_code": "BDT00001",
+  "asset_code": "D00001",
   "user_name": "김개발",
   "user_department": "개발팀",
   "inspection_building": "본관",
@@ -1279,10 +1265,9 @@ final alertChannel = supabase.channel('agent-alerts:global')
 | 컬럼 | 타입 | 설명                  |
 | --- | --- |---------------------|
 | `id` | INTEGER | 자산 기본 키             |
-| `asset_uid` | TEXT | 자산 고유 코드(실사 시 매칭 키, 형식: 등록경로1자리+등록장비2자리+숫자5자리) |
+| `asset_uid` | TEXT | 자산 고유 코드(실사 시 매칭 키, 형식: 현재기준 `D00001` 또는 변경후 `BDT00001`, 4.1.2 참고) |
 | `name` | TEXT | 자산 명칭               |
-| `assets_status` | TEXT | 자산현재진행상태 (사용/가용/이동/점검필요/고장 등) |
-| `supply_type` | TEXT | 자산지급형태 (지급/렌탈/대여/창고(대기)/창고(점검)) |
+| `supply_type` | TEXT | 자산지급형태 = UI "상태" (지급/렌탈/대여/이동/창고(대기)/창고(점검)/폐기/도급/개인). `assets_status`는 2026-06-14 삭제 |
 | `supply_end_date` | DATETIME | 대여/렌탈 만료일 (supply_type이 렌탈/대여일 때 사용) |
 | `category` | TEXT | 자산 분류(데스크탑/모니터/노트북/IP전화기/스캐너/프린터/태블릿/테스트폰/네트워크장비/서버/웨어러블/특수목적장비) |
 | `serial_number` | TEXT | 시리얼 번호              |
@@ -1300,9 +1285,12 @@ final alertChannel = supabase.channel('agent-alerts:global')
 | `owner_name` | TEXT | 소유자명                |
 | `owner_department` | TEXT | 소유자부서              |
 | `user_name` | TEXT | 사용자명                |
+| `user_employee_id` | TEXT | 사용자 사번 (에이전트 사용자 확인 기준) |
 | `user_department` | TEXT | 사용자부서              |
 | `admin_name` | TEXT | 관리자명                |
 | `admin_department` | TEXT | 관리자부서              |
+| `admin_affiliation` | TEXT | 담당자 소속 (롯데카드 / 롯데카드 외) |
+| `admin_company` | TEXT | '롯데카드 외' 선택 시 회사명 |
 | `location_drawing_id` | INTEGER | 도면 ID               |
 | `location_row` | INTEGER | 도면 좌표(행)            |
 | `location_col` | INTEGER | 도면 좌표(열)            |
@@ -1316,6 +1304,7 @@ final alertChannel = supabase.channel('agent-alerts:global')
 | `verification_status` | TEXT | 사용자 확인 상태 (`verified`/`mismatch`/NULL, 4.6.7 참고) |
 | `assignment_status` | TEXT | 배정 수령 상태 (`pending`/`confirmed`/NULL, 4.6.8 참고) |
 | `assignment_confirmed_at` | TIMESTAMPTZ | 자산 수령 확인 시각 (4.6.8 참고) |
+| `inspection_round_no` | INTEGER | 활성 라운드 회차 번호 (기본 0) |
 
 > **설계 방침**: 공통 항목은 assets 테이블 컬럼으로 관리하고, 자산 유형(category)별로 다른 추가 사양은 `specifications` JSON 컬럼에 저장합니다. 이 하이브리드 방식은 공통 필드의 검색/정렬 성능을 유지하면서, 자산 유형별 확장에 유연하게 대응할 수 있습니다.
 
@@ -1469,12 +1458,16 @@ final alertChannel = supabase.channel('agent-alerts:global')
 | `auth_provider` | TEXT | 인증 제공자 (email / kakao / google) |
 | `sns_id` | TEXT | SNS 로그인 시 외부 서비스 사용자 ID |
 | `role` | TEXT | 사용자 역할 (`admin`, `operator1`, `operator2`, `user`) 기본값: `user` |
+| `is_master_admin` | BOOLEAN | 마스터 관리자 (role=admin 중 최대 4명) |
+| `must_change_password` | BOOLEAN | 다음 로그인 시 비밀번호 강제 변경 |
+| `receipt_team` | TEXT | 인수증 서명 담당 (`helpdesk` / `it_plan`) |
 | `created_at` | TIMESTAMPTZ | 생성일 |
 | `updated_at` | TIMESTAMPTZ | 수정일 |
 
 > **역할 체계**:
-> - **관리자 그룹**: `admin`(관리자), `operator1`(운영자1), `operator2`(운영자2) → 차수 관리, 완료건 수정 가능
-> - **사용자 그룹**: `user` → 활성 라운드 시에만 실사 수정 가능
+> - **관리자 그룹**: `admin`(관리자), `operator1`(운영자1), `operator2`(운영자2) → 전체 조회, 자산·도면 변경, 차수 관리
+> - **admin 전용**: 완료·잠금 실사 수정, 실사 초기화·삭제, 라운드 재오픈·삭제, 사용자 관리
+> - **사용자 그룹**: `user` → 본인 배정 자산·참여 실사만 조회, 활성 라운드의 배정 자산 실사만 입력
 > - Dart 모델: `User.isAdminGroup` getter로 관리자 그룹 판별
 >
 > **참고**: 비밀번호(password_hash)는 백엔드에서만 관리하며, 프론트엔드에는 노출되지 않습니다.
@@ -1491,7 +1484,7 @@ final alertChannel = supabase.channel('agent-alerts:global')
 | `asset_type` | TEXT | 자산 종류 |
 | `asset_info` | JSONB | 모델명/용도/시리얼 등 상세 정보 |
 | `inspection_count` | INTEGER | 실사 횟수 (트리거 자동 계산) |
-| `inspection_date` | TIMESTAMPTZ | 실사 일시 |
+| `inspection_date` | TIMESTAMPTZ | 실사 완료 일시 (기본값 없음) |
 | `maintenance_company_staff` | TEXT | 유지보수 담당자 |
 | `department_confirm` | TEXT | 확인 부서 |
 | `inspection_building` | TEXT | 실사 시 확인한 건물명 |
@@ -1502,15 +1495,17 @@ final alertChannel = supabase.channel('agent-alerts:global')
 | `inspection_photo` | TEXT | 실사 사진 이미지 Storage 경로 (JPG/PNG) |
 | `signature_image` | TEXT | 친필 서명 이미지 Storage 경로 (PNG) |
 | `round_id` | BIGINT | 전사 실사 라운드 FK (inspection_rounds.id 참조) |
+| `locked` | BOOLEAN | 등록 후 잠금 (admin만 수정) |
 | `synced` | BOOLEAN | 서버 동기화 여부 (기본값: true) |
 | `created_at` | TIMESTAMPTZ | 생성일 |
 | `updated_at` | TIMESTAMPTZ | 수정일 (트리거 자동 갱신) |
 
 > **완료 판정 기준**: `inspection_building`, `inspection_floor`, `inspection_position`, `inspection_photo`, `signature_image` 5개 필드가 모두 NOT NULL이면 완료(completed)로 간주합니다.
 >
-> **사진 저장 경로 패턴**: `{round}/photos/{assetCode}_{page}_{timestamp}_{round}.jpg`
+> **사진 저장 경로 패턴**: `<auth_uid>/{round}/photos/{assetCode}_{page}_{timestamp}_{round}.jpg`
 > - `page`: `detail`(실사상세), `register`(실사등록)
-> - 서명: `{round}/signatures/{inspId}_sig_{timestamp}_{round}.png`
+> - 서명: `<auth_uid>/{round}/signatures/{inspId}_sig_{timestamp}_{round}.png`
+> - 첫 폴더는 업로더 Auth UUID여야 함 (Storage RLS가 강제)
 > - 버킷: `inspection-photos` (사진), `inspection-signatures` (서명)
 
 ### 8.5 inspection_rounds (전사 실사 라운드)
@@ -1743,25 +1738,28 @@ class RealtimeService {
 ## 10. 라우팅
 
 ### 10.1 GoRouter 설정
-```dart
-final router = GoRouter(
-  redirect: (context, state) => /* 미인증 시 /login 리다이렉트 */,
-  routes: [
-    GoRoute(path: '/login', builder: (context, state) => LoginPage()),
-    GoRoute(path: '/', builder: (context, state) => HomePage()),
-    GoRoute(path: '/scan', builder: (context, state) => ScanPage()),
-    GoRoute(path: '/assets', builder: (context, state) => AssetListPage()),
-    GoRoute(path: '/asset/new', builder: (context, state) => AssetDetailPage(mode: CreateMode)),
-    GoRoute(path: '/asset/:id', builder: (context, state) => AssetDetailPage()),
-    GoRoute(path: '/inspections', builder: (context, state) => InspectionListPage()),
-    GoRoute(path: '/inspection/:id', builder: (context, state) => InspectionDetailPage()),
-    GoRoute(path: '/signature', builder: (context, state) => SignaturePage()),
-    GoRoute(path: '/drawings', builder: (context, state) => DrawingManagerPage()),
-    GoRoute(path: '/drawing/:id', builder: (context, state) => DrawingViewerPage()),
-    GoRoute(path: '/unverified', builder: (context, state) => UnverifiedPage()),
-  ],
-);
-```
+`goRouterProvider` (Riverpod)로 한 번만 생성하고, 인증 상태 변경 시 `refreshListenable`로 redirect만 재평가합니다.
+
+| 경로 | 화면 |
+|------|------|
+| `/login` | LoginPage |
+| `/` | HomePage |
+| `/scan` | ScanPage |
+| `/assets` | AssetListPage |
+| `/asset/new` | AssetDetailPage (생성 모드) |
+| `/asset/:id` | AssetDetailPage |
+| `/inspections` | InspectionListPage |
+| `/inspection/:id` | InspectionDetailPage |
+| `/signature` | SignaturePage |
+| `/drawings` | DrawingManagerPage |
+| `/drawing/:id` | DrawingViewerPage |
+| `/receipts` | ReceiptListPage |
+| `/receipt/new`, `/receipt/:id` | ReceiptDetailPage |
+| `/admin/vendors` | VendorManagerPage |
+| `/change-password` | ChangePasswordPage |
+| `/admin/settings` | AdminSettingsPage |
+
+- **redirect**: 미인증 → `/login`, `must_change_password = true` → `/change-password`
 
 ---
 
@@ -1779,21 +1777,21 @@ final router = GoRouter(
 1. 사번 + 비밀번호 입력
 2. `POST /api/auth/login` → 토큰 발급
 3. 토큰을 `flutter_secure_storage`에 암호화 저장
-4. 이후 **인증 필요 API 요청에만** 토큰 자동 포함 (Dio Interceptor)
+4. 이후 모든 데이터 요청에 토큰 자동 포함 (supabase_flutter SDK)
 
 #### SNS 로그인 (카카오 / 구글)
 1. SNS 로그인 버튼 클릭
 2. 카카오 SDK 또는 Google Sign-In SDK로 인증 → SNS Access Token 획득
 3. `POST /api/auth/sns/kakao` 또는 `POST /api/auth/sns/google` → SNS 토큰 전달
 4. 서버에서 SNS 토큰 검증 → 사원 정보 매칭 → Access/Refresh Token 발급
-5. 이후 흐름은 일반 로그인과 동일 (토큰 저장 → Dio Interceptor)
+5. 이후 흐름은 일반 로그인과 동일 (토큰 저장 → SDK 자동 포함)
 
 ### 11.3 토큰 관리
 | 항목 | 설명 |
 |------|------|
-| Access Token 만료 | 30분 (백엔드 협의) |
+| Access Token 만료 | 60분 (`jwt_expiry = 3600`, `OA_JWT_EXPIRY`) |
 | Refresh Token 만료 | 7일 |
-| 자동 갱신 | Dio Interceptor에서 401 응답 시 Refresh Token으로 재발급 |
+| 자동 갱신 | `supabase_flutter` SDK 자동 처리 (refresh token rotation 사용) |
 | 강제 로그아웃 | Refresh Token 만료 시 로그인 화면 이동 |
 
 ### 11.4 보안 정책
@@ -1823,7 +1821,7 @@ final router = GoRouter(
 
 ### 12.3 사용자 입력 검증
 - **필수 입력**: 미입력 시 빨간 테두리 + 에러 메시지
-- **형식 검증**: 자산 UID(`^(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD|SM)[0-9]{5}$`), MAC 주소, 전화번호 등 포맷 체크
+- **형식 검증**: 자산 UID(4.1.2 정규식 — 두 형식 허용), MAC 주소, 전화번호 등 포맷 체크
 - **중복 검증**: 자산 UID 중복 시 경고
 
 ---
@@ -2024,7 +2022,7 @@ flutter build web --release
    - 토큰 로컬 저장 확인 (flutter_secure_storage)
    - 홈 화면 자동 이동 확인
 2. **토큰 만료 처리**:
-   - Access Token 만료 시 자동 갱신 확인 (Dio Interceptor)
+   - Access Token 만료 시 자동 갱신 확인 (supabase_flutter SDK)
    - Refresh Token 만료 시 로그인 화면 강제 이동 확인
 3. **로그아웃**:
    - 로그아웃 버튼 클릭 → 토큰 삭제 확인
@@ -2118,11 +2116,15 @@ flutter test
 
 ## 변경 이력 (프론트엔드)
 
+- `2026-10-11` : 자산번호 두 형식 병행 허용 (`assetUidRegex` 변경, 안내 다이얼로그에 변경후 코드표 추가)
+- `2026-10-11` : 명세를 실제 코드 기준으로 정비 — Flutter 3.41.2/Dart 3.11, asset_uid 현재 형식, assets_status 삭제 반영, 화면·라우트(인수증·관리자 설정·비밀번호 변경, 미검증 화면 폐지), 보안 실행서 기준 API 인증·권한, Storage 경로(`<auth_uid>/...`), Realtime private 채널
+- `2026-09` : 인수증·거래처 화면, 관리자 설정 탭 개편(유저 정보·아이디 생성·메뉴권한·입고증 양식·세부선택), 비밀번호 강제 변경
+- `2026-08` : 보안 강화 대응 — Realtime private 채널, Presence·운영 알림 관리자 그룹만 구독, 사진·서명 업로드 경로에 Auth UUID 접두
 - `2026-06-04` :
   - 자산 상세 페이지: "관리자 재확인 요청" 버튼 추가 (`admin_force_verify` RPC 호출, 다이얼로그 확인 후 실행)
   - 에이전트 설정 페이지(`/admin_settings_page.dart`): 마스터 관리자 카드 추가 (현재 N/4 표시, admin 사용자별 SwitchListTile, 한도 초과 시 비활성화)
   - API URL: `apioa.terraforming.info`로 변경
-  - 테스트 계정 비밀번호 소문자 통일 (`temp01`/`temp1234!` 등)
+  - 과거 정적 테스트 계정은 폐기되었으며 신규 환경에는 기본 자격증명을 만들지 않음
   - nginx 캐시 정책 분리 (entry 자산은 no-cache, 보조 자산은 immutable)
 - `2026-03-21` : 역할 체계 + 실사 라운드(차수) UI
 - `2026-03-20` : OCR 웹 지원 (Tesseract.js), 실사 사진 촬영, 사진/서명 레이지 로딩

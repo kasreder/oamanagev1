@@ -32,6 +32,7 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
 
     data class UiState(
         val assetUid: String = "",
+        val isAuthenticated: Boolean = false,
         val intervalMinutes: Int = 15,
         val isRunning: Boolean = false,
         val lastHeartbeatTime: Long = 0L,
@@ -78,6 +79,7 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
     private fun loadSavedState() {
         _uiState.value = _uiState.value.copy(
             assetUid = prefs.assetUid ?: "",
+            isAuthenticated = authManager.hasStoredSession(),
             intervalMinutes = prefs.intervalMinutes,
             lastHeartbeatTime = prefs.lastHeartbeatTime,
             isRunning = prefs.assetUid != null,
@@ -120,6 +122,7 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun refreshFromPrefs() {
         _uiState.value = _uiState.value.copy(
+            isAuthenticated = authManager.hasStoredSession(),
             lastHeartbeatTime = prefs.lastHeartbeatTime,
             lastVerifiedAt = prefs.lastVerifiedAt,
             assetUserName = prefs.assetUserName,
@@ -144,10 +147,64 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
         return AgentConfig.ASSET_UID_REGEX.matches(uid)
     }
 
+    /**
+     * 공용 에이전트 계정 대신 실제 자산 담당자 또는 관리자 OA 계정으로 로그인한다.
+     * 비밀번호는 이 호출을 벗어나 저장하지 않으며, 성공하면 세션 토큰만 보안
+     * 저장소에 보관한다.
+     */
+    fun signInWithPersonalAccount(account: String, password: String) {
+        if (account.isBlank() || password.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                message = "OA 계정과 비밀번호를 모두 입력하세요.",
+            )
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(isLoading = true)
+        viewModelScope.launch {
+            // OA 모바일 앱과 동일하게 사번 입력을 내부 로그인 이메일로 변환한다.
+            // 관리 계정처럼 이메일을 쓰는 경우에는 그대로 전달한다.
+            val loginEmail = account.trim().let {
+                if (it.contains('@')) it else "$it@oamanager.internal"
+            }
+            val signedIn = authManager.signInWithPassword(loginEmail, password)
+            if (!signedIn) {
+                _uiState.value = _uiState.value.copy(
+                    isAuthenticated = false,
+                    isLoading = false,
+                    message = "OA 계정 로그인에 실패했습니다. 계정 권한을 확인하세요.",
+                )
+                return@launch
+            }
+
+            _uiState.value = _uiState.value.copy(
+                isAuthenticated = true,
+                isLoading = false,
+                message = "OA 계정으로 로그인했습니다.",
+            )
+            fetchServerInterval()
+
+            // 앱 업데이트 후 기존 설정을 가진 장치가 다시 로그인한 경우에도
+            // 새 사용자 세션으로만 Heartbeat를 재개한다.
+            if (prefs.assetUid != null) {
+                val app = getApplication<OAAgentApp>()
+                app.enqueueHeartbeat(prefs.intervalMinutes)
+                checkAssignmentStatus()
+            }
+        }
+    }
+
     // ─── 시작/설정 저장 ─────────────────────────────────────────────────
 
     fun startAgent(assetUid: String, intervalMinutes: Int) {
         if (!isValidAssetUid(assetUid)) return
+        if (!authManager.hasStoredSession()) {
+            _uiState.value = _uiState.value.copy(
+                isAuthenticated = false,
+                message = "Heartbeat를 시작하려면 자산 담당자 OA 계정으로 로그인하세요.",
+            )
+            return
+        }
 
         prefs.assetUid = assetUid
         prefs.intervalMinutes = intervalMinutes
@@ -174,7 +231,10 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 val token = authManager.getValidToken()
-                    ?: throw IllegalStateException("인증 실패")
+                    ?: run {
+                        _uiState.value = _uiState.value.copy(isAuthenticated = false)
+                        throw IllegalStateException("세션이 만료되었습니다. OA 계정으로 다시 로그인하세요.")
+                    }
 
                 val systemInfo = com.oamanager.agent.platform.SystemInfoCollector(
                     context = getApplication(),
@@ -215,7 +275,10 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 val token = authManager.getValidToken()
-                    ?: throw IllegalStateException("인증 실패")
+                    ?: run {
+                        _uiState.value = _uiState.value.copy(isAuthenticated = false)
+                        throw IllegalStateException("세션이 만료되었습니다. OA 계정으로 다시 로그인하세요.")
+                    }
 
                 val result = client.verifyUser(token, assetUid, userName, employeeId)
                 val matched = result["matched"]?.jsonPrimitive?.boolean ?: false
@@ -265,7 +328,10 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 val token = authManager.getValidToken()
-                    ?: throw IllegalStateException("인증 실패")
+                    ?: run {
+                        _uiState.value = _uiState.value.copy(isAuthenticated = false)
+                        throw IllegalStateException("세션이 만료되었습니다. OA 계정으로 다시 로그인하세요.")
+                    }
 
                 val result = client.confirmAssignment(token, assetUid, userName)
                 val success = result["success"]?.jsonPrimitive?.boolean ?: false

@@ -3,7 +3,7 @@
 // 만료 임박 자산의 상세 목록을 반환합니다.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,6 +11,43 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
 };
+
+const adminGroupRoles = new Set(["admin", "operator1", "operator2"]);
+
+function jsonResponse(body: unknown, status: number): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+// This handler uses a service-role client for data access only after caller
+// identity and the OA administrator role have been validated server-side.
+async function requireAdminGroup(
+  req: Request,
+  supabase: SupabaseClient<any>,
+): Promise<Response | null> {
+  const authorization = req.headers.get("authorization");
+  const accessToken = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+  if (!accessToken) return jsonResponse({ error: "인증 토큰이 필요합니다" }, 401);
+
+  const { data: authData, error: authError } = await supabase.auth.getUser(accessToken);
+  if (authError || !authData.user) {
+    return jsonResponse({ error: "유효하지 않은 인증 토큰입니다" }, 401);
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("users")
+    .select("role")
+    .eq("auth_uid", authData.user.id)
+    .maybeSingle();
+
+  if (profileError || !profile || !adminGroupRoles.has(profile.role)) {
+    return jsonResponse({ error: "관리자 권한이 필요합니다" }, 403);
+  }
+
+  return null;
+}
 
 serve(async (req: Request) => {
   // CORS preflight
@@ -37,6 +74,9 @@ serve(async (req: Request) => {
         persistSession: false,
       },
     });
+
+    const authorizationError = await requireAdminGroup(req, supabase);
+    if (authorizationError) return authorizationError;
 
     // ── RPC 호출 시도: get_expiring_assets() ────────────────────
     // DB에 RPC 함수가 존재하면 사용하고, 없으면 직접 쿼리로 대체

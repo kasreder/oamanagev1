@@ -1,4 +1,7 @@
 # Miscellaneous
+.env
+.env.*
+!.env.example
 *.class
 *.log
 *.pyc
@@ -44,3 +47,12 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# OA Agent Gradle outputs and the local Android release signing key.
+# Release packages must be produced by CI/a controlled release workspace, not committed.
+Agent/**/build/
+Agent/.gradle/
+Agent/android/app/*.jks
+
+# Local database safety backups created before operational migrations.
+backups/*.dump

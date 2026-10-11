@@ -3,11 +3,49 @@
 // main 라우터에서 dynamic import 되므로 handler를 default export 합니다.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
+const adminGroupRoles = new Set(['admin', 'operator1', 'operator2'])
+
+const jsonResponse = (body: unknown, status: number): Response =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
+
+// A public anon key is an API-routing credential, not an authorization grant.
+// Verify the caller's user JWT and resolve the server-side OA role before using
+// the service key to read device tokens or send a push notification.
+const requireAdminGroup = async (
+  req: Request,
+  supabase: SupabaseClient<any>,
+): Promise<Response | null> => {
+  const authorization = req.headers.get('authorization')
+  const accessToken = authorization?.match(/^Bearer\s+(.+)$/i)?.[1]
+  if (!accessToken) return jsonResponse({ error: '인증 토큰이 필요합니다' }, 401)
+
+  const { data: authData, error: authError } = await supabase.auth.getUser(accessToken)
+  if (authError || !authData.user) {
+    return jsonResponse({ error: '유효하지 않은 인증 토큰입니다' }, 401)
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('users')
+    .select('role')
+    .eq('auth_uid', authData.user.id)
+    .maybeSingle()
+
+  if (profileError || !profile || !adminGroupRoles.has(profile.role)) {
+    return jsonResponse({ error: '관리자 권한이 필요합니다' }, 403)
+  }
+
+  return null
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -16,21 +54,38 @@ const handler = async (req: Request): Promise<Response> => {
     return new Response('ok', { headers: corsHeaders })
   }
 
+  if (req.method !== 'POST') {
+    return jsonResponse({ error: 'Method not allowed' }, 405)
+  }
+
   try {
-    const { asset_uid, type, title, body } = await req.json()
-    // asset_uid가 null이면 전체 발송
-
-    if (!title) {
-      return new Response(
-        JSON.stringify({ error: '알림 제목은 필수입니다' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      )
-    }
-
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     )
+    const authorizationError = await requireAdminGroup(req, supabase)
+    if (authorizationError) return authorizationError
+
+    const { asset_uid, type, title, body } = await req.json() as {
+      asset_uid?: unknown
+      type?: unknown
+      title?: unknown
+      body?: unknown
+    }
+    // asset_uid가 null이면 전체 발송
+
+    if (typeof title !== 'string' || !title.trim() || title.length > 200) {
+      return jsonResponse({ error: '알림 제목은 1~200자로 입력하세요' }, 400)
+    }
+    if (asset_uid != null && (typeof asset_uid !== 'string' || asset_uid.length > 100)) {
+      return jsonResponse({ error: '유효하지 않은 자산번호입니다' }, 400)
+    }
+    if (body != null && (typeof body !== 'string' || body.length > 2000)) {
+      return jsonResponse({ error: '알림 본문은 2,000자 이하여야 합니다' }, 400)
+    }
+    if (type != null && typeof type !== 'string') {
+      return jsonResponse({ error: '유효하지 않은 알림 유형입니다' }, 400)
+    }
 
     // 1. 대상 기기 FCM 토큰 조회
     let query = supabase.from('device_tokens').select('fcm_token, asset_uid')
@@ -41,7 +96,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     if (tokenError) {
       return new Response(
-        JSON.stringify({ error: tokenError.message }),
+        JSON.stringify({ error: '알림 대상 조회에 실패했습니다' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       )
     }
@@ -118,7 +173,7 @@ const handler = async (req: Request): Promise<Response> => {
           body: JSON.stringify({
             message: {
               token: token.fcm_token,
-              notification: { title, body: body ?? '' },
+              notification: { title: title.trim(), body: body ?? '' },
               data: {
                 type: type ?? 'general',
                 asset_uid: token.asset_uid ?? '',
@@ -138,7 +193,7 @@ const handler = async (req: Request): Promise<Response> => {
       tokens.map((t: { asset_uid: string; fcm_token: string }) => ({
         asset_uid: t.asset_uid,
         type: type ?? 'general',
-        title,
+        title: title.trim(),
         body,
       })),
     )
@@ -149,7 +204,7 @@ const handler = async (req: Request): Promise<Response> => {
     )
   } catch (err) {
     return new Response(
-      JSON.stringify({ error: err.message }),
+      JSON.stringify({ error: '알림 발송 처리 중 오류가 발생했습니다' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     )
   }

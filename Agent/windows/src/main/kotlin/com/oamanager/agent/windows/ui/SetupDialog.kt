@@ -20,6 +20,8 @@ class SetupDialog(private val app: WindowsAgentApp) : JDialog() {
 
     private val tfAssetUid = JTextField(15)
     private val lblError = JLabel(" ").apply { foreground = Color.RED; font = font.deriveFont(11f) }
+    private val lblAuthentication = JLabel("OA 계정: 로그인 필요")
+    private val btnSignIn = JButton("OA 계정 로그인")
     private val cbInterval = JComboBox(arrayOf("5분", "15분 (기본값)", "30분"))
     private val btnStart = JButton("시작").apply { isEnabled = false }
     private val btnSendNow = JButton("즉시 전송").apply { isEnabled = false }
@@ -51,8 +53,18 @@ class SetupDialog(private val app: WindowsAgentApp) : JDialog() {
         panel.layout = BoxLayout(panel, BoxLayout.Y_AXIS)
         panel.border = EmptyBorder(16, 16, 16, 16)
 
+        // ── OA 계정 로그인 ──────────────────────────────────────────────
+
+        panel.add(createSectionLabel("OA 계정 인증"))
+        panel.add(lblAuthentication)
+        btnSignIn.alignmentX = Component.LEFT_ALIGNMENT
+        btnSignIn.addActionListener { onSignIn() }
+        panel.add(Box.createVerticalStrut(4))
+        panel.add(btnSignIn)
+
         // ── 자산 번호 입력 ──────────────────────────────────────────────
 
+        panel.add(Box.createVerticalStrut(16))
         panel.add(createSectionLabel("자산 번호 (asset_uid)"))
 
         tfAssetUid.maximumSize = Dimension(Int.MAX_VALUE, 30)
@@ -66,7 +78,7 @@ class SetupDialog(private val app: WindowsAgentApp) : JDialog() {
                 lblError.text = if (text.isNotEmpty() && !valid) {
                     "형식: [B|R|C|L|S][유형코드][5자리 숫자]"
                 } else " "
-                btnStart.isEnabled = valid
+                updateActionState()
             }
         })
         panel.add(tfAssetUid)
@@ -121,13 +133,27 @@ class SetupDialog(private val app: WindowsAgentApp) : JDialog() {
         val uid = app.prefs.assetUid
         if (uid != null) {
             tfAssetUid.text = uid
-            tfAssetUid.isEditable = false
-            btnStart.text = if (app.isRunning) "실행 중" else "시작"
-            btnStart.isEnabled = !app.isRunning
-            btnSendNow.isEnabled = true
+            if (app.isRunning) {
+                tfAssetUid.isEditable = false
+                btnStart.text = "실행 중"
+            }
         }
 
         updateStatusLabels()
+        updateActionState()
+    }
+
+    private fun updateActionState() {
+        val validAssetUid = AgentConfig.ASSET_UID_REGEX.matches(tfAssetUid.text.trim())
+        val authenticated = app.hasPersonalSession
+        btnStart.isEnabled = validAssetUid && authenticated && !app.isRunning
+        btnSendNow.isEnabled = app.isRunning && authenticated
+        btnSignIn.text = if (authenticated) "다른 OA 계정으로 로그인" else "OA 계정 로그인"
+        lblAuthentication.text = if (authenticated) {
+            "OA 계정: 로그인됨 (자산 담당자 또는 관리자)"
+        } else {
+            "OA 계정: 로그인 필요"
+        }
     }
 
     private fun updateStatusLabels() {
@@ -147,9 +173,21 @@ class SetupDialog(private val app: WindowsAgentApp) : JDialog() {
         } else {
             "사용자 확인: 미확인"
         }
+
+        updateActionState()
     }
 
     private fun onStart() {
+        if (!app.hasPersonalSession) {
+            JOptionPane.showMessageDialog(
+                this,
+                "Heartbeat를 시작하려면 자산 담당자 또는 관리자 OA 계정으로 로그인하세요.",
+                "OA 계정 로그인 필요",
+                JOptionPane.WARNING_MESSAGE,
+            )
+            return
+        }
+
         val assetUid = tfAssetUid.text.trim()
         val interval = when (cbInterval.selectedIndex) {
             0 -> 5
@@ -159,7 +197,10 @@ class SetupDialog(private val app: WindowsAgentApp) : JDialog() {
 
         app.prefs.assetUid = assetUid
         app.prefs.intervalMinutes = interval
-        app.start()
+        if (!app.start()) {
+            updateActionState()
+            return
+        }
 
         tfAssetUid.isEditable = false
         btnStart.isEnabled = false
@@ -173,6 +214,74 @@ class SetupDialog(private val app: WindowsAgentApp) : JDialog() {
             "시작 완료",
             JOptionPane.INFORMATION_MESSAGE,
         )
+    }
+
+    private fun onSignIn() {
+        val tfAccount = JTextField(24)
+        val pfPassword = JPasswordField(24)
+        val form = JPanel(GridLayout(0, 1, 0, 6)).apply {
+            add(JLabel("자산 담당자 또는 관리자 개인 OA 계정으로 로그인하세요."))
+            add(JLabel("사번 또는 OA 계정 이메일"))
+            add(tfAccount)
+            add(JLabel("비밀번호"))
+            add(pfPassword)
+        }
+
+        val choice = JOptionPane.showConfirmDialog(
+            this,
+            form,
+            "OA 계정 로그인",
+            JOptionPane.OK_CANCEL_OPTION,
+            JOptionPane.PLAIN_MESSAGE,
+        )
+        if (choice != JOptionPane.OK_OPTION) return
+
+        val account = tfAccount.text
+        val password = pfPassword.password
+        if (account.isBlank() || password.isEmpty()) {
+            password.fill('\u0000')
+            JOptionPane.showMessageDialog(
+                this,
+                "OA 계정과 비밀번호를 모두 입력하세요.",
+                "입력 확인",
+                JOptionPane.WARNING_MESSAGE,
+            )
+            return
+        }
+
+        btnSignIn.isEnabled = false
+        Thread {
+            val signedIn = try {
+                val passwordText = password.concatToString()
+                kotlinx.coroutines.runBlocking {
+                    app.signInWithPersonalAccount(account, passwordText)
+                }
+            } catch (_: Exception) {
+                false
+            } finally {
+                password.fill('\u0000')
+            }
+
+            SwingUtilities.invokeLater {
+                btnSignIn.isEnabled = true
+                updateActionState()
+                if (signedIn) {
+                    JOptionPane.showMessageDialog(
+                        this,
+                        "개인 OA 계정으로 로그인했습니다. 자산 번호를 확인한 뒤 시작하세요.",
+                        "로그인 완료",
+                        JOptionPane.INFORMATION_MESSAGE,
+                    )
+                } else {
+                    JOptionPane.showMessageDialog(
+                        this,
+                        "로그인에 실패했습니다. 계정 또는 자산 담당자/관리자 권한을 확인하세요.",
+                        "로그인 실패",
+                        JOptionPane.ERROR_MESSAGE,
+                    )
+                }
+            }
+        }.start()
     }
 
     private fun onSendNow() {

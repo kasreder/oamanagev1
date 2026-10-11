@@ -39,7 +39,7 @@ class AuthService {
   Future<AuthResponse> signInWithKakao(String kakaoAccessToken) async {
     final response = await _client.functions.invoke(
       'auth-kakao',
-      body: {'access_token': kakaoAccessToken},
+      body: {'kakao_token': kakaoAccessToken},
     );
 
     final data = response.data as Map<String, dynamic>;

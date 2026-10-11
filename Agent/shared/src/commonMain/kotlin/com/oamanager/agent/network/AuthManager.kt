@@ -29,7 +29,11 @@ interface TokenStorage {
  *
  * - access_token 유효 → 그대로 반환
  * - access_token 만료 → refresh_token으로 갱신
- * - 둘 다 실패 → email/password 재로그인
+ * - 둘 다 실패 → 사용자에게 다시 로그인을 요청
+ *
+ * 공용 서비스 계정은 사용하지 않는다. 각 설치본은 자산 담당자 또는 관리자
+ * 개인 OA 계정으로 명시적으로 로그인해야 하며, 토큰 갱신에 실패해도 APK에
+ * 포함된 자격증명으로 자동 재로그인하지 않는다.
  */
 class AuthManager(
     private val client: SupabaseClient,
@@ -63,18 +67,35 @@ class AuthManager(
             }
         }
 
-        // 3) email/password 재로그인
+        // 3) 자격증명 자동 재로그인은 금지한다. UI에서 명시적으로 로그인해야 한다.
+        return null
+    }
+
+    /**
+     * 자산 담당자 또는 관리자 OA 계정으로 명시적으로 로그인한다.
+     *
+     * 비밀번호는 호출 중에만 사용하며 저장하지 않는다. 성공 시 Supabase 세션의
+     * access/refresh token만 [TokenStorage]에 저장한다.
+     */
+    suspend fun signInWithPassword(email: String, password: String): Boolean {
+        val normalizedEmail = email.trim()
+        if (normalizedEmail.isEmpty() || password.isEmpty()) return false
+
         return try {
-            val response = client.signIn(
-                com.oamanager.agent.AgentConfig.AGENT_EMAIL,
-                com.oamanager.agent.AgentConfig.AGENT_PASSWORD,
-            )
+            val response = client.signIn(normalizedEmail, password)
             saveTokens(response)
-            response.accessToken
+            true
         } catch (_: Exception) {
-            null
+            false
         }
     }
+
+    /**
+     * 저장된 세션이 있는지 확인한다. 실제 유효성은 [getValidToken]이 갱신 시점에
+     * 검증하므로, 이 값은 UI에서 로그인 필요 여부를 표시하는 용도로만 사용한다.
+     */
+    fun hasStoredSession(): Boolean =
+        storage.accessToken != null || storage.refreshToken != null
 
     private fun saveTokens(response: AuthResponse) {
         storage.accessToken = response.accessToken

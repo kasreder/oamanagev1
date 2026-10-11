@@ -38,8 +38,10 @@ private fun runWithTray() {
     // 트레이 아이콘 등록
     TrayIconManager.setup(app)
 
-    // asset_uid 미설정 시 설정 다이얼로그 표시
-    if (prefs.assetUid == null) {
+    // 개인 OA 세션이 없거나 asset_uid 미설정 시 설정 다이얼로그 표시.
+    // 구버전 공용 계정 토큰이 남아 있어도 명시적 개인 로그인을 거치기 전에는
+    // Heartbeat를 재개하지 않는다.
+    if (prefs.assetUid == null || !app.hasPersonalSession) {
         TrayIconManager.showSetupDialog(app)
     } else {
         // 이미 설정됨 → Heartbeat 시작
@@ -58,8 +60,8 @@ private fun runAsService() {
     val prefs = WindowsPreferences()
     val app = WindowsAgentApp(prefs)
 
-    if (prefs.assetUid == null) {
-        System.err.println("ERROR: asset_uid not configured. Run without --service first.")
+    if (prefs.assetUid == null || !app.hasPersonalSession) {
+        System.err.println("ERROR: asset_uid or personal OA login is not configured. Run without --service first.")
         System.exit(1)
     }
 
@@ -75,8 +77,8 @@ private fun runSendNow() {
     val prefs = WindowsPreferences()
     val app = WindowsAgentApp(prefs)
 
-    if (prefs.assetUid == null) {
-        System.err.println("ERROR: asset_uid not configured.")
+    if (prefs.assetUid == null || !app.hasPersonalSession) {
+        System.err.println("ERROR: asset_uid or personal OA login is not configured.")
         System.exit(1)
     }
 

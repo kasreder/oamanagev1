@@ -2,11 +2,15 @@
 
 이 문서는 `assets.asset_uid` 컬럼의 형식/검증 규칙을 정리한다.
 DB 검증 로직은 `OA_backend/supabase/migrations/` 하위의 `*_asset_uid_*.sql`
-마이그레이션이 소스 오브 트루스(SoT)이며, 이 문서는 요약과 폐기된 규격 보존이 목적이다.
+마이그레이션이 소스 오브 트루스(SoT)이며, 이 문서는 두 형식의 요약이 목적이다.
 
 ---
 
-## 1. 현재기준 (2026-06 이후 유일하게 유효)
+> **2026-10-11부터 두 형식 모두 유효** (`20261011000000_allow_both_uid_formats.sql`)
+> 통합 정규식: `^([A-Z]{1,2}[0-9]{4,5}|(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD|TP|ET|EH)[0-9]{5})$`
+> 두 형식은 길이(5~7자리 vs 8자리)와 구조가 달라 서로 겹치지 않는다. 같은 기기에 두 번호를 부여하지 않도록 운영에서 관리한다.
+
+## 1. 현재기준
 
 - 정규식: `^[A-Z]{1,2}[0-9]{4,5}$`
 - 규칙: **영문 대문자 1~2자리 + 숫자 4~5자리** (총 5~7자리)
@@ -32,14 +36,12 @@ DB 검증 로직은 `OA_backend/supabase/migrations/` 하위의 `*_asset_uid_*.s
 
 ---
 
-## 2. 변경후 (계획됐다 폐기됨 — 2026-06-14 이후 저장 불가)
+## 2. 변경후 (2026-06-14 폐기 → 2026-10-11 재허용)
 
-한때 두 형식을 병기하는 마이그레이션이 있었으나
-`20260614000003_drop_new_uid_format.sql`에서 DB 전수 조사 결과 0건이라
-**"변경후" 규격을 정규식에서 제거**했다. 여기 남기는 것은 향후 재도입 검토를
-할 때 규칙을 다시 만들지 않기 위함이다.
+`20260614000003_drop_new_uid_format.sql`에서 한때 제거됐다가(당시 DB 0건),
+`20261011000000_allow_both_uid_formats.sql`에서 현재기준과 병행 허용으로 되돌렸다.
 
-- 정규식(폐기): `(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD|TP|ET|EH)[0-9]{5}`
+- 정규식: `(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD|TP|ET|EH)[0-9]{5}`
 - 규칙: **등록경로(1) + 장비코드(2) + 일련번호(5)** = 총 8자리
 
 ### 등록경로 (1자리)
@@ -85,9 +87,10 @@ DB 검증 로직은 `OA_backend/supabase/migrations/` 하위의 `*_asset_uid_*.s
 |---|---|
 | `20260211000001_asset_uid_format_alignment.sql` | 옛 형식 + 변경후 규격 병기 시작 |
 | `20260614000003_drop_new_uid_format.sql` | 변경후 규격 폐기, 옛 형식만 유효 |
+| `20261011000000_allow_both_uid_formats.sql` | 두 형식 병행 허용 (현재) |
 
 ## 관련 코드
 
 - 클라이언트 검증: `OA_frontend/oa_app/lib/constants.dart` `assetUidRegex`
-- 사용자 안내 다이얼로그: `OA_frontend/oa_app/lib/widgets/common/asset_uid_guide_dialog.dart`
+- 사용자 안내 다이얼로그: `OA_frontend/oa_app/lib/widgets/common/asset_uid_guide_dialog.dart` (두 형식 코드표)
 - DB 트리거: `public.validate_asset_uid()` (assets 테이블 BEFORE INSERT/UPDATE)

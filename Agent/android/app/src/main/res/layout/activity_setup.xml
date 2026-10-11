@@ -14,13 +14,37 @@
         android:paddingBottom="32dp"
         android:clipToPadding="false">
 
+        <!-- ── OA 계정 로그인 ── -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="OA 계정 인증"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tv_authentication_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="OA 계정: 로그인 필요"
+            android:textSize="14sp"
+            android:layout_marginTop="8dp" />
+
+        <Button
+            android:id="@+id/btn_sign_in"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="OA 계정 로그인"
+            android:layout_marginTop="8dp" />
+
         <!-- ── 자산 번호 입력 ── -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="자산 번호 (asset_uid)"
             android:textSize="15sp"
-            android:textStyle="bold" />
+            android:textStyle="bold"
+            android:layout_marginTop="20dp" />
 
         <EditText
             android:id="@+id/et_asset_uid"

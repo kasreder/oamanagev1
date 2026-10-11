@@ -145,13 +145,8 @@ class HeartbeatForegroundService : Service() {
         serviceScope.launch {
             try {
                 realtimeManager?.connect(serviceScope)
-                realtimeManager?.joinPresence(
-                    assetUid = assetUid,
-                    platform = "android",
-                    agentVersion = getVersionName(),
-                )
+                realtimeManager?.joinPresence(assetUid)
                 realtimeManager?.joinCommandChannel(assetUid)
-                realtimeManager?.joinAlertChannel()
                 realtimeManager?.joinNotificationsChannel(assetUid)
 
                 // 명령 수신 처리

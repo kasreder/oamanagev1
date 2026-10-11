@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.text.Editable
+import android.text.InputType
 import android.text.TextWatcher
 import android.view.View
 import android.widget.*
@@ -38,6 +39,8 @@ class SetupActivity : AppCompatActivity() {
     // Views
     private lateinit var etAssetUid: EditText
     private lateinit var tvAssetUidError: TextView
+    private lateinit var tvAuthenticationStatus: TextView
+    private lateinit var btnSignIn: Button
     private lateinit var spinnerInterval: Spinner
     private lateinit var btnStart: Button
     private lateinit var btnSendNow: Button
@@ -105,6 +108,8 @@ class SetupActivity : AppCompatActivity() {
     private fun bindViews() {
         etAssetUid = findViewById(R.id.et_asset_uid)
         tvAssetUidError = findViewById(R.id.tv_asset_uid_error)
+        tvAuthenticationStatus = findViewById(R.id.tv_authentication_status)
+        btnSignIn = findViewById(R.id.btn_sign_in)
         spinnerInterval = findViewById(R.id.spinner_interval)
         btnStart = findViewById(R.id.btn_start)
         btnSendNow = findViewById(R.id.btn_send_now)
@@ -148,7 +153,7 @@ class SetupActivity : AppCompatActivity() {
                 val text = s?.toString() ?: ""
                 val isValid = viewModel.isValidAssetUid(text)
                 tvAssetUidError.visibility = if (text.isNotEmpty() && !isValid) View.VISIBLE else View.GONE
-                btnStart.isEnabled = isValid
+                updateStartButtonEnabled()
             }
         })
     }
@@ -187,6 +192,18 @@ class SetupActivity : AppCompatActivity() {
         btnVerify.setOnClickListener {
             showVerificationDialog()
         }
+
+        btnSignIn.setOnClickListener {
+            showPersonalLoginDialog()
+        }
+    }
+
+    private fun updateStartButtonEnabled() {
+        val state = viewModel.uiState.value
+        btnStart.isEnabled =
+            !state.isRunning &&
+            state.isAuthenticated &&
+            viewModel.isValidAssetUid(etAssetUid.text.toString().trim())
     }
 
     private fun observeAdminCommandEvents() {
@@ -209,8 +226,20 @@ class SetupActivity : AppCompatActivity() {
                 if (state.isRunning) {
                     etAssetUid.setText(state.assetUid)
                     etAssetUid.isEnabled = false
-                    btnSendNow.isEnabled = true
                 }
+
+                tvAuthenticationStatus.text = if (state.isAuthenticated) {
+                    "OA 계정: 로그인됨 (자산 담당자 또는 관리자 권한 필요)"
+                } else {
+                    "OA 계정: 로그인 필요"
+                }
+                btnSignIn.text = if (state.isAuthenticated) {
+                    "다른 OA 계정으로 로그인"
+                } else {
+                    "OA 계정 로그인"
+                }
+                updateStartButtonEnabled()
+                btnSendNow.isEnabled = state.isRunning && state.isAuthenticated
 
                 // 상태 표시
                 tvAssetUidDisplay.text = "자산 번호: ${state.assetUid.ifEmpty { "-" }}"
@@ -273,6 +302,39 @@ class SetupActivity : AppCompatActivity() {
     }
 
     // ─── 다이얼로그 ─────────────────────────────────────────────────────
+
+    private fun showPersonalLoginDialog() {
+        val etEmail = EditText(this).apply {
+            hint = "사번 또는 OA 계정 이메일"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+        }
+        val etPassword = EditText(this).apply {
+            hint = "비밀번호"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 24, 48, 24)
+            addView(TextView(context).apply {
+                text = "자산 담당자 또는 관리자 개인 OA 계정으로 로그인하세요.\n사번 입력 시 OA 앱과 같은 내부 계정으로 처리됩니다.\n공용 에이전트 계정은 사용할 수 없습니다."
+            })
+            addView(etEmail)
+            addView(etPassword)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("OA 계정 로그인")
+            .setView(layout)
+            .setPositiveButton("로그인") { _, _ ->
+                viewModel.signInWithPersonalAccount(
+                    etEmail.text.toString(),
+                    etPassword.text.toString(),
+                )
+            }
+            .setNegativeButton("취소", null)
+            .show()
+    }
 
     private fun showVerificationDialog() {
         val etName = EditText(this).apply { hint = "이름" }

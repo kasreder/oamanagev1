@@ -84,11 +84,11 @@ const List<String> employmentTypes = [
   '도급직',
 ];
 
-/// asset_uid 검증 정규식 (옛 기준 단일)
-/// D00001, N00001, TP0001, EH0001, ET0001 등
-/// 영문 1~2자리 + 숫자 4~5자리
+/// asset_uid 검증 정규식 (두 형식 병행 — DB CHECK/트리거와 동일)
+/// - 현재기준: 영문 1~2자리 + 숫자 4~5자리 (D00001, TP0001, EH0001)
+/// - 변경후: 등록경로 1 + 장비코드 2 + 숫자 5 (BDT00001, STP22222)
 final RegExp assetUidRegex = RegExp(
-  r'^[A-Z]{1,2}[0-9]{4,5}$',
+  r'^([A-Z]{1,2}[0-9]{4,5}|(B|R|C|L|S)(DT|NB|MN|PR|TB|SC|IP|NW|SV|WR|SD|TP|ET|EH)[0-9]{5})$',
 );
 
 /// 페이지네이션 기본 사이즈
@@ -104,3 +104,17 @@ const double signaturePadSize = 400.0;
 const double drawingMinScale = 0.5;
 const double drawingMaxScale = 3.0;
 const double drawingScaleStep = 0.5;
+
+/// 비밀번호 정책 안내 문구 (설정/재설정/생성 공통)
+const String passwordPolicyText = '8자 이상 · 대문자/소문자/숫자/특수문자 각 1자 이상';
+
+/// 비밀번호 정책 검증 — 통과하면 null, 아니면 이유 반환.
+/// 관리자 비밀번호 설정 / 아이디 생성 / 본인 재설정 모두 이 기준 하나를 쓴다.
+String? validatePassword(String pw) {
+  if (pw.length < 8) return '8자 이상이어야 합니다.';
+  if (!RegExp(r'[A-Z]').hasMatch(pw)) return '대문자를 1자 이상 포함하세요.';
+  if (!RegExp(r'[a-z]').hasMatch(pw)) return '소문자를 1자 이상 포함하세요.';
+  if (!RegExp(r'[0-9]').hasMatch(pw)) return '숫자를 1자 이상 포함하세요.';
+  if (!RegExp(r'[^A-Za-z0-9]').hasMatch(pw)) return '특수문자를 1자 이상 포함하세요.';
+  return null;
+}
