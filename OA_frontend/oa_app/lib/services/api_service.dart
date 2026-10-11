@@ -32,7 +32,7 @@ class ApiService {
   ///
   /// - `conditions`가 비어있고 `search`가 주어지면 옛 단일 검색 호환 동작
   /// - `conditions`가 모두 AND이면 chain 적용, OR가 섞이면 `.or()` 평탄 문자열
-  /// - `count`는 기본 [CountOption.planned] (정확도 ↓ 속도 ↑)
+  /// - `count`는 기본 [CountOption.estimated] (max-rows 이하면 정확, 초과 시 추정 — planned는 소규모 테이블에서 틀린 값을 냄)
   Future<({List<Asset> data, int total})> fetchAssets({
     int page = 1,
     int pageSize = defaultPageSize,
@@ -42,7 +42,7 @@ class ApiService {
     List<SearchCondition> conditions = const [],
     String orderBy = 'id',
     bool ascending = false,
-    CountOption count = CountOption.planned,
+    CountOption count = CountOption.estimated,
   }) async {
     final from = (page - 1) * pageSize;
     final to = from + pageSize - 1;
@@ -255,7 +255,7 @@ class ApiService {
     final response = await query
         .order(effectiveOrder, ascending: ascending)
         .range(from, to)
-        .count(CountOption.planned);
+        .count(CountOption.estimated);
 
     final total = response.count;
     final rows = response.data

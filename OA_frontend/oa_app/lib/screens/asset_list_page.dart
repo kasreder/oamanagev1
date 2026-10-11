@@ -1230,106 +1230,56 @@ class _AssetListPageState extends ConsumerState<AssetListPage> {
   }
 
   /// 접속현황 인디케이터 (Presence 우선 → Heartbeat 기반)
-  Widget _accessStatusWidgetWithPresence(Asset asset, BuildContext context) {
-    final presenceState = ref.watch(agentPresenceNotifierProvider);
-    final isPresenceConnected = presenceState.containsKey(asset.assetUid);
-
-    final lastActive = asset.lastActiveAt;
-    Color color;
-    String? dayText;
-
-    if (isPresenceConnected) {
-      color = Colors.blue;
-    } else if (lastActive == null) {
-      color = Colors.grey;
-    } else {
-      final diff = DateTime.now().difference(lastActive);
-      if (diff.inMinutes <= 60) {
-        color = Colors.green;
-      } else if (diff.inDays <= 31) {
-        color = Colors.lightGreen;
-        dayText = '${diff.inDays}';
-      } else {
-        color = Colors.red;
-      }
-    }
-
-    const double size = 16;
-
-    if (dayText != null) {
-      return SizedBox(
-        width: size,
-        height: size,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Container(
-              width: size,
-              height: size,
-              decoration: BoxDecoration(
-                color: color,
-                shape: BoxShape.circle,
-              ),
-            ),
-            Text(
-              dayText,
-              style: const TextStyle(
-                color: Colors.black,
-                fontSize: 8,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-      ),
-    );
-  }
-
+  /// 셀 단위 Consumer 로 Presence 를 구독해 실시간 연결(파란색)을 반영한다.
   static Widget _accessStatusWidget(Asset asset, BuildContext context) {
-    final lastActive = asset.lastActiveAt;
-    Color color;
-    String? dayText;
+    return Consumer(builder: (context, ref, _) {
+      final isPresenceConnected = ref.watch(
+        agentPresenceNotifierProvider
+            .select((state) => state.containsKey(asset.assetUid)),
+      );
+      final lastActive = asset.lastActiveAt;
+      Color color;
+      String? dayText;
 
-    if (lastActive == null) {
-      color = Colors.grey;
-    } else {
-      final diff = DateTime.now().difference(lastActive);
-      if (diff.inMinutes <= 60) {
-        color = Colors.green;
-      } else if (diff.inDays <= 31) {
-        color = Colors.lightGreen;
-        dayText = '${diff.inDays}';
+      if (isPresenceConnected) {
+        color = Colors.blue;
+      } else if (lastActive == null) {
+        color = Colors.grey;
       } else {
-        color = Colors.red;
+        final diff = DateTime.now().difference(lastActive);
+        if (diff.inMinutes <= 60) {
+          color = Colors.green;
+        } else if (diff.inDays <= 31) {
+          color = Colors.lightGreen;
+          dayText = '${diff.inDays}';
+        } else {
+          color = Colors.red;
+        }
       }
-    }
 
-    const double size = 16;
-
-    if (dayText != null) {
+      const double size = 16;
+      final dot = Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      );
+      if (dayText == null) return dot;
       return SizedBox(
         width: size,
         height: size,
         child: Stack(
           alignment: Alignment.center,
           children: [
-            Container(width: size, height: size, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-            Text(dayText, style: const TextStyle(color: Colors.black, fontSize: 8, fontWeight: FontWeight.bold)),
+            dot,
+            Text(dayText,
+                style: const TextStyle(
+                    color: Colors.black,
+                    fontSize: 8,
+                    fontWeight: FontWeight.bold)),
           ],
         ),
       );
-    }
-
-    return Container(width: size, height: size, decoration: BoxDecoration(color: color, shape: BoxShape.circle));
+    });
   }
 
   // ── 사용자 확인 상태 (Verification Status) ──────────────────────────────

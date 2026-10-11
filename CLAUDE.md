@@ -15,7 +15,7 @@
 | `Agent/README.md` | 에이전트 명세 — 프로토콜(§3~5), 플랫폼(§6~7), 알림(§10), Realtime(§14), 재도입 설계(§15) | 에이전트 상세 |
 | `Agent/BUILDING.md` | 에이전트 빌드 입력값(URL·anon key) 주입 규칙 | 에이전트 빌드 |
 | `docs/asset_uid_spec.md` | 자산번호 규격 (두 형식 병행) | 자산번호 관련 |
-| `docs/software_inventory_spec.md` | 설치 SW 수집 계획 (**미구현, 결정 대기**) | 해당 기능 착수 시 |
+| `docs/software_inventory_spec.md` | 자산별 설치 SW 계획 (**미구현, 계획 확정** — 전 OS, 1단계 스크립트 → 2단계 에이전트) | 해당 기능 착수 시 |
 
 명세와 코드가 다르면 **코드·마이그레이션이 우선**이고, 문서를 고친다. 권한 관련은 보안 실행서가 문서들보다 우선한다.
 
@@ -58,4 +58,6 @@ docker exec -i oa-db psql -U postgres -d postgres -v ON_ERROR_STOP=1 < OA_backen
 
 ## 미해결 이슈
 
-전체 목록은 `README.md` "알려진 이슈 / 결정 사항" 표. 요약: 키스토어·`.env`가 git 이력에 있음(push 전 정리 필요, 로컬 `main`은 `origin/main`과 갈라짐), 인수증 RLS 과다 허용, 계정 RPC가 마스터→admin으로 완화, 카테고리 CHECK 12종 vs 앱 14종, 자산목록 "총 N건" 표시 오류.
+전체 목록은 `README.md` "알려진 이슈 / 결정 사항" 표. 요약: 서명키(`oaagent-release.jks`)가 원격 이력에 있어 에이전트 재배포 시 교체 필요, 계정 RPC가 마스터→admin으로 완화, 에이전트 재도입(§15) 보류 중.
+
+**라이브 DB가 저장소보다 앞설 수 있다** — 정책·제약은 마이그레이션 파일만 보지 말고 라이브를 읽기 전용으로 조회해 확인할 것.

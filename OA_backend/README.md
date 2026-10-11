@@ -126,7 +126,7 @@ supabase db push
 ```
 
 ### 2.5 마이그레이션 파일 목록
-전체 목록(58건)과 역할은 12.2를 참고합니다. `OA_backend/supabase/migrations/`가 소스 오브 트루스입니다.
+전체 목록(60건)과 역할은 12.2를 참고합니다. `OA_backend/supabase/migrations/`가 소스 오브 트루스입니다.
 
 ```bash
 # 로컬 반영
@@ -706,6 +706,7 @@ VALUES
 | `vendors` | `20260922000000` | 인수증 거래처 마스터 (로고, 양식 변형) | 조회=인증 사용자, 쓰기=관리자 그룹 |
 | `receipts` / `receipt_items` | `20260922000000`~`20260929000003` | 인수증 본문·항목 (발송/인수업체, 서명 3종, 금액) | 5.10 참고 |
 | `menu_permissions` | `20260929000000` | 대상(`all`/`role`/`user`)별 보이는 메뉴 키 목록. 우선순위 user > role > all > 기본(전부 보임) | 조회=인증 사용자, 쓰기=관리자 |
+| `asset_software` (계획) | — | 자산별 설치 SW 스냅샷. 쓰기는 `replace_asset_software` RPC만 | `docs/software_inventory_spec.md` §4 |
 
 ---
 
@@ -721,6 +722,10 @@ VALUES
 | **`20260817000001`** | 적용됨 (2026-10-11) | private Realtime 토픽 정책 + **담당 범위 조회**. `20260817000003`의 긴급 조치(조회 = 관리자 그룹만)를 대체. 새 프론트(private 채널) 배포 **후** 적용한 순서 |
 | `20260922*`, `20260929*`, `20261011000000` | 적용됨 | 인수증·메뉴 권한·asset_uid 두 형식 |
 | `20261011000001` | 적용됨 (2026-10-11) | `auth.users` 토큰 컬럼 NULL로 인한 로그인 500 수정 (9.13 참고) |
+| `20261011000002` | 라이브 기반영 (적용 불필요) | `category` CHECK 14종 — 라이브에는 이미 직접 반영돼 있어 저장소만 동기화 |
+| `20261011000003` | 적용됨 (2026-10-11) | 인수증·거래처·버킷 관리자 그룹 전용(라이브 기반영분 동기화) + `receipts`·`receipt_items`·`vendors`·`menu_permissions` RESTRICTIVE 정책(신규) |
+
+> ⚠️ **라이브 DB가 저장소보다 앞선 경우가 있다** (category CHECK, 인수증 RLS가 운영에 직접 반영돼 있었음). 정책·제약을 판단할 때는 마이그레이션 파일만 보지 말고 라이브를 조회해 확인한다.
 
 > **2026-10-11 실측 검증** (롤백 트랜잭션에서 계정별 시뮬레이션): 관리자 = 자산·실사·도면 전체 조회 / 배정받은 일반 사용자 = 본인 배정 자산만 조회, 남의 자산 0건, 자산 수정 0건 반영 / 배정 없는 일반 사용자 = 0건 / 익명 = `permission denied for schema public`. 현재 자산 2건(`D00001`, `TP0001`)은 모두 미배정이므로 일반 사용자 화면은 담당 자산을 배정하기 전까지 비어 있는 것이 정상입니다.
 
@@ -812,12 +817,12 @@ REVOKE INSERT, UPDATE, DELETE ON public.users FROM authenticated;
 | 테이블 | SELECT | INSERT / UPDATE | DELETE |
 |--------|--------|-----------------|--------|
 | `dropdown_options` | 인증 사용자 | 관리자 그룹 | 관리자 그룹 |
-| `vendors` | 인증 사용자 | 관리자 그룹 | 관리자 그룹 |
-| `receipts` | 인증 사용자 | 인증 사용자 | admin |
-| `receipt_items` | 인증 사용자 | 인증 사용자 | 인증 사용자 |
-| `menu_permissions` | 인증 사용자 | admin | admin |
+| `vendors` | 관리자 그룹 | 관리자 그룹 | 관리자 그룹 |
+| `receipts` | 관리자 그룹 | 관리자 그룹 | admin |
+| `receipt_items` | 관리자 그룹 | 관리자 그룹 | 관리자 그룹 |
+| `menu_permissions` | 인증 사용자 (본인 메뉴 계산용) | admin | admin |
 
-> ⚠️ **보안 실행서 기준 미충족**: `receipts`/`receipt_items`와 `receipt-signatures`/`receipt-assets` 버킷은 `20260922000000`에서 "인증 사용자 전체 읽기/쓰기"로 만들어졌습니다. 실행서 원칙(일반 사용자는 담당 범위만, 변경은 관리자 그룹)에 맞추려면 별도 수정 마이그레이션이 필요합니다. 또한 이 테이블들은 5.1 RESTRICTIVE 정책 대상 목록에 포함되어 있지 않습니다.
+> 인수증 테이블과 `receipt-signatures`/`receipt-assets` 버킷은 관리자 그룹 전용이며, 5개 테이블 모두 5.1 RESTRICTIVE 정책 대상입니다 (`20261011000003`, 2026-10-11). 최초 `20260922000000`의 "인증 사용자 전체 허용"은 대체되었습니다.
 
 ---
 
@@ -848,7 +853,7 @@ drawing-images/{drawing_id}/{filename}.png
 | `inspection-photos` | 관리자 그룹, 본인 UUID 폴더, 또는 본인이 참여한 실사의 사진 | 본인 UUID 폴더만 | admin, 본인 UUID 폴더, 또는 본인 소유 실사에 연결된 파일 |
 | `inspection-signatures` | 위와 동일 (서명 기준) | 본인 UUID 폴더만 | 위와 동일 |
 | `drawing-images` | 관리자 그룹, 또는 배정 자산이 있는 도면의 이미지 | 관리자 그룹 | 관리자 그룹 |
-| `receipt-signatures`, `receipt-assets` | 인증 사용자 | 인증 사용자 | 인증 사용자 (⚠️ 5.10 참고) |
+| `receipt-signatures`, `receipt-assets` | 관리자 그룹 | 관리자 그룹 | 관리자 그룹 |
 
 ### 6.4 파일 업로드/조회 (클라이언트)
 ```dart
@@ -1761,7 +1766,7 @@ try {
 ### 12.2 마이그레이션 관리
 ```bash
 supabase/
-├── migrations/                                   # 총 58건
+├── migrations/                                   # 총 60건
 │   ├── 20240201000000_create_users.sql          # #1  users 테이블
 │   ├── 20240201000001_create_drawings.sql        # #2  drawings 테이블
 │   ├── 20240201000002_create_assets.sql          # #3  assets + specifications
@@ -1819,7 +1824,9 @@ supabase/
 │   ├── 20260929000002_receipts_sender_manager.sql # #55 발송담당자
 │   ├── 20260929000003_receipt_items_amount.sql   # #56 항목 금액
 │   ├── 20261011000000_allow_both_uid_formats.sql # #57 asset_uid 현재기준 + 변경후 병행 허용
-│   └── 20261011000001_fix_auth_user_token_columns.sql # #58 auth.users 토큰 NULL 로 인한 로그인 500 수정
+│   ├── 20261011000001_fix_auth_user_token_columns.sql # #58 auth.users 토큰 NULL 로 인한 로그인 500 수정
+│   ├── 20261011000002_expand_asset_category.sql # #59 category CHECK 14종 (라이브 기반영분 저장소 동기화)
+│   └── 20261011000003_receipts_rls_admin_group.sql # #60 인수증 관리자 그룹 전용 + RESTRICTIVE 정책
 ├── functions/
 │   ├── auth-kakao/index.ts                       # 8.2 카카오 로그인 (사전 연결 계정만)
 │   ├── dashboard-stats/index.ts                  # 8.3 대시보드 통계 (관리자 그룹)
@@ -1962,6 +1969,7 @@ curl -X POST http://localhost:54321/functions/v1/dashboard-stats \
 
 ## 변경 이력 (백엔드)
 
+- `2026-10-11` : #59 category CHECK 14종(저장소 동기화), #60 인수증 관리자 그룹 전용 + RESTRICTIVE 정책 4개 테이블. 설치 SW 인벤토리 계획 확정(`docs/software_inventory_spec.md`, 테이블 `asset_software` 예정)
 - `2026-10-11` : 마이그레이션 #58 — `admin_create_user_secure` 가 만든 계정이 `auth.users` 토큰 컬럼 NULL 때문에 로그인 500(`converting NULL to string`)이 나던 문제 수정 (기존 3개 계정 복구 + 함수가 빈 문자열로 INSERT)
 - `2026-10-11` : 마이그레이션 #57 — asset_uid 두 형식 병행 허용 (현재기준 `D00001` + 변경후 `BDT00001`)
 - `2026-10-11` : 명세를 실제 마이그레이션(56건)·보안 실행서 기준으로 정비 — asset_uid 현재 형식(`^[A-Z]{1,2}[0-9]{4,5}$`), RLS/Storage/Realtime 최종 정책, 에이전트 RPC 차단 상태, 계정 관리 RPC와 실행서 미충족 항목(5.10, 9.13) 명시, FCM 기술 제거

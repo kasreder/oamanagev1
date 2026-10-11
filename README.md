@@ -89,7 +89,7 @@ supabase functions serve
 - `OA_backend/SECURITY_HARDENING_RUNBOOK.md` : 보안 긴급 전환 실행서 — **권한·RLS·에이전트 정책의 기준 문서**
 - `Agent/README.md` : 에이전트 명세 / `Agent/BUILDING.md` : 에이전트 빌드 입력값 규칙
 - `docs/asset_uid_spec.md` : 자산번호(`asset_uid`) 형식 규격 — 현재기준(`D00001`)과 변경후(`BDT00001`) **두 형식 병행 허용**
-- `docs/software_inventory_spec.md` : 에이전트 설치 SW 인벤토리 수집 명세 (계획 — 플랫폼 범위 결정 대기)
+- `docs/software_inventory_spec.md` : 자산별 설치 SW 인벤토리 명세 (계획 확정 — 전 OS, 1단계 스크립트 가져오기 → 2단계 에이전트)
 
 ## Supabase 환경 변수 주입
 - `OA_frontend/oa_app/lib/main.dart`의 `SUPABASE_URL`, `SUPABASE_ANON_KEY`는 `String.fromEnvironment`로 읽습니다.
@@ -104,7 +104,7 @@ supabase functions serve
 
 ### 백엔드 (Supabase)
 
-#### DB 마이그레이션 (58건)
+#### DB 마이그레이션 (60건)
 전체 목록은 `OA_backend/README.md` 12.2 참고. 시기별 요약:
 
 | 시기 | 건수 | 내용 |
@@ -115,7 +115,7 @@ supabase functions serve
 | 2026-06-04 ~ 06-15 | 18 | 마스터 관리자·강제 재확인, verify_user 수정, 검색 인덱스, 실사 잠금·라운드 재오픈/삭제/자동 생성, 실사 평탄 view, supply_type 확장, **assets_status 삭제**, **asset_uid 옛 형식만 허용**, 재실사 요청, 담당자 소속/회사, MAC 동기화, dropdown_options |
 | 2026-08-16 ~ 08-17 | 8 | **보안 강화** — 익명 노출 제거, 최소 권한 RLS, 도면 버킷 private, private Realtime, 공용 에이전트·시드 계정 차단, 차단 계정 RESTRICTIVE 정책, 레거시 비밀번호 RPC 삭제 |
 | 2026-09-22 ~ 09-29 | 10 | 인수증(vendors/receipts/receipt_items), 사용자 관리 RPC 개편, 메뉴 권한(menu_permissions) |
-| 2026-10-11 | 2 | asset_uid 두 형식 병행 허용, 계정 생성 시 토큰 컬럼 NULL로 로그인 500 나던 문제 수정 |
+| 2026-10-11 | 4 | asset_uid 두 형식 병행 허용, 계정 생성 토큰 NULL 로그인 500 수정, category CHECK 14종(동기화), 인수증 관리자 그룹 전용 |
 
 #### Edge Functions
 | 함수명 | 용도 | 권한 |
@@ -204,16 +204,17 @@ supabase functions serve
 ### 알려진 이슈 / 결정 사항 (2026-10-11 기준)
 | 구분 | 내용 | 상태 |
 |------|------|------|
-| 보안 | 릴리스 키스토어(`oaagent-release.jks`)와 키 비밀번호가 git 이력에 있고 `origin/main`에 이미 포함됨 → Android 에이전트 재배포 시 새 키로 교체 필요 | 미해결 |
-| 보안 | `.env`가 로컬 커밋 3개의 이력에 있음. 로컬 `main`이 `origin/main`과 갈라져(286/286) 있어 push 시 노출 가능 → push 전 이력 정리·시크릿 교체 필요 | 미해결 |
-| 보안 | 인수증(`receipts`, `receipt_items`, `receipt-*` 버킷)이 인증 사용자 전체 읽기/쓰기 (`OA_backend/README.md` 5.10) | 미해결 |
+| 보안 | 릴리스 키스토어(`oaagent-release.jks`)와 키 비밀번호가 원격 git 이력에 있음 → 새 키로 교체 | 에이전트 재배포(재도입) 시 함께 처리 |
+| 보안 | `.env` 이력 노출 | 해결 — 원격 이력에서 제거됨, 이력의 운영 키(DB·JWT·anon·service·대시보드)는 모두 이미 교체된 값임을 해시로 확인 (2026-10-11) |
+| 보안 | 인수증 RLS 과다 허용 | 해결 — 라이브는 이미 관리자 그룹 전용, 저장소 동기화 + RESTRICTIVE 정책 추가 (`20261011000003`) |
 | 보안 | 계정 관리 RPC가 마스터 전용에서 admin으로 완화 (`OA_backend/README.md` 9.13) | 미해결 (시드 계정 활성은 의도된 운영) |
 | 운영 | 시드 계정 `admin01`/`oper01`/`user01` 차단 해제 상태 사용 중 | 의도된 것 (2026-10-11 확인) |
-| 기능 | 자산 `category` 앱 14종 vs DB CHECK 12종 (`현장업무 태블릿`, `법인폰` 저장 시 CHECK 위반 가능) | 미해결 |
+| 기능 | 자산 `category` 앱 14종 vs DB CHECK 12종 | 해결 — 라이브는 이미 14종, 저장소 동기화 (`20261011000002`) |
+| 기능 | 자산별 설치 SW 조회 (전 OS) | 계획 확정 (`docs/software_inventory_spec.md`) — 1단계는 에이전트 없이 스크립트 가져오기 |
 | 기능 | `send-notification` Edge Function은 `device_tokens`(0건) 기준이라 실질 동작 없음, Kong 라우트 제거됨 | 알림은 RPC·직접 INSERT 사용 |
 | 기능 | 에이전트 RPC(heartbeat·사용자 확인·수령 확인) 실행 권한 회수 — 기기별 신원 재도입 전까지 접속현황은 계속 미접속 (`Agent/README.md` §15) | 의도된 차단 |
-| 표시 | 자산목록 상단이 `2 / 총 1건`으로 표시 (실제 2건, 총 건수 계산 오류) | 미해결 |
-| 표시 | 자산목록의 접속현황 점은 Presence를 반영하는 함수가 호출되지 않아 Heartbeat 기준 색만 표시 (상세 화면은 반영) | 미해결 |
+| 표시 | 자산·실사 목록 총 건수 오류 | 해결 — `CountOption.planned`(통계 추정) → `estimated` (2026-10-11 배포·화면 확인) |
+| 표시 | 자산목록 접속현황 점이 Presence 미반영 | 해결 — 셀 단위 Consumer로 Presence 구독 (2026-10-11 배포, 에이전트 미접속이라 파란 점은 미관찰) |
 
 ## 버전 관리
 
@@ -224,6 +225,7 @@ supabase functions serve
 
 ### 변경 이력
 
+- `2026-10-11` : 인수증 권한 정렬·category 동기화 마이그레이션(#59, #60), 목록 총 건수·접속현황 표시 수정 배포, 설치 SW 인벤토리 전 OS 계획 확정
 - `2026-10-11` : 운영 절차·검증 결과·알려진 이슈 섹션 추가, `20260817000001` 적용(담당 범위 조회·private Realtime)
 - `2026-10-11` : 앱에서 만든 계정(LD10239, LD09112, 비상 마스터)이 로그인 500으로 실패하던 문제 수정 (마이그레이션 #58)
 - `2026-10-11` : 자산번호 두 형식 병행 허용 (마이그레이션 #57, 프론트 정규식·안내 다이얼로그)

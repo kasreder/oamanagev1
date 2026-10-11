@@ -1628,6 +1628,8 @@ realtimeManager.joinNotificationsChannel(assetUid)
 
 > 그 전까지 현재 구현(개인 계정 로그인)은 Realtime 명령·알림 수신 경로만 의미가 있으며, 데이터 갱신 RPC는 서버에서 거부됩니다.
 
+> **연관 계획**: 설치 SW 자동 수집(`SoftwareInventoryCollector`, 하루 1회 업로드)도 이 재도입 이후의 2단계 작업입니다 — `docs/software_inventory_spec.md` §6. Linux 에이전트 신규 개발도 여기에 포함됩니다.
+
 ---
 
 ## Android 릴리스 서명
