@@ -15,7 +15,7 @@
 | `Agent/README.md` | 에이전트 명세 — 프로토콜(§3~5), 플랫폼(§6~7), 알림(§10), Realtime(§14), 재도입 설계(§15) | 에이전트 상세 |
 | `Agent/BUILDING.md` | 에이전트 빌드 입력값(URL·anon key) 주입 규칙 | 에이전트 빌드 |
 | `docs/asset_uid_spec.md` | 자산번호 규격 (두 형식 병행) | 자산번호 관련 |
-| `docs/software_inventory_spec.md` | 자산별 설치 SW 계획 (**미구현, 계획 확정** — 전 OS, 1단계 스크립트 → 2단계 에이전트) | 해당 기능 착수 시 |
+| `docs/software_inventory_spec.md` | 자산별 설치 SW 계획 (**미구현, 계획 확정** — Windows·macOS·Linux·Android, 1단계 스크립트 → 2단계 에이전트) | 해당 기능 착수 시 |
 
 명세와 코드가 다르면 **코드·마이그레이션이 우선**이고, 문서를 고친다. 권한 관련은 보안 실행서가 문서들보다 우선한다.
 

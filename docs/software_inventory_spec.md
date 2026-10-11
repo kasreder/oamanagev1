@@ -1,8 +1,8 @@
 # 자산별 설치 SW 인벤토리 명세 (계획)
 
 > 상태: **미구현 — 계획 확정** (2026-10-11 개정)
-> 결정됨: ① 대상 플랫폼 = **전 OS** (Windows · macOS · Linux · Android · iOS/iPadOS) ② 1차 목표 = **자산 상세에서 자산별 설치 SW 조회**
-> 결정 대기: iOS/iPadOS 수집을 위한 MDM 도입 여부(§2.5), 전사 집계 화면 착수 시점(§6 3단계)
+> 결정됨: ① 대상 플랫폼 = **Windows · macOS · Linux · Android** (iOS/iPadOS 제외, §2.5) ② 1차 목표 = **자산 상세에서 자산별 설치 SW 조회**
+> 결정 대기: 전사 집계 화면 착수 시점(§6 3단계)
 
 자산마다 설치된 소프트웨어의 **이름 · 제조사 · 버전 · 설치일자**를 모아 자산 상세에서 보여 주는 기능.
 
@@ -27,7 +27,6 @@
 | macOS | `system_profiler` + `pkgutil` (+ Homebrew) | ✅ | △ | ✅ | △ 앱은 근사값 | ✅ zsh/bash | ✅ 기존 macOS 에이전트에 추가 |
 | Linux | `dpkg` / `rpm` + `snap` / `flatpak` | ✅ | △ | ✅ | ✅ rpm / △ dpkg | ✅ bash | ⏳ Linux 에이전트 신규 필요 |
 | Android | `PackageManager` | ✅ | △ | ✅ | ✅ | △ adb 스크립트(선택) | ✅ 기존 Android 에이전트에 추가 |
-| iOS / iPadOS | **앱으로는 불가** — MDM 명령만 | ✅ | ✕ | ✅ | ✕ | MDM 보고서 가져오기 | ✕ |
 
 ✅ 정확 · △ 근사/대체값 · ✕ 불가
 
@@ -90,12 +89,10 @@ flatpak list --app --columns=application,version,origin
 - 1단계 대안(선택): IT 담당자가 adb로 `pm list packages --show-versioncode`와 `dumpsys package <패키지>`(설치 시각)를 수집하는 스크립트.
 - `source`: `android_pm`. `is_system`: `FLAG_SYSTEM` — 화면에서 기본 숨김.
 
-### 2.5 iOS / iPadOS
+### 2.5 제외: iOS / iPadOS
 
-- iOS 앱은 샌드박스 때문에 **다른 설치 앱 목록을 조회할 수 없다.** 에이전트 방식으로는 수집 불가.
-- 유일한 경로는 MDM의 `InstalledApplicationList` 명령(감독 모드·MDM 등록 기기, 사용자 등록 기기는 관리 앱만 반환). 일부 앱은 버전 정보가 비어 오는 알려진 한계가 있다.
-- 따라서: **MDM이 있으면** MDM 보고서(CSV)를 1단계 가져오기로 넣고, **없으면** 자산 상세에 "iOS는 MDM 없이 수집 불가"로 표시한다. → MDM 도입 여부는 별도 결정.
-- `source`: `mdm` (또는 수동 입력 `manual`).
+- 범위에서 제외한다(2026-10-12 결정). iOS 앱은 샌드박스 때문에 다른 설치 앱 목록을 조회할 수 없어 MDM 없이는 수집 수단이 없다.
+- iPhone·iPad 자산의 "설치 SW" 섹션은 비어 있게 두고, 필요해지면 별도로 검토한다.
 
 ---
 
@@ -123,8 +120,8 @@ flatpak list --app --columns=application,version,origin
 
 | 필드 | 규칙 |
 |------|------|
-| `platform` | `windows` · `macos` · `linux` · `android` · `ios` · `ipados` |
-| `source` | `registry` · `appx` · `app_bundle` · `pkg` · `homebrew` · `dpkg` · `rpm` · `snap` · `flatpak` · `android_pm` · `mdm` · `manual` |
+| `platform` | `windows` · `macos` · `linux` · `android` |
+| `source` | `registry` · `appx` · `app_bundle` · `pkg` · `homebrew` · `dpkg` · `rpm` · `snap` · `flatpak` · `android_pm` · `manual` |
 | `install_date` | `YYYY-MM-DD` 또는 `null` (근사값이면 그대로 넣고 화면에서 출처로 구분) |
 | `items` | 파일당 최대 5,000건, 문자열 필드 최대 500자 |
 
@@ -138,9 +135,9 @@ flatpak list --app --columns=application,version,origin
 CREATE TABLE public.asset_software (
   id            bigserial PRIMARY KEY,
   asset_id      bigint NOT NULL REFERENCES public.assets(id) ON DELETE CASCADE,
-  platform      text NOT NULL CHECK (platform IN ('windows','macos','linux','android','ios','ipados')),
+  platform      text NOT NULL CHECK (platform IN ('windows','macos','linux','android')),
   source        text NOT NULL CHECK (source IN ('registry','appx','app_bundle','pkg','homebrew',
-                                                'dpkg','rpm','snap','flatpak','android_pm','mdm','manual')),
+                                                'dpkg','rpm','snap','flatpak','android_pm','manual')),
   name          text NOT NULL,
   publisher     text,
   version       text,
@@ -148,7 +145,7 @@ CREATE TABLE public.asset_software (
   package_id    text,
   is_system     boolean NOT NULL DEFAULT false,
   collected_at  timestamptz NOT NULL,
-  collected_by  text NOT NULL CHECK (collected_by IN ('import','agent','mdm')),
+  collected_by  text NOT NULL CHECK (collected_by IN ('import','agent')),
   UNIQUE (asset_id, source, package_id, version)
 );
 CREATE INDEX ON public.asset_software (asset_id);
@@ -183,7 +180,7 @@ public.replace_asset_software(p_payload jsonb) RETURNS jsonb   -- SECURITY DEFIN
 
 | 위치 | 내용 |
 |------|------|
-| 자산 상세 → **"설치 SW" 섹션** | 목록(이름 · 제조사 · 버전 · 설치일 · 출처), 이름/제조사 검색, 마지막 수집 시각, 시스템 앱 숨김 토글(Android 기본 숨김), iOS 자산은 MDM 미연동 시 "수집 불가" 안내 |
+| 자산 상세 → **"설치 SW" 섹션** | 목록(이름 · 제조사 · 버전 · 설치일 · 출처), 이름/제조사 검색, 마지막 수집 시각, 시스템 앱 숨김 토글(Android 기본 숨김) |
 | 자산 상세 → **"SW 목록 가져오기"** (관리자 그룹) | §3 JSON 파일 선택 → 미리보기(건수·출처) → `replace_asset_software` 호출 |
 | (3단계, 선택) 전사 집계 | SW 이름별 설치 대수 · 버전 분포 — 라이선스 관리용 |
 
@@ -196,7 +193,6 @@ public.replace_asset_software(p_payload jsonb) RETURNS jsonb   -- SECURITY DEFIN
 | **1단계** (에이전트 불필요) | ① 마이그레이션(테이블·RPC·RLS·GRANT) ② 수집 스크립트 `tools/sw-inventory/` — Windows(PowerShell)·macOS·Linux(bash), Android adb(선택) ③ 자산 상세 "설치 SW" 섹션 + 가져오기 ④ macOS `system_profiler` 필드 실기기 확정 | 없음 |
 | **2단계** (자동 수집) | Windows·macOS·Android 에이전트에 `SoftwareInventoryCollector`(KMP expect/actual) 추가, **하루 1회** 업로드(heartbeat와 분리), Linux 에이전트 신규 | 에이전트 기기별 신원 재도입(`Agent/README.md` §15) |
 | **3단계** (선택) | 전사 집계 화면 | 1단계 데이터 축적 |
-| iOS | MDM 보고서 가져오기 | MDM 도입 결정 |
 
 ---
 

@@ -89,7 +89,7 @@ supabase functions serve
 - `OA_backend/SECURITY_HARDENING_RUNBOOK.md` : 보안 긴급 전환 실행서 — **권한·RLS·에이전트 정책의 기준 문서**
 - `Agent/README.md` : 에이전트 명세 / `Agent/BUILDING.md` : 에이전트 빌드 입력값 규칙
 - `docs/asset_uid_spec.md` : 자산번호(`asset_uid`) 형식 규격 — 현재기준(`D00001`)과 변경후(`BDT00001`) **두 형식 병행 허용**
-- `docs/software_inventory_spec.md` : 자산별 설치 SW 인벤토리 명세 (계획 확정 — 전 OS, 1단계 스크립트 가져오기 → 2단계 에이전트)
+- `docs/software_inventory_spec.md` : 자산별 설치 SW 인벤토리 명세 (계획 확정 — Windows·macOS·Linux·Android, 1단계 스크립트 가져오기 → 2단계 에이전트)
 
 ## Supabase 환경 변수 주입
 - `OA_frontend/oa_app/lib/main.dart`의 `SUPABASE_URL`, `SUPABASE_ANON_KEY`는 `String.fromEnvironment`로 읽습니다.
@@ -210,7 +210,7 @@ supabase functions serve
 | 보안 | 계정 관리 RPC가 마스터 전용에서 admin으로 완화 (`OA_backend/README.md` 9.13) | 미해결 (시드 계정 활성은 의도된 운영) |
 | 운영 | 시드 계정 `admin01`/`oper01`/`user01` 차단 해제 상태 사용 중 | 의도된 것 (2026-10-11 확인) |
 | 기능 | 자산 `category` 앱 14종 vs DB CHECK 12종 | 해결 — 라이브는 이미 14종, 저장소 동기화 (`20261011000002`) |
-| 기능 | 자산별 설치 SW 조회 (전 OS) | 계획 확정 (`docs/software_inventory_spec.md`) — 1단계는 에이전트 없이 스크립트 가져오기 |
+| 기능 | 자산별 설치 SW 조회 (Windows·macOS·Linux·Android) | 계획 확정 (`docs/software_inventory_spec.md`) — 1단계는 에이전트 없이 스크립트 가져오기 |
 | 기능 | `send-notification` Edge Function은 `device_tokens`(0건) 기준이라 실질 동작 없음, Kong 라우트 제거됨 | 알림은 RPC·직접 INSERT 사용 |
 | 기능 | 에이전트 RPC(heartbeat·사용자 확인·수령 확인) 실행 권한 회수 — 기기별 신원 재도입 전까지 접속현황은 계속 미접속 (`Agent/README.md` §15) | 의도된 차단 |
 | 표시 | 자산·실사 목록 총 건수 오류 | 해결 — `CountOption.planned`(통계 추정) → `estimated` (2026-10-11 배포·화면 확인) |
@@ -225,7 +225,7 @@ supabase functions serve
 
 ### 변경 이력
 
-- `2026-10-11` : 인수증 권한 정렬·category 동기화 마이그레이션(#59, #60), 목록 총 건수·접속현황 표시 수정 배포, 설치 SW 인벤토리 전 OS 계획 확정
+- `2026-10-11` : 인수증 권한 정렬·category 동기화 마이그레이션(#59, #60), 목록 총 건수·접속현황 표시 수정 배포, 설치 SW 인벤토리 Windows·macOS·Linux·Android 계획 확정
 - `2026-10-11` : 운영 절차·검증 결과·알려진 이슈 섹션 추가, `20260817000001` 적용(담당 범위 조회·private Realtime)
 - `2026-10-11` : 앱에서 만든 계정(LD10239, LD09112, 비상 마스터)이 로그인 500으로 실패하던 문제 수정 (마이그레이션 #58)
 - `2026-10-11` : 자산번호 두 형식 병행 허용 (마이그레이션 #57, 프론트 정규식·안내 다이얼로그)
